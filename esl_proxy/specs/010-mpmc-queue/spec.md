@@ -86,6 +86,53 @@ A system operator leverages a circular buffer implementation for the MPMC queue 
 
 ---
 
+### User Story 6 - Batch Enqueue (Priority: P2)
+
+A system operator enqueues multiple items in a single batch operation, reducing per-item overhead and improving throughput when dispatching groups of related tasks to the queue.
+
+**Why this priority**: Batch enqueue reduces syscall and atomic operation overhead when dispatching multiple tasks, critical for high-throughput DAG scheduling where groups of dependent tasks are often enqueued together.
+
+**Independent Test**: Can be verified by enqueuing a batch of 10 items in a single operation and confirming all 10 items are in the queue with correct order.
+
+**Acceptance Scenarios**:
+
+1. **Given** a queue with capacity 100 and 90 items, **When** a batch of 10 items is enqueued, **Then** all 10 items are successfully added and queue is full
+2. **Given** a queue with capacity 100 and 95 items, **When** a batch of 10 items is enqueued, **Then** the operation succeeds for 5 items and returns partial batch status for the remaining 5
+3. **Given** a batch of items [1, 2, 3, 4, 5] is enqueued together, **When** items are dequeued, **Then** items maintain relative order [1, 2, 3, 4, 5]
+
+---
+
+### User Story 7 - Batch Dequeue (Priority: P2)
+
+A system operator dequeues multiple items in a single batch operation, allowing workers to fetch multiple waiting tasks at once and reduce per-item coordination overhead.
+
+**Why this priority**: Batch dequeue enables workers to process multiple tasks with a single queue interaction, reducing contention and improving cache locality for sequential task processing.
+
+**Independent Test**: Can be verified by enqueuing 100 items and dequeuing a batch of 10, confirming 10 items are returned and queue depth decreases by 10.
+
+**Acceptance Scenarios**:
+
+1. **Given** a queue with 100 items, **When** a batch dequeue of 10 is attempted, **Then** 10 items are returned and queue has 90 remaining
+2. **Given** a queue with 5 items, **When** a batch dequeue of 10 is attempted, **Then** 5 items are returned and queue is empty
+3. **Given** a queue with 5 items, **When** a batch dequeue of 10 is attempted in non-blocking mode, **Then** 5 items are returned immediately
+
+---
+
+### User Story 8 - Batch Size Limits and Partial Results (Priority: P2)
+
+A system operator configures maximum batch sizes and handles partial batch results when fewer items than requested are available. The batch API returns the actual number of items processed.
+
+**Why this priority**: Partial batch handling is essential for bounded queues where the number of available items may be less than the requested batch size, enabling graceful degradation without blocking.
+
+**Independent Test**: Can be verified by requesting more items than available and confirming partial results are returned with accurate count.
+
+**Acceptance Scenarios**:
+
+1. **Given** a queue with 3 items, **When** a batch dequeue of 10 is requested, **Then** exactly 3 items are returned with batch count of 3
+2. **Given** a queue with 3 items, **When** a batch enqueue of 10 is attempted with 7 items needing to wait, **Then** 3 items are enqueued with batch count of 3
+
+---
+
 ### Edge Cases
 
 - What happens when multiple producers enqueue concurrently at the same slot?
@@ -93,6 +140,9 @@ A system operator leverages a circular buffer implementation for the MPMC queue 
 - What happens when producers enqueue faster than consumers can handle (head-of-line blocking)?
 - What happens when the queue wraps around multiple times?
 - What happens when task data contains pointers that become invalid after dequeue?
+- What happens when batch enqueue attempts more items than remaining capacity?
+- What happens when batch dequeue requests more items than are available?
+- What is the maximum batch size supported?
 
 ## Requirements *(mandatory)*
 
@@ -109,6 +159,12 @@ A system operator leverages a circular buffer implementation for the MPMC queue 
 - **FR-009**: Each item MUST be delivered to exactly one consumer (no duplication)
 - **FR-010**: The queue MUST use a circular buffer for memory-efficient operation
 - **FR-011**: The queue MUST support non-blocking dequeue operation
+- **FR-012**: The queue MUST support batch enqueue of multiple items in a single operation
+- **FR-013**: Batch enqueue MUST return the count of items successfully enqueued
+- **FR-014**: Batch enqueue MUST fail for items that would exceed capacity (partial batch handling)
+- **FR-015**: The queue MUST support batch dequeue of multiple items in a single operation
+- **FR-016**: Batch dequeue MUST return the count of items actually dequeued
+- **FR-017**: Batch dequeue MUST return partial results when fewer items than requested are available
 
 ### Key Entities *(include if feature involves data)*
 
@@ -117,6 +173,9 @@ A system operator leverages a circular buffer implementation for the MPMC queue 
 - **Enqueue Operation**: Add an item to the tail of the queue. Succeeds if queue is not full, returns error if queue is full.
 - **Dequeue Operation**: Remove and return an item from the head of the queue. Succeeds if queue is not empty, returns empty signal if queue is empty.
 - **Queue Slot**: Individual memory location within the circular buffer that holds one queue item.
+- **Batch Enqueue**: Operation that adds multiple items to the queue in a single call. Returns count of items successfully enqueued.
+- **Batch Dequeue**: Operation that removes multiple items from the queue in a single call. Returns count of items actually dequeued.
+- **Batch Count**: Return value indicating how many items were processed in a batch operation.
 
 ## Success Criteria *(mandatory)*
 
@@ -129,6 +188,9 @@ A system operator leverages a circular buffer implementation for the MPMC queue 
 - **SC-005**: Queue memory footprint remains constant regardless of total items processed
 - **SC-006**: Non-blocking dequeue returns within 1 microsecond when queue is empty
 - **SC-007**: Bounded queue correctly applies backpressure when at capacity
+- **SC-008**: Batch enqueue processes at least 10 items in a single operation
+- **SC-009**: Batch dequeue processes at least 10 items in a single operation
+- **SC-010**: Partial batch results accurately report actual item count
 
 ## Assumptions
 
