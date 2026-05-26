@@ -2,17 +2,17 @@
 
 **Branch**: `010-mpmc-queue` | **Date**: 2026-05-26 | **Spec**: [link](spec.md)
 
-**Input**: Lock-free MPMC queue with batch operations using C11 atomics
+**Input**: Lock-free MPMC queue with 2D ReadyQueue matrix and CompleteQueue for task dispatch
 
 ## Summary
 
-A bounded multi-producer-multi-consumer (MPMC) queue using C11 atomics for lock-free concurrent access. Circular buffer provides O(1) enqueue/dequeue. Supports batch enqueue/dequeue operations for high-throughput task dispatch.
+A bounded multi-producer-multi-consumer (MPMC) queue using C11 atomics for lock-free concurrent access. Circular buffer provides O(1) enqueue/dequeue. Supports batch operations. 2D ReadyQueue matrix (task_type × org_mode) for task dispatch. Global CompleteQueue for recording task completions.
 
 ## Technical Context
 
 **Language/Version**: C11 (`-std=c11`)
 
-**Primary Dependencies**: Standard C library only (`<stdint.h>`, `<stdatomic.h>`, `<stddef.h>`)
+**Primary Dependencies**: Standard C library only (`<stdint.h>`, `<stdatomic.h>`, `<stdbool.h>`, `<stddef.h>`, `<string.h>`)
 
 **Storage**: Circular buffer in memory with fixed capacity
 
@@ -26,7 +26,7 @@ A bounded multi-producer-multi-consumer (MPMC) queue using C11 atomics for lock-
 - O(1) enqueue and dequeue
 - Support 4+ producers and 4+ consumers concurrently
 - Batch operations process 10+ items per call
-- Lock-free: no mutexes/spinlocks in hot paths
+- 12 ReadyQueues + 1 CompleteQueue
 
 **Constraints**:
 - Bounded queue with configurable capacity
@@ -34,10 +34,12 @@ A bounded multi-producer-multi-consumer (MPMC) queue using C11 atomics for lock-
 - All inputs assumed valid (Trust the Caller)
 - Naming per Constitution XI (no redundant prefixes)
 - Header-only library design
+- 3 task types × 4 org modes = 12 ReadyQueues
+- Single global CompleteQueue
 
 **Scale/Scope**:
 - Queue capacity: 100-10000 (configurable)
-- 8 user stories covering basic ops + batch operations
+- 12 user stories covering MPMC + ReadyQueue + CompleteQueue
 
 ## Constitution Check
 
@@ -64,14 +66,16 @@ A bounded multi-producer-multi-consumer (MPMC) queue using C11 atomics for lock-
 ```text
 include/dag/
 ├── mpmc_queue.h     # MPMC Queue API (static inline functions)
-└── mpmc_queue.c     # Global queue instance definition
+├── mpmc_queue.c     # Global queue definitions
+├── ready_queue.h    # 2D ReadyQueue matrix API
+└── ready_queue.c    # Global ReadyQueue matrix definition
 ```
 
 **Header-Only Enforcement**: All API in headers with `static inline`. Only .c file for global instance definition.
 
 ## Phase 1: Design
 
-### mpmc_queue.h - MPMC Queue API
+### mpmc_queue.h - Core MPMC Queue API
 
 ```c
 #ifndef DAG_MPMC_QUEUE_H
@@ -82,150 +86,88 @@ include/dag/
 #include <stdbool.h>
 #include <stddef.h>
 
-/*
- * MPMC Queue - lock-free multi-producer-multi-consumer queue
- * Uses circular buffer with atomic head/tail indices
- */
-
-typedef struct {
-    void *buffer;           /* ring buffer data */
-    size_t capacity;        /* max items */
-    size_t elem_size;       /* size of each element in bytes */
-    _Atomic size_t head;    /* consumer side */
-    _Atomic size_t tail;    /* producer side */
-} mpmc_queue_t;
-
-/*
- * Queue status codes
- */
 typedef enum {
-    MPMC_OK       = 0,
-    MPMC_FULL     = 1,
-    MPMC_EMPTY    = 2,
-    MPMC_AGAIN    = 3,      /* non-blocking retry */
+    MPMC_OK    = 0,
+    MPMC_FULL  = 1,
+    MPMC_EMPTY = 2,
 } mpmc_status_t;
 
-/*
- * Initialize queue with given capacity and element size
- */
-static inline int mpmc_queue_init(mpmc_queue_t *q, size_t capacity, size_t elem_size) {
-    q->buffer = malloc(capacity * elem_size);
-    q->capacity = capacity;
-    q->elem_size = elem_size;
-    atomic_init(&q->head, 0);
-    atomic_init(&q->tail, 0);
-    return 0;
+typedef struct {
+    void *buffer;
+    size_t capacity;
+    size_t elem_size;
+    _Atomic size_t head;
+    _Atomic size_t tail;
+} mpmc_queue_t;
+
+static inline int mpmc_init(mpmc_queue_t *q, size_t capacity, size_t elem_size);
+static inline size_t mpmc_idx(mpmc_queue_t *q, size_t pos);
+static inline mpmc_status_t mpmc_enqueue(mpmc_queue_t *q, const void *item);
+static inline mpmc_status_t mpmc_dequeue(mpmc_queue_t *q, void *item);
+static inline size_t mpmc_enqueue_batch(mpmc_queue_t *q, const void *items, size_t count);
+static inline size_t mpmc_dequeue_batch(mpmc_queue_t *q, void *items, size_t count);
+static inline size_t mpmc_size(mpmc_queue_t *q);
+
+#endif
+```
+
+### ready_queue.h - 2D ReadyQueue Matrix API
+
+```c
+#ifndef DAG_READY_QUEUE_H
+#define DAG_READY_QUEUE_H
+
+#include "mpmc_queue.h"
+#include "task.h"
+
+/* 2D matrix: task_type × org_mode = 3 × 4 = 12 queues */
+extern mpmc_queue_t g_ready_queues[TASK_TYPE_COUNT][ORG_MODE_COUNT];
+
+static inline mpmc_queue_t *ready_queue_get(task_type_t type, org_mode_t mode) {
+    return &g_ready_queues[type][mode];
 }
 
-/*
- * Calculate circular buffer index
- */
-static inline size_t mpmc_idx(mpmc_queue_t *q, size_t pos) {
-    return pos % q->capacity;
+static inline mpmc_status_t ready_enqueue(task_type_t type, org_mode_t mode, const void *item) {
+    return mpmc_enqueue(&g_ready_queues[type][mode], item);
 }
 
-/*
- * Single-item enqueue (non-blocking)
- * Returns: MPMC_OK on success, MPMC_FULL if queue is full
- */
-static inline mpmc_status_t mpmc_enqueue(mpmc_queue_t *q, const void *item) {
-    size_t tail = atomic_load_explicit(&q->tail, memory_order_relaxed);
-    size_t head = atomic_load_explicit(&q->head, memory_order_acquire);
-
-    if (tail - head >= q->capacity) {
-        return MPMC_FULL;  /* queue is full */
-    }
-
-    /* Copy item to buffer */
-    char *slot = (char *)q->buffer + mpmc_idx(q, tail) * q->elem_size;
-    memcpy(slot, item, q->elem_size);
-
-    atomic_store_explicit(&q->tail, tail + 1, memory_order_release);
-    return MPMC_OK;
+static inline mpmc_status_t ready_dequeue(task_type_t type, org_mode_t mode, void *item) {
+    return mpmc_dequeue(&g_ready_queues[type][mode], item);
 }
 
-/*
- * Single-item dequeue (non-blocking)
- * Returns: MPMC_OK on success, MPMC_EMPTY if queue is empty
- */
-static inline mpmc_status_t mpmc_dequeue(mpmc_queue_t *q, void *item) {
-    size_t head = atomic_load_explicit(&q->head, memory_order_relaxed);
-    size_t tail = atomic_load_explicit(&q->tail, memory_order_acquire);
+#endif
+```
 
-    if (tail == head) {
-        return MPMC_EMPTY;  /* queue is empty */
-    }
+### complete_queue.h - Global CompleteQueue API
 
-    /* Copy item from buffer */
-    char *slot = (char *)q->buffer + mpmc_idx(q, head) * q->elem_size;
-    memcpy(item, slot, q->elem_size);
+```c
+#ifndef DAG_COMPLETE_QUEUE_H
+#define DAG_COMPLETE_QUEUE_H
 
-    atomic_store_explicit(&q->head, head + 1, memory_order_release);
-    return MPMC_OK;
+#include "mpmc_queue.h"
+
+/* Single global CompleteQueue for task completion notifications */
+extern mpmc_queue_t g_complete_queue;
+
+static inline mpmc_status_t complete_enqueue(const void *item) {
+    return mpmc_enqueue(&g_complete_queue, item);
 }
 
-/*
- * Batch enqueue - enqueue multiple items
- * Returns: number of items actually enqueued
- */
-static inline size_t mpmc_enqueue_batch(mpmc_queue_t *q, const void *items, size_t count) {
-    size_t tail = atomic_load_explicit(&q->tail, memory_order_relaxed);
-    size_t head = atomic_load_explicit(&q->head, memory_order_acquire);
-    size_t avail = q->capacity - (tail - head);
-
-    size_t to_enq = (count < avail) ? count : avail;
-    const char *src = (const char *)items;
-
-    for (size_t i = 0; i < to_enq; i++) {
-        char *slot = (char *)q->buffer + mpmc_idx(q, tail + i) * q->elem_size;
-        memcpy(slot, src + i * q->elem_size, q->elem_size;
-    }
-
-    atomic_store_explicit(&q->tail, tail + to_enq, memory_order_release);
-    return to_enq;
+static inline mpmc_status_t complete_dequeue(void *item) {
+    return mpmc_dequeue(&g_complete_queue, item);
 }
 
-/*
- * Batch dequeue - dequeue multiple items
- * Returns: number of items actually dequeued
- */
-static inline size_t mpmc_dequeue_batch(mpmc_queue_t *q, void *items, size_t count) {
-    size_t head = atomic_load_explicit(&q->head, memory_order_relaxed);
-    size_t tail = atomic_load_explicit(&q->tail, memory_order_acquire);
-    size_t avail = tail - head;
-
-    size_t to_deq = (count < avail) ? count : avail;
-    char *dst = (char *)items;
-
-    for (size_t i = 0; i < to_deq; i++) {
-        char *slot = (char *)q->buffer + mpmc_idx(q, head + i) * q->elem_size;
-        memcpy(dst + i * q->elem_size, slot, q->elem_size);
-    }
-
-    atomic_store_explicit(&q->head, head + to_deq, memory_order_release);
-    return to_deq;
-}
-
-/*
- * Get approximate current size (may be stale)
- */
-static inline size_t mpmc_size(mpmc_queue_t *q) {
-    size_t tail = atomic_load_explicit(&q->tail, memory_order_relaxed);
-    size_t head = atomic_load_explicit(&q->head, memory_order_relaxed);
-    return tail - head;
-}
-
-#endif /* DAG_MPMC_QUEUE_H */
+#endif
 ```
 
 ### Key Design Decisions
 
-1. **Circular Buffer**: Fixed-size ring buffer with atomic head/tail indices
-2. **Atomic Indices**: C11 atomics for lock-free concurrent access
-3. **Batch Operations**: Support enqueueing/dequeueing multiple items per call
-4. **Non-blocking**: All operations return immediately with status
-5. **Concise Naming**: Per Constitution XI - `mpmc_*` prefix is sufficient
-6. **Trust the Caller**: No validation; caller ensures valid inputs
+1. **MPMC as Foundation**: Core queue type used by both ReadyQueue matrix and CompleteQueue
+2. **2D Matrix**: g_ready_queues[TASK_TYPE_COUNT][ORG_MODE_COUNT] = g_ready_queues[3][4]
+3. **Global Instances**: Single g_complete_queue, 12 g_ready_queues entries
+4. **Concise Naming**: mpmc_* for core queue, ready_* for 2D access, complete_* for completion
+5. **Task Type Indexing**: task_type and org_mode enums used directly as array indices
+6. **Trust the Caller**: No validation; caller ensures valid type/mode values
 
 ---
 
