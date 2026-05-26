@@ -16,12 +16,12 @@
 
 **Purpose**: Create project structure and basic configuration
 
-- [ ] T001 [P] Create include/dag/mpmc_queue.h with header guard DAG_MPMC_QUEUE_H, mpmc_status_t enum, mpmc_queue_t struct
-- [ ] T002 [P] Create include/dag/mpmc_queue.c for global queue definitions
-- [ ] T003 [P] Create include/dag/ready_queue.h with 2D queue matrix API
-- [ ] T004 [P] Create include/dag/ready_queue.c for global ReadyQueue matrix
-- [ ] T005 [P] Create include/dag/complete_queue.h with global CompleteQueue API
-- [ ] T006 [P] Create include/dag/complete_queue.c for global CompleteQueue definition
+- [X] T001 [P] Create include/dag/mpmc_queue.h with header guard DAG_MPMC_QUEUE_H, mpmc_status_t enum, mpmc_queue_t struct
+- [X] T002 [P] Create include/dag/mpmc_queue.c for global queue definitions
+- [X] T003 [P] Create include/dag/ready_queue.h with 2D queue matrix API
+- [X] T004 [P] Create include/dag/ready_queue.c for global ReadyQueue matrix
+- [X] T005 [P] Create include/dag/complete_queue.h with global CompleteQueue API
+- [X] T006 [P] Create include/dag/complete_queue.c for global CompleteQueue definition
 
 ---
 
@@ -29,15 +29,15 @@
 
 **Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
 
-- [ ] T007 Implement mpmc_init() in mpmc_queue.h - initialize queue with capacity and elem_size
-- [ ] T008 [P] Implement mpmc_idx() function using pos % capacity
-- [ ] T009 Implement mpmc_enqueue() with atomic head/tail, circular buffer copy
-- [ ] T010 Implement mpmc_dequeue() with atomic head/tail, circular buffer copy
-- [ ] T011 Implement mpmc_size() returning tail - head approximate size
-- [ ] T012 [P] Define global mpmc_queue_t g_ready_queues[3][4] in ready_queue.c
-- [ ] T013 [P] Define global mpmc_queue_t g_complete_queue in complete_queue.c
-- [ ] T014 Implement ready_queue_get(type, mode) inline accessor
-- [ ] T015 Implement complete_enqueue() and complete_dequeue() inline accessors
+- [X] T007 Implement mpmc_init() in mpmc_queue.h - initialize queue with capacity and elem_size
+- [X] T008 [P] Implement mpmc_idx() function using pos % capacity
+- [X] T009 Implement mpmc_enqueue() with atomic head/tail, circular buffer copy
+- [X] T010 Implement mpmc_dequeue() with atomic head/tail, circular buffer copy
+- [X] T011 Implement mpmc_size() returning tail - head approximate size
+- [X] T012 [P] Define global mpmc_queue_t g_ready_queues[3][4] in ready_queue.c
+- [X] T013 [P] Define global mpmc_queue_t g_complete_queue in complete_queue.c
+- [X] T014 Implement ready_queue_get(type, mode) inline accessor
+- [X] T015 Implement complete_enqueue() and complete_dequeue() inline accessors
 
 **Checkpoint**: Core MPMC queue infrastructure ready
 
