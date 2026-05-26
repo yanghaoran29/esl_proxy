@@ -182,7 +182,7 @@
 
 - [X] T041 [P] All queue implementations compile with clang -std=c11
 - [X] T042 [P] C11 atomics usage (_Atomic, atomic_load/store)
-- [ ] T043 Update checklist status and commit changes
+- [X] T043 Update checklist status and commit changes
 
 ---
 
