@@ -16,9 +16,9 @@
 
 **Purpose**: Create project structure and basic configuration
 
-- [ ] T001 [P] Create include/dag/ring_buf.h with header guard DAG_RING_BUF_H
-- [ ] T002 [P] Create include/dag/ring_buf.c for global variable definitions
-- [ ] T003 Configure C11 build flags in Makefile/CMakeLists
+- [X] T001 [P] Create include/dag/ring_buf.h with header guard DAG_RING_BUF_H
+- [X] T002 [P] Create include/dag/ring_buf.c for global variable definitions
+- [X] T003 Configure C11 build flags in Makefile/CMakeLists
 
 ---
 
@@ -26,15 +26,15 @@
 
 **Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
 
-- [ ] T004 Define RING_SIZE (4096) and RING_MASK constants in ring_buf.h
-- [ ] T005 Create ring_cat_t enum (STATE, BASIC, DEP, RUNTIME)
-- [ ] T006 [P] Declare extern global g_state_buf[RING_SIZE] in ring_buf.h
-- [ ] T007 [P] Declare extern global g_basic_buf[RING_SIZE] in ring_buf.h
-- [ ] T008 [P] Declare extern global g_dep_buf[RING_SIZE] in ring_buf.h
-- [ ] T009 [P] Declare extern global g_runtime_buf[RING_SIZE] in ring_buf.h
-- [ ] T010 Define 4 global ring buffers in ring_buf.c
-- [ ] T011 [P] Implement ring_idx() function using TaskID & RING_MASK
-- [ ] T012 Include dag/task.h and verify task_desc_t, dep_base_t types
+- [X] T004 Define RING_SIZE (4096) and RING_MASK constants in ring_buf.h
+- [X] T005 Create ring_cat_t enum (STATE, BASIC, DEP, RUNTIME)
+- [X] T006 [P] Declare extern global g_state_buf[RING_SIZE] in ring_buf.h
+- [X] T007 [P] Declare extern global g_basic_buf[RING_SIZE] in ring_buf.h
+- [X] T008 [P] Declare extern global g_dep_buf[RING_SIZE] in ring_buf.h
+- [X] T009 [P] Declare extern global g_runtime_buf[RING_SIZE] in ring_buf.h
+- [X] T010 Define 4 global ring buffers in ring_buf.c
+- [X] T011 [P] Implement ring_idx() function using TaskID & RING_MASK
+- [X] T012 Include dag/task.h and verify task_desc_t, dep_base_t types
 
 **Checkpoint**: Foundational ring buffer infrastructure ready
 
