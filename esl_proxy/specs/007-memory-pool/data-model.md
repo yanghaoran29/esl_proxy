@@ -7,27 +7,26 @@
 
 ### Memory Pool
 
-Pre-allocated region of memory for task intermediate data managed via ring buffer head/tail pointers.
+Pre-allocated continuous memory region managed via ring buffer head/tail pointers.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `base_addr` | `void*` | Base address of pre-allocated memory block |
+| `base_addr` | `void*` | Base address of pre-allocated continuous memory block |
 | `total_size` | `size_t` | Total pool size in bytes |
-| `slot_size` | `size_t` | Size of each slot |
-| `slot_count` | `size_t` | Number of slots (computed: total_size / slot_size) |
-| `_Atomic tail` | `size_t` | Producer head pointer for allocation (SPSC) |
-| `_Atomic head` | `size_t` | Consumer head pointer for release (SPSC) |
+| `_Atomic tail` | `size_t` | Producer offset pointer for allocation (SPSC) |
+| `_Atomic head` | `size_t` | Consumer offset pointer for release (SPSC) |
 
 **State**: N/A (static allocation via ring buffer)
 
-### Memory Slot
+### Allocation Record
 
-Individual allocatable unit within the pool - addressed via base_addr + slot_size * index.
+Tracks individual allocation within the continuous pool.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `addr` | `void*` | Slot memory address (derived: base_addr + slot_size * index) |
-| `in_use` | `_Atomic bool` | Whether slot is currently allocated |
+| `offset` | `size_t` | Offset from base_addr where allocation starts |
+| `size` | `size_t` | Size of this allocation in bytes |
+| `in_use` | `_Atomic bool` | Whether this allocation is active |
 | `when2free_task_id` | `uint32_t` | Threshold for when2free release (0 = none) |
 
 ### Buffer Handle
@@ -36,9 +35,9 @@ Reference to allocated buffer returned to caller.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `slot_index` | `size_t` | Index of allocated slot |
-| `addr` | `void*` | Buffer address within pool |
+| `addr` | `void*` | Buffer address within pool (base_addr + offset) |
 | `size` | `size_t` | Buffer size |
+| `offset` | `size_t` | Offset from pool base for release |
 
 ### when2free Registry
 
@@ -46,7 +45,7 @@ Registration entry for automatic memory release.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `slot_index` | `size_t` | Index of registered slot |
+| `offset` | `size_t` | Offset of registered allocation |
 | `task_id` | `uint32_t` | Release threshold (free when min_uncompleted > task_id) |
 | `active` | `bool` | Whether registration is active |
 
@@ -62,36 +61,37 @@ Tracks minimum uncompleted TaskID via Task State Ring Buffer.
 ## Relationships
 
 ```
-Memory Pool (Ring Buffer)
-├── base_addr + slot_size * tail (alloc)
-├── base_addr + slot_size * head (free)
-├── slots[] (N slots by index)
-│   └── each slot: in_use state + when2free_task_id
-├── when2free_registry[] (M registered slots)
-│   └── each entry: slot_index + task_id threshold
+Memory Pool (Continuous Ring Buffer)
+├── base_addr + tail (alloc offset)
+├── base_addr + head (free offset)
+├── allocation_records[] (variable-sized allocations tracked by offset)
+│   └── each allocation: size + in_use state + when2free_task_id
+├── when2free_registry[]
+│   └── each entry: offset + task_id threshold
 └── min_uncompleted_tracker
     └── queries Task State Ring Buffer for state
 ```
 
 ## Validation Rules
 
-1. `slot.in_use == true` → slot is allocated via ring buffer tail
-2. `slot.in_use == false` → slot is in free state, can be allocated
-3. when2free release only when `min_uncompleted > slot.when2free_task_id`
-4. SPSC: only Orchestrator (producer) increments `tail`, only Worker/Manager (consumer) increments `head`
+1. Allocations are variable-sized (no fixed slots)
+2. `tail` advances by allocation size on alloc
+3. `head` advances by allocation size on free (FIFO order)
+4. when2free release only when `min_uncompleted > allocation.when2free_task_id`
+5. SPSC: only Orchestrator (producer) advances `tail`, only Worker/Manager (consumer) advances `head`
 
 ## State Transitions
 
-### Slot State (via Ring Buffer)
+### Allocation State (Continuous)
 ```
-FREE --[tail % slot_count]--> ALLOCATED
-ALLOCATED --[head % slot_count]--> FREE
+FREE --[tail += size]--> ALLOCATED
+ALLOCATED --[head += size]--> FREE (FIFO order)
 ```
 
-### Ring Buffer Pointer Wrap
+### Ring Buffer Pointer Advance
 ```
-tail: (tail + 1) % slot_count
-head: (head + 1) % slot_count
+tail: tail + allocation_size (with wrap at total_size)
+head: head + allocation_size (with wrap at total_size)
 ```
 
 ### when2free Entry

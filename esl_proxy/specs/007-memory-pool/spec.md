@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "memory预分配内存，支持task执行期间中间数据内存的分配和释放  + memory对orchestrator提供内存分配和注册释放时机的接口 + memory对orchestrator提供when2free(addr, taskID)接口，在所有小于taskID的任务已经执行完时自动释放对应的内存  + 根据task state Ring buffer中的TaskID状态更新最小未完成TaskID + 采用单生产者单消费者的模式 + 内存池以FIFO的方式管理 + 利用spsc队列首尾指针的更新实现内存的分配和释放"
+**Input**: User description: "memory预分配内存，支持task执行期间中间数据内存的分配和释放  + memory对orchestrator提供内存分配和注册释放时机的接口 + memory对orchestrator提供when2free(addr, taskID)接口，在所有小于taskID的任务已经执行完时自动释放对应的内存  + 根据task state Ring buffer中的TaskID状态更新最小未完成TaskID + 采用单生产者单消费者的模式 + 内存池以FIFO的方式管理 + 利用spsc队列首尾指针的更新实现内存的分配和释放 + 不分slot支持连续的内存管理"
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -206,7 +206,7 @@ A system operator relies on a dedicated Manager thread to monitor the minimum un
 - **FR-016**: The system MUST query the Task State Ring Buffer to determine task completion status for minimum uncompleted TaskID computation
 - **FR-017**: The system MUST treat tasks in "running" state as uncompleted when computing minimum uncompleted TaskID
 - **FR-018**: A dedicated Manager thread MUST continuously monitor the Task State Ring Buffer, update the minimum uncompleted TaskID, and automatically free when2free-registered buffers whose threshold has been reached
-- **FR-019**: The memory pool MUST use FIFO-based allocation where freed slots are returned to the queue for reuse
+- **FR-019**: The memory pool MUST manage continuous memory without fixed-size slots, supporting variable-sized allocations via FIFO-based allocation where freed memory is returned to the queue for reuse
 - **FR-020**: The memory pool MUST use SPSC queue head/tail pointer updates for allocation and release, leveraging memory contiguity for O(1) operation without complex data structures
 
 ### Key Entities *(include if feature involves data)*
@@ -235,7 +235,7 @@ A system operator relies on a dedicated Manager thread to monitor the minimum un
 - Memory pool size is configured at system initialization based on workload analysis
 - Tasks are trusted to call free exactly once per allocation (Trust the Caller principle applies to lifecycle management)
 - The memory pool is private to a single Executor or Dispatch-Executor pair (not shared across processes)
-- Fragmentation is managed through a suitable allocation strategy (e.g., slab or pool-based allocator)
+- Fragmentation is managed through continuous memory management without fixed-size slots (variable-sized allocations)
 - Task intermediate data does not persist beyond task completion (no durability requirements)
 - Task IDs are assigned sequentially and monotonically increasing within a DAG execution
 - A sentinel value (e.g., UINT16_MAX or special "DONE" marker) indicates no uncompleted tasks

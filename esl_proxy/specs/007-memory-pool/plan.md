@@ -76,30 +76,31 @@ include/dag/
 ## Ring Buffer Head/Tail Pointer Design
 
 ### Allocation (Producer - Orchestrator)
-- Uses ring buffer tail pointer to allocate
-- `tail++` with wraparound at capacity
-- O(1) operation: single atomic increment
+- Uses ring buffer tail offset to allocate variable-sized chunks
+- `tail += size` with wraparound at total_size
+- O(1) operation: single atomic addition by allocation size
 
 ### Release (Consumer - Manager/Worker)
-- Uses ring buffer head pointer to free
-- `head++` with wraparound at capacity
-- O(1) operation: single atomic increment
+- Uses ring buffer head offset to free in FIFO order
+- `head += size` with wraparound at total_size
+- O(1) operation: single atomic addition by allocation size
 
-### Why Ring Buffer Head/Tail?
-1. **Memory Contiguity**: Pre-allocated slots in continuous memory block
-2. **O(1) Allocation**: No search needed - just increment tail pointer
-3. **O(1) Release**: No merge needed - just increment head pointer
-4. **SPSC Natural Fit**: Single producer (tail), single consumer (head)
-5. **No Fragmentation**: FIFO reuse prevents fragmentation
+### Why Continuous Ring Buffer Head/Tail?
+1. **Continuous Memory**: Pre-allocated memory block without fixed-size slots
+2. **Variable-Sized**: Supports any allocation size up to pool remaining
+3. **O(1) Allocation**: No search needed - just advance tail by size
+4. **O(1) Release**: FIFO order - just advance head by size
+5. **SPSC Natural Fit**: Single producer (tail), single consumer (head)
+6. **No Fragmentation**: FIFO reuse of continuous memory prevents fragmentation
 
-### Slot State Machine (SPSC Ring Buffer)
+### State Machine (Continuous SPSC Ring Buffer)
 
 ```
-[FREE] --[tail++]--> [ALLOCATED]
-[ALLOCATED] --[head++]--> [FREE]
+[FREE] --[tail += size]--> [ALLOCATED]
+[ALLOCATED] --[head += size]--> [FREE]
 ```
 
-Head and tail pointers wrap around at capacity using modulo operation.
+Tail and head are offsets that wrap around at total_size using modulo operation.
 
 ## Complexity Tracking
 
@@ -109,4 +110,5 @@ Head and tail pointers wrap around at capacity using modulo operation.
 |-----------|------------|-------------------------------------|
 | Manager thread polling | Decouples when2free release from task execution | Synchronous release would block task execution paths |
 | SPSC-only mode | Simplifies lock-free design to ring buffer head/tail | MPMC would require CAS retry loops |
+| Continuous memory (no slots) | Variable-sized allocations without wasted space | Fixed slots would waste memory or limit max size |
 | Ring buffer head/tail | O(1) alloc/free without complex free-list | Linked-list or bitmap would add overhead |
