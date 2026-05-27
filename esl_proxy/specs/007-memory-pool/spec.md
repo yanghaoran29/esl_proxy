@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "memory预分配内存，支持task执行期间中间数据内存的分配和释放  + memory对orchestrator提供内存分配和注册释放时机的接口 + memory对orchestrator提供when2free(addr, taskID)接口，在所有小于taskID的任务已经执行完时自动释放对应的内存  + 根据task state Ring buffer中的TaskID状态更新最小未完成TaskID + 采用单生产者单消费者的模式 + 内存池以FIFO的方式管理 + 利用spsc队列首尾指针的更新实现内存的分配和释放 + 不分slot支持连续的内存管理"
+**Input**: User description: "预分配内存，提供内存分配和注册释放时机的接口 + memory对orchestrator提供when2free(addr, taskID)接口，在所有小于taskID的任务已经执行完时自动释放对应的内存  + 根据task state Ring buffer中的TaskID状态更新最小未完成TaskID + 采用单生产者单消费者的模式 + 利用spsc队列首尾指针的更新实现内存的分配和释放 + 不分slot支持连续的内存管理 + 通过额外的FIFO队列记录addr和taskid来进行内存释放的管理"
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -195,25 +195,24 @@ A system operator relies on a dedicated Manager thread to monitor the minimum un
 - **FR-005**: The system MUST handle pool exhaustion gracefully (allocation failure signal rather than crash)
 - **FR-006**: The system MUST support querying pool metadata (total size, allocated, available)
 - **FR-007**: Allocated buffers MUST support zero-copy sharing between producer and consumer tasks
-- **FR-008**: The system MUST prevent double-free errors (freeing already-freed buffers)
-- **FR-009**: The system SHOULD support pool resize (growing the pre-allocated region) at runtime
-- **FR-010**: The memory pool MUST expose allocation and deallocation interfaces to tasks for obtaining and releasing intermediate data buffers
-- **FR-011**: The memory pool MUST expose allocation and deallocation interfaces to the Orchestrator for constructing task graphs and managing task input/output data
-- **FR-012**: The memory pool MUST expose a when2free(addr, taskID) interface to the Orchestrator that registers a buffer address for automatic release when all tasks with IDs smaller than the specified threshold have completed
-- **FR-013**: The system MUST track the minimum TaskID among all uncompleted tasks
-- **FR-014**: The system MUST automatically update the minimum uncompleted TaskID when tasks complete
-- **FR-015**: The system MUST provide an interface to query the current minimum uncompleted TaskID
-- **FR-016**: The system MUST query the Task State Ring Buffer to determine task completion status for minimum uncompleted TaskID computation
-- **FR-017**: The system MUST treat tasks in "running" state as uncompleted when computing minimum uncompleted TaskID
-- **FR-018**: A dedicated Manager thread MUST continuously monitor the Task State Ring Buffer, update the minimum uncompleted TaskID, and automatically free when2free-registered buffers whose threshold has been reached
-- **FR-019**: The memory pool MUST manage continuous memory without fixed-size slots, supporting variable-sized allocations via FIFO-based allocation where freed memory is returned to the queue for reuse
-- **FR-020**: The memory pool MUST use SPSC queue head/tail pointer updates for allocation and release, leveraging memory contiguity for O(1) operation without complex data structures
+- **FR-008**: The memory pool MUST expose allocation interfaces to the Orchestrator for constructing task graphs and managing task input/output data
+- **FR-009**: The memory pool MUST expose a when2free(addr, taskID) interface to the Orchestrator that registers a buffer address for automatic release when all tasks with IDs smaller than the specified threshold have completed
+- **FR-010**: The system MUST track the minimum TaskID among all uncompleted tasks
+- **FR-011**: The system MUST automatically update the minimum uncompleted TaskID when tasks complete
+- **FR-012**: The system MUST provide an interface to query the current minimum uncompleted TaskID
+- **FR-013**: The system MUST query the Task State Ring Buffer to determine task completion status for minimum uncompleted TaskID computation
+- **FR-014**: The system MUST treat tasks in "running" state as uncompleted when computing minimum uncompleted TaskID
+- **FR-015**: A dedicated Manager thread MUST continuously monitor the Task State Ring Buffer, update the minimum uncompleted TaskID, and automatically free when2free-registered buffers whose threshold has been reached
+- **FR-016**: The memory pool MUST manage continuous memory without fixed-size slots, supporting variable-sized allocations via FIFO-based allocation where freed memory is returned to the queue for reuse
+- **FR-017**: The memory pool MUST use SPSC queue head/tail pointer updates for allocation and release, leveraging memory contiguity for O(1) operation without complex data structures
+- **FR-018**: The system MUST use an additional FIFO queue to record when2free addr and taskid pairs for automatic memory release management, processed by the Manager thread
 
 ### Key Entities *(include if feature involves data)*
 
 - **Memory Pool**: A pre-allocated region of memory from which task intermediate data is allocated. Attributes: total size, allocated bytes, free bytes.
 - **Buffer Handle**: A reference to an allocated buffer within the pool. Used by tasks to read/write data and to free the buffer.
 - **Allocation Request**: A task's request for a buffer of a specific size. Contains: requested size, returned buffer handle or failure status.
+- **when2free FIFO Queue**: Additional FIFO queue that records when2free entries containing addr and taskid pairs for automatic memory release.
 - **Task Completion Tracker**: Component that tracks task completion status and maintains the minimum uncompleted TaskID based on Task State Ring Buffer.
 - **Task State Ring Buffer**: Ring buffer that maintains the state of each task ID (pending, running, completed). The authoritative source for determining which tasks are still uncompleted.
 
@@ -233,7 +232,6 @@ A system operator relies on a dedicated Manager thread to monitor the minimum un
 ## Assumptions
 
 - Memory pool size is configured at system initialization based on workload analysis
-- Tasks are trusted to call free exactly once per allocation (Trust the Caller principle applies to lifecycle management)
 - The memory pool is private to a single Executor or Dispatch-Executor pair (not shared across processes)
 - Fragmentation is managed through continuous memory management without fixed-size slots (variable-sized allocations)
 - Task intermediate data does not persist beyond task completion (no durability requirements)
@@ -242,8 +240,8 @@ A system operator relies on a dedicated Manager thread to monitor the minimum un
 - The Task State Ring Buffer is the authoritative source for task state information
 - Task states include: pending, running, completed (or similar states defined in the ring buffer)
 - The system queries the Task State Ring Buffer to compute minimum uncompleted TaskID
-- CompleteQueue is NOT used for minimum uncompleted TaskID updates - it serves other purposes (e.g., signaling task completion to other components)
-- The memory pool operates in Single Producer Single Consumer (SPSC) mode, where a single designated producer (Orchestrator) allocates memory and a single designated consumer (Worker/Executor) frees memory
+- The memory pool operates in Single Producer Single Consumer (SPSC) mode, where a single designated producer (Orchestrator) allocates memory and a single designated consumer (Manager) frees memory
 - A dedicated Manager thread handles when2free-based automatic memory release by monitoring minimum uncompleted TaskID
 - The memory pool uses FIFO-based allocation where freed slots are returned to the queue for reuse
 - Allocation and release use SPSC queue head/tail pointer updates, leveraging memory contiguity for O(1) operation
+- when2free uses an additional FIFO queue to record addr and taskid for memory release management

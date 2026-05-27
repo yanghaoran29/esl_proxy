@@ -16,38 +16,34 @@ Pre-allocated continuous memory region managed via ring buffer head/tail pointer
 | `_Atomic tail` | `size_t` | Producer offset pointer for allocation (SPSC) |
 | `_Atomic head` | `size_t` | Consumer offset pointer for release (SPSC) |
 
-**State**: N/A (static allocation via ring buffer)
-
-### Allocation Record
-
-Tracks individual allocation within the continuous pool.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `offset` | `size_t` | Offset from base_addr where allocation starts |
-| `size` | `size_t` | Size of this allocation in bytes |
-| `in_use` | `_Atomic bool` | Whether this allocation is active |
-| `when2free_task_id` | `uint32_t` | Threshold for when2free release (0 = none) |
-
 ### Buffer Handle
 
 Reference to allocated buffer returned to caller.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `addr` | `void*` | Buffer address within pool (base_addr + offset) |
+| `addr` | `void*` | Buffer address within pool |
 | `size` | `size_t` | Buffer size |
-| `offset` | `size_t` | Offset from pool base for release |
 
-### when2free Registry
+### when2free Entry
 
-Registration entry for automatic memory release.
+Entry in the when2free FIFO queue.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `offset` | `size_t` | Offset of registered allocation |
+| `addr` | `void*` | Buffer address to free |
 | `task_id` | `uint32_t` | Release threshold (free when min_uncompleted > task_id) |
-| `active` | `bool` | Whether registration is active |
+
+### when2free FIFO Queue
+
+SPSC queue for when2free entries.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `entries` | `when2free_entry_t*` | Array of when2free entries |
+| `capacity` | `size_t` | Queue capacity |
+| `_Atomic head` | `size_t` | Consumer head pointer |
+| `_Atomic tail` | `size_t` | Producer tail pointer |
 
 ### Minimum Uncompleted Tracker
 
@@ -64,10 +60,9 @@ Tracks minimum uncompleted TaskID via Task State Ring Buffer.
 Memory Pool (Continuous Ring Buffer)
 ├── base_addr + tail (alloc offset)
 ├── base_addr + head (free offset)
-├── allocation_records[] (variable-sized allocations tracked by offset)
-│   └── each allocation: size + in_use state + when2free_task_id
-├── when2free_registry[]
-│   └── each entry: offset + task_id threshold
+├── when2free FIFO Queue
+│   ├── head: Manager reads entries here
+│   └── tail: Orchestrator writes entries here
 └── min_uncompleted_tracker
     └── queries Task State Ring Buffer for state
 ```
@@ -77,27 +72,20 @@ Memory Pool (Continuous Ring Buffer)
 1. Allocations are variable-sized (no fixed slots)
 2. `tail` advances by allocation size on alloc
 3. `head` advances by allocation size on free (FIFO order)
-4. when2free release only when `min_uncompleted > allocation.when2free_task_id`
-5. SPSC: only Orchestrator (producer) advances `tail`, only Worker/Manager (consumer) advances `head`
+4. when2free release when `min_uncompleted > entry.task_id`
+5. SPSC: only Orchestrator (producer) advances `tail`, only Manager (consumer) advances `head`
 
 ## State Transitions
 
-### Allocation State (Continuous)
+### Memory Pool (Continuous)
 ```
-FREE --[tail += size]--> ALLOCATED
-ALLOCATED --[head += size]--> FREE (FIFO order)
-```
-
-### Ring Buffer Pointer Advance
-```
-tail: tail + allocation_size (with wrap at total_size)
-head: head + allocation_size (with wrap at total_size)
+[FREE] --[tail += size]--> [ALLOCATED]
+[ALLOCATED] --[head += size]--> [FREE] (FIFO order)
 ```
 
-### when2free Entry
+### when2free FIFO Queue
 ```
-ACTIVE --[min_uncompleted > task_id]--> FREED
-ACTIVE --[explicit free]--> EXPLICIT_FREE
+EMPTY --[when2free]--> [ENTRY Added] --[Manager dequeues]--> [ENTRY Removed]
 ```
 
 ### TaskID Tracker

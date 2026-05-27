@@ -6,7 +6,7 @@
 
 ## Summary
 
-A pre-allocated memory pool for DAG task execution supporting: SPSC allocation/deallocation via ring buffer head/tail pointer updates, when2free automatic release based on minimum uncompleted TaskID tracked via Task State Ring Buffer, and a dedicated Manager thread for threshold-based memory reclamation.
+A pre-allocated memory pool for DAG task execution supporting: SPSC allocation/deallocation via ring buffer head/tail pointer updates, when2free automatic release managed via additional FIFO queue recording addr/taskid pairs, and a dedicated Manager thread for threshold-based memory reclamation.
 
 ## Technical Context
 
@@ -24,7 +24,7 @@ A pre-allocated memory pool for DAG task execution supporting: SPSC allocation/d
 
 **Performance Goals**: Allocation/deallocation < 1μs, when2free release < 1μs after threshold
 
-**Constraints**: SPSC mode only (single producer Orchestrator, single consumer Worker), ring buffer head/tail pointer for O(1) alloc/free
+**Constraints**: SPSC mode only (single producer Orchestrator, single consumer Manager), continuous memory without fixed slots, when2free FIFO queue for addr/taskid
 
 **Scale/Scope**: Pool sizes 1MB-1GB, thousands of concurrent allocations
 
@@ -35,7 +35,7 @@ A pre-allocated memory pool for DAG task execution supporting: SPSC allocation/d
 | Principle | Compliance Requirement |
 |-----------|----------------------|
 | Modern C11 | C11 standard (`-std=c11`) only; `_Generic`, atomics, `restrict` pointers required; unsafe practices prohibited |
-| Callback-Based Async Architecture | Manager thread uses async polling pattern; when2free callbacks for allocation/release; no blocking |
+| Callback-Based Async Architecture | Manager thread uses async polling pattern; when2free FIFO queue; no blocking |
 | DAG-Based Task Scheduling | N/A - memory pool component, not DAG scheduler |
 | Zero-Copy Task Data Flow | Buffer descriptors (pointer+size) for zero-copy sharing |
 | Lock-Free Concurrency | SPSC mode with C11 atomics; ring buffer head/tail pointers are atomic; no mutexes |
@@ -45,7 +45,7 @@ A pre-allocated memory pool for DAG task execution supporting: SPSC allocation/d
 | Header-Only Library | All implementation in headers with `static inline` |
 | Trust the Caller | Caller provides valid addresses and TaskIDs; no validation at pool layer |
 
-**Rationale**: Memory pool is a header-only C11 component using ring buffer head/tail pointers for SPSC. Manager thread runs independently with async polling. Ring buffer design provides O(1) allocation without complex data structures.
+**Rationale**: Memory pool is a header-only C11 component using ring buffer head/tail pointers for SPSC. Manager thread runs independently with async polling. when2free FIFO queue decouples release timing from allocation.
 
 ## Project Structure
 
@@ -71,36 +71,44 @@ include/dag/
 └── ring_buf.c           # Ring buffer global defs
 ```
 
-**Structure Decision**: Header-only library under `include/dag/`. Single `mem_pool.h` with `static inline` implementations. Ring buffer head/tail pointer approach for SPSC slot management.
+**Structure Decision**: Header-only library under `include/dag/`. Single `mem_pool.h` with `static inline` implementations. when2free uses separate FIFO queue for addr/taskid pairs.
 
-## Ring Buffer Head/Tail Pointer Design
+## Continuous Memory Ring Buffer Design
 
 ### Allocation (Producer - Orchestrator)
 - Uses ring buffer tail offset to allocate variable-sized chunks
 - `tail += size` with wraparound at total_size
 - O(1) operation: single atomic addition by allocation size
 
-### Release (Consumer - Manager/Worker)
+### Release (Consumer - Manager)
 - Uses ring buffer head offset to free in FIFO order
 - `head += size` with wraparound at total_size
 - O(1) operation: single atomic addition by allocation size
 
-### Why Continuous Ring Buffer Head/Tail?
-1. **Continuous Memory**: Pre-allocated memory block without fixed-size slots
-2. **Variable-Sized**: Supports any allocation size up to pool remaining
-3. **O(1) Allocation**: No search needed - just advance tail by size
-4. **O(1) Release**: FIFO order - just advance head by size
-5. **SPSC Natural Fit**: Single producer (tail), single consumer (head)
-6. **No Fragmentation**: FIFO reuse of continuous memory prevents fragmentation
+### when2free FIFO Queue
+- Additional SPSC FIFO queue records when2free entries
+- Each entry contains: addr (buffer address), taskid (release threshold)
+- Manager thread dequeues entries when min_uncompleted > taskid
+- O(1) enqueue (producer) and O(1) dequeue (consumer)
 
-### State Machine (Continuous SPSC Ring Buffer)
+### Why Separate when2free FIFO?
+1. **Decoupling**: when2free registration timing decoupled from allocation
+2. **FIFO Order**: Buffers freed in registration order when thresholds met
+3. **Simplicity**: No need to track in-use slots for release - just check FIFO
+4. **SPSC Natural Fit**: when2free called by Orchestrator (producer), processed by Manager (consumer)
+
+### when2free Flow
 
 ```
-[FREE] --[tail += size]--> [ALLOCATED]
-[ALLOCATED] --[head += size]--> [FREE]
+Orchestrator                    Manager Thread
+     |                               |
+when2free(addr, T) --> [FIFO] -->   |
+     |                          min_uncompleted > T?
+     |                               |
+     |                          Yes: free(addr), dequeue
+     |                               |
+     |                          No: keep in FIFO
 ```
-
-Tail and head are offsets that wrap around at total_size using modulo operation.
 
 ## Complexity Tracking
 
@@ -110,5 +118,5 @@ Tail and head are offsets that wrap around at total_size using modulo operation.
 |-----------|------------|-------------------------------------|
 | Manager thread polling | Decouples when2free release from task execution | Synchronous release would block task execution paths |
 | SPSC-only mode | Simplifies lock-free design to ring buffer head/tail | MPMC would require CAS retry loops |
+| when2free FIFO queue | Decouples release timing, enables O(1) threshold check | Inline tracking would add complexity |
 | Continuous memory (no slots) | Variable-sized allocations without wasted space | Fixed slots would waste memory or limit max size |
-| Ring buffer head/tail | O(1) alloc/free without complex free-list | Linked-list or bitmap would add overhead |

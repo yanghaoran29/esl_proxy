@@ -11,7 +11,6 @@
 // Configure pool at system init
 mem_pool_config_t config = {
     .pool_size = 64 * 1024 * 1024,  // 64MB
-    .slot_size = 4096,               // 4KB slots
 };
 mem_pool_init(&config);
 ```
@@ -20,26 +19,16 @@ mem_pool_init(&config);
 
 ```c
 // Orchestrator allocates buffer via ring buffer tail
-size_t slot_index = mem_pool_alloc(1024);
-if (slot_index == INVALID_SLOT) {
+buffer_handle_t *buf = mem_pool_alloc(1024);
+if (!buf) {
     // Handle pool exhaustion
 }
 
-// Register for automatic release
-mem_pool_when2free(slot_index, target_task_id);
+// Register for automatic release via when2free FIFO
+mem_pool_when2free(buf->addr, target_task_id);
 ```
 
-### 3. Worker Uses Buffer (Consumer)
-
-```c
-// Worker uses buffer
-void *buffer = mem_pool_addr(slot_index);
-
-// After task completion, Manager thread frees via ring buffer head
-mem_pool_free(slot_index);
-```
-
-### 4. Manager Thread (when2free Release)
+### 3. Manager Thread Processes when2free (Consumer)
 
 ```c
 // Manager thread runs continuously
@@ -50,71 +39,93 @@ while (running) {
 }
 ```
 
-## Ring Buffer Head/Tail Flow
+## Continuous Ring Buffer Flow
 
 ```
-Producer (Orchestrator)          Consumer (Manager/Worker)
+Producer (Orchestrator)              Consumer (Manager)
       |                                  |
-      v                                  v
-   tail = 0                           head = 0
+      |-- tail += size -->              |
       |                                  |
-      |-- alloc --> slot[0] -- free --> |
+   tail = 100                          head = 0
       |                                  |
-   tail = 1                           head = 1
+      |-- alloc(100) --> buffer[0-99]  |
       |                                  |
-      |-- alloc --> slot[1] -- free --> |
+   tail = 200                          head = 100
       |                                  |
-   tail = 2                           head = 2
+      |-- tail += 50 -->                |
+      |                                  |
+   tail = 250                          head = 100
+      |                                  |
+      |-- alloc(50) --> buffer[100-149] |
+```
+
+## when2free FIFO Queue Flow
+
+```
+Orchestrator                 when2free FIFO              Manager Thread
+      |                            |                           |
+      |-- when2free(A, 5) -->      |                           |
+      |                            |                           |
+      |                            | --> dequeues A            |
+      |                            |                           min_id = 6 > 5?
+      |                            |                           Yes: free(A)
+      |                            |                           |
+      |-- when2free(B, 8) -->      |                           |
+      |                            |                           |
+      |                            | --> dequeues B            |
+      |                            |                           min_id = 6 < 8?
+      |                            |                           No: re-enqueue or keep
 ```
 
 ## Test Scenarios
 
-### Scenario 1: Basic Alloc/Free via Ring Buffer
+### Scenario 1: Basic Alloc/Free
 
 ```
-1. Init pool (1MB, 256 slots of 4KB)
+1. Init pool (64MB)
 2. tail = 0, head = 0
-3. alloc() → returns slot 0, tail = 1
-4. free(slot 0) → head = 1
-5. Verify ring buffer state: head=1, tail=1 (balanced)
+3. alloc(1024) → returns buffer, tail = 1024
+4. free(buffer) → head = 1024
+5. Verify ring buffer state: head == tail (balanced)
 ```
 
-### Scenario 2: Ring Buffer Wraparound
+### Scenario 2: when2free FIFO Processing
 
 ```
-1. Pool with 4 slots
-2. alloc × 4 → tail: 0→1→2→3→4 (wrap to 0)
-3. Verify tail % 4 == 0
-4. free × 4 → head: 0→1→2→3→4 (wrap to 0)
-5. Verify head % 4 == 0
+1. Init pool + when2free FIFO queue
+2. Orchestrator: when2free(buffer_A, taskID=5)
+3. Orchestrator: when2free(buffer_B, taskID=8)
+4. Manager: min_uncompleted = 6 > 5? → free buffer_A
+5. Manager: min_uncompleted = 6 < 8? → keep buffer_B in FIFO
+6. Manager: min_uncompleted = 9 > 8? → free buffer_B
 ```
 
-### Scenario 3: when2free Automatic Release
+### Scenario 3: Continuous Memory (Variable-Sized)
 
 ```
-1. Init pool
-2. alloc() → slot 0, register when2free(slot=0, task_id=5)
-3. Task 3 completes → min_uncompleted = 4
-4. Task 4 completes → min_uncompleted = 5 (slot NOT freed, 5 is threshold)
-5. Task 5 completes → min_uncompleted = 6 → slot freed via head++
+1. Init pool (100KB)
+2. alloc(30KB) → tail = 30KB
+3. alloc(50KB) → tail = 80KB
+4. free(30KB) → head = 30KB
+5. alloc(20KB) → tail = 100KB
+6. Verify: No fixed slots, memory used contiguously
 ```
 
-### Scenario 4: SPSC Mode Enforcement
+### Scenario 4: FIFO Queue Wraparound
 
 ```
-1. Init pool in SPSC mode
-2. Producer (Orchestrator) calls alloc() → tail++ → slot allocated
-3. Consumer (Worker/Manager) calls free() → head++ → slot freed
-4. Verify: only producer modifies tail, only consumer modifies head
+1. when2free FIFO capacity = 1024
+2. when2free(A, 1), when2free(B, 2), ..., when2free(X, 24)
+3. Manager processes entries 1-24
+4. dequeues in FIFO order: A first, then B, etc.
 ```
 
 ### Scenario 5: Pool Exhaustion
 
 ```
-1. Init pool (1KB total, 2 slots of 500 bytes)
-2. tail = 0: alloc → slot 0, tail = 1
-3. tail = 1: alloc → slot 1, tail = 2
-4. tail = 2 % 2 = 0 == head? Pool full
-5. free(slot 0) → head = 1
-6. alloc → slot 1, tail = 0
+1. Init pool (1KB)
+2. alloc(500B) → tail = 500
+3. alloc(500B) → tail = 1000
+4. alloc(500B) → tail wraps, but head still 0 → Pool full?
+5. Actually: (tail - head) >= pool_size? → return NULL
 ```
