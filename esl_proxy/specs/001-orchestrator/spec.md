@@ -1,90 +1,90 @@
-# Feature Specification: Orchestrator
+# 功能规格说明：Orchestrator
 
-**Feature Branch**: `001-orchestrator`
+**功能分支**：`001-orchestrator`
 
-**Created**: 2026-05-22
+**创建时间**：2026-05-22
 
-**Status**: Draft
+**状态**：草稿
 
-**Input**: User description: "目标：设计一个名为 Graph 的类，用户可以通过它直观地编排任务依赖关系。任务声明：用户通过传递输入数据地址、输出数据地址、常量、Kernel地址来创建 Task。拓扑编排：支持 A.precede(B)（A 在 B 之前执行）或 B.succeed(A)（B 在 A 之后执行）的操作符或方法。"
+**输入**：用户描述："目标：设计一个名为 Graph 的类，用户可以通过它直观地编排任务依赖关系。任务声明：用户通过传递输入数据地址、输出数据地址、常量、Kernel地址来创建 Task。拓扑编排：支持 A.precede(B)（A 在 B 之前执行）或 B.succeed(A)（B 在 A 之后执行）的操作符或方法。"
 
-## User Scenarios & Testing *(mandatory)*
+## 用户场景与测试 *(必填)*
 
-### User Story 1 - Task Graph Construction (Priority: P1)
+### 用户故事 1 - 任务图构建（优先级：P1）
 
-A data engineer needs to define a pipeline of computation tasks where each task depends on the outputs of previous tasks. They create a Graph, add Tasks representing each computational step, and wire them together using precedence constraints.
+数据工程师需要定义一个计算任务流水线，其中每个任务都依赖于前序任务的输出。他们创建一个 Graph，添加表示每个计算步骤的 Task，并使用先后顺序约束将它们连接起来。
 
-**Why this priority**: This is the core use case - users must be able to build a DAG of tasks with dependencies.
+**为何此优先级**：这是核心使用场景——用户必须能够构建一个带依赖关系的任务 DAG。
 
-**Independent Test**: Can be tested by creating a simple 3-task graph, verifying that execution respects the dependency order.
+**独立测试**：可以通过创建一个简单的 3 任务图、验证执行过程遵循依赖顺序来进行测试。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** an empty Graph, **When** the user adds Task A and Task B, **Then** both tasks exist in the graph with no dependency between them
-2. **Given** Task A and Task B exist in a Graph, **When** the user calls `A.precede(B)`, **Then** B will execute after A completes
-3. **Given** Task A and Task B exist in a Graph, **When** the user calls `B.succeed(A)`, **Then** the same dependency is established as `A.precede(B)`
-
----
-
-### User Story 2 - Task Data Binding (Priority: P1)
-
-A data engineer needs to specify what data each task reads from and writes to. They provide memory addresses for input/output data, constants, and the kernel (computation function) when creating each Task.
-
-**Why this priority**: Task execution requires knowing the data sources and destinations - this is fundamental to task operation.
-
-**Independent Test**: Can be tested by creating Tasks with data bindings and verifying the Graph captures these bindings correctly.
-
-**Acceptance Scenarios**:
-
-1. **Given** a user creates a Task with input address X, output address Y, input output address W, constant Z, duration M, subTaskCnt N , taskType V and kernel address K, **When** the Task is added to a Graph, **Then** the Graph stores these bindings
-2. **Given** a Task with input bound to output of another Task, **When** the Graph executes, **Then** data flows from the producing Task to the consuming Task
+1. **给定** 一个空的 Graph，**当** 用户添加 Task A 和 Task B 时，**则** 两个任务都存在于图中，并且它们之间没有依赖关系
+2. **给定** Task A 和 Task B 存在于一个 Graph 中，**当** 用户调用 `A.precede(B)` 时，**则** B 将在 A 完成之后执行
+3. **给定** Task A 和 Task B 存在于一个 Graph 中，**当** 用户调用 `B.succeed(A)` 时，**则** 建立与 `A.precede(B)` 相同的依赖关系
 
 ---
 
-### User Story 3 - Parallel Execution Planning (Priority: P2)
+### 用户故事 2 - 任务数据绑定（优先级：P1）
 
-A data engineer wants to understand how their task graph will be executed. The Graph should expose information about execution order - specifically, which tasks can run in parallel.
+数据工程师需要指定每个任务从哪里读取数据以及将数据写入哪里。在创建每个 Task 时,他们提供输入/输出数据、常量和 kernel（计算函数）的内存地址。
 
-**Why this priority**: Users need to verify the scheduler will exploit parallelism as expected.
+**为何此优先级**：任务执行需要知道数据源和目标——这是任务运行的基础。
 
-**Independent Test**: Can be tested by creating a diamond dependency pattern and verifying tasks on different branches can execute concurrently.
+**独立测试**：可以通过创建带数据绑定的 Task 并验证 Graph 正确捕获这些绑定来进行测试。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a Graph with a diamond pattern (A→B, A→C, B→D, C→D), **When** the user queries parallel execution groups, **Then** {A} is in the first group, {B, C} in the second, and {D} in the third
-2. **Given** a Graph is valid (no cycles), **When** the user requests topological order, **Then** the returned order respects all precedence constraints
-
----
-
-## Requirements *(mandatory)*
-
-### Functional Requirements
-
-- **FR-001**: Users MUST be able to create a Graph instance
-- **FR-002**: Users MUST be able to create a Task by providing input addresses, output addresses，input output addresses, constants, and kernel address
-- **FR-003**: Users MUST be able to add Tasks to a Graph
-- **FR-004**: Users MUST be able to express precedence via `A.precede(B)` method
-- **FR-005**: Users MUST be able to express precedence via `B.succeed(A)` method
-- **FR-006**: The Graph MUST provide topological ordering of Tasks
-- **FR-007**: The Graph MUST identify independent Tasks that can execute in parallel
-- **FR-008**: The Graph MUST validate that all Task references are resolvable before execution
+1. **给定** 用户使用输入地址 X、输出地址 Y、输入输出地址 W、常量 Z、持续时间 M、subTaskCnt N、taskType V 和 kernel 地址 K 创建一个 Task，**当** 该 Task 被加入到 Graph 时，**则** Graph 存储这些绑定
+2. **给定** 一个 Task 的输入绑定到另一个 Task 的输出，**当** Graph 执行时，**则** 数据从生产者 Task 流向消费者 Task
 
 ---
 
-## Success Criteria *(mandatory)*
+### 用户故事 3 - 并行执行规划（优先级：P2）
 
-### Measurable Outcomes
+数据工程师希望了解其任务图将如何被执行。Graph 应当暴露关于执行顺序的信息——具体而言，即哪些任务可以并行运行。
 
-- **SC-001**: Users can construct a 100-task DAG with mixed precedence constraints in under 5 minutes
-- **SC-002**: Cycle detection completes in O(V+E) time where V=tasks, E=edges
-- **SC-003**: Independent task groups are correctly identified for parallel execution
-- **SC-004**: Users receive clear error messages when cycle is detected, identifying the specific Tasks involved
+**为何此优先级**：用户需要验证调度器将按预期发挥并行能力。
+
+**独立测试**：可以通过创建一个菱形依赖模式并验证不同分支上的任务可以并发执行来进行测试。
+
+**验收场景**：
+
+1. **给定** 一个具有菱形模式（A→B, A→C, B→D, C→D）的 Graph，**当** 用户查询并行执行组时，**则** {A} 位于第一组，{B, C} 位于第二组，{D} 位于第三组
+2. **给定** 一个有效的 Graph（无环），**当** 用户请求拓扑顺序时，**则** 返回的顺序应遵循所有先后顺序约束
 
 ---
 
-## Assumptions
+## 需求 *(必填)*
 
-- Users have a valid kernel implementation (function pointer/address) for each Task
-- Memory addresses provided are valid and accessible during Graph execution
-- The Graph is intended for single-threaded construction but multi-threaded execution
-- No automatic data flow inference - users explicitly specify input/output bindings
+### 功能性需求
+
+- **FR-001**：用户必须能够创建一个 Graph 实例
+- **FR-002**：用户必须能够通过提供输入地址、输出地址、输入输出地址、常量和 kernel 地址来创建一个 Task
+- **FR-003**：用户必须能够将 Task 添加到 Graph 中
+- **FR-004**：用户必须能够通过 `A.precede(B)` 方法表达先后顺序
+- **FR-005**：用户必须能够通过 `B.succeed(A)` 方法表达先后顺序
+- **FR-006**：Graph 必须提供 Task 的拓扑排序
+- **FR-007**：Graph 必须识别出可以并行执行的独立 Task
+- **FR-008**：Graph 必须在执行之前验证所有 Task 引用均可解析
+
+---
+
+## 成功标准 *(必填)*
+
+### 可度量结果
+
+- **SC-001**：用户能够在 5 分钟内构建一个包含混合先后顺序约束的 100 任务 DAG
+- **SC-002**：环检测在 O(V+E) 时间内完成，其中 V=任务数，E=边数
+- **SC-003**：独立任务组被正确识别以用于并行执行
+- **SC-004**：当检测到环时，用户收到清晰的错误信息，指出所涉及的具体 Task
+
+---
+
+## 假设
+
+- 用户为每个 Task 都拥有有效的 kernel 实现（函数指针/地址）
+- 所提供的内存地址在 Graph 执行期间是有效且可访问的
+- Graph 设计为单线程构建但多线程执行
+- 不进行自动数据流推断——用户显式指定输入/输出绑定

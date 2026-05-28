@@ -1,78 +1,78 @@
-# Implementation Plan: Task
+# 实施计划：Task
 
-**Branch**: `008-task` | **Date**: 2026-05-26 | **Spec**: [link](spec.md)
+**分支**：`008-task` | **日期**：2026-05-26 | **规格说明**：[link](spec.md)
 
-**Input**: Task feature with task descriptor containing only description information. Task types CUBE/VECTOR/MIX, organization modes Single/Group/SPMD_SYNC/SPMD_ASYNC. Dependency info: successor count, successor nodes, predecessor count. Successor storage: base entry (3 inline) + extension entries via 2-byte next pointer. Runtime info: input/output data address, kernel address. Naming without `dag` prefix per Constitution XI.
+**输入**：Task 功能，其任务描述符仅包含描述信息。任务类型 CUBE/VECTOR/MIX，组织模式 Single/Group/SPMD_SYNC/SPMD_ASYNC。依赖信息：后继数量、后继节点、前驱数量。后继存储：基础条目（3 个内联）+ 通过 2 字节 next 指针的扩展条目。运行时信息：输入/输出数据地址、kernel 地址。命名按宪法第 XI 条不使用 `dag` 前缀。
 
-## Summary
+## 概要
 
-Task is the fundamental execution unit in the DAG engine. The task descriptor contains only task description information (id, type, mode, kernel, base index, count, prio, data). Dependency information stored separately includes successor count, successor nodes, and predecessor count. Runtime information stored separately includes input/output data addresses and kernel address. Naming avoids `dag` prefix per Constitution XI.
+Task 是 DAG 引擎中的基本执行单元。任务描述符仅包含任务描述信息（id、type、mode、kernel、base index、count、prio、data）。单独存储的依赖信息包含后继数量、后继节点与前驱数量。单独存储的运行时信息包含输入/输出数据地址与 kernel 地址。命名按宪法第 XI 条避免使用 `dag` 前缀。
 
-## Technical Context
+## 技术背景
 
-**Language/Version**: C11 (`-std=c11`)
+**语言/版本**：C11（`-std=c11`）
 
-**Primary Dependencies**: Standard C library only
+**主要依赖**：仅标准 C 库
 
-**Storage**: 4 separate Ring Buffers (managed by ring buffer component):
+**存储**：4 个独立的 Ring Buffer（由 ring buffer 组件管理）：
 - Task State Ring Buffer
 - Task Basic Info Ring Buffer
 - Task Dependency Ring Buffer
 - Task Runtime Info Ring Buffer
 
-**Testing**: Unit tests via dependency injection
+**测试**：通过依赖注入进行单元测试
 
-**Target Platform**: Cross-platform (Linux/macOS)
+**目标平台**：跨平台（Linux/macOS）
 
-**Project Type**: Header-only C library for DAG scheduling
+**项目类型**：用于 DAG 调度的仅头文件 C 库
 
-**Performance Goals**:
-- Task access: O(1) via TASKID & RING_SIZE
-- Compact storage: 16-bit TaskID
+**性能目标**：
+- 任务访问：通过 TASKID & RING_SIZE 实现 O(1)
+- 紧凑存储：16 位 TaskID
 
-**Constraints**:
-- Header-only — all implementation in headers, no .c files
-- Task descriptor contains ONLY description fields, NO execution state
-- Naming without `dag` prefix per Constitution XI
+**约束**：
+- 仅头文件——所有实现都在头文件中，无 .c 文件
+- 任务描述符仅包含描述字段，不含执行状态
+- 命名按宪法第 XI 条不使用 `dag` 前缀
 
-**Scale/Scope**:
-- TASKID: 16-bit (2 bytes)
-- Successor storage: base entry (3 inline) + extension via 2B next pointer
+**规模/范围**：
+- TASKID：16 位（2 字节）
+- 后继存储：基础条目（3 个内联）+ 通过 2B next 指针的扩展条目
 
-## Constitution Check
+## 宪法检查
 
-*GATE: Must pass before Phase 0 research.*
+*门禁：必须在 Phase 0 研究前通过。*
 
-| Principle | Compliance Requirement |
+| 原则 | 合规要求 |
 |-----------|----------------------|
-| Modern C11 | C11 standard only; `_Generic`, atomics, `restrict` |
-| Callback-Based Async | Completion via atomic bits; function pointers |
-| DAG-Based Task Scheduling | DAG structure; Work-Stealing scheduler |
-| Zero-Copy Task Data Flow | Buffer descriptors in Ring Buffers |
-| Lock-Free Concurrency | C11 atomics only; no mutexes in hot paths |
-| No Blocking in Hot Paths | No sync I/O; async waits with continuation |
-| Deterministic Scheduling | Same DAG+inputs → same results |
-| Testability | Dependency injection via function pointers |
-| Header-Only Library | All implementation in headers; `static inline` functions |
-| Trust the Caller | No validation; undefined on invalid input |
-| Concise Naming | No redundant prefixes; no `dag` prefix; names within context |
+| Modern C11 | 仅 C11 标准；`_Generic`、原子操作、`restrict` |
+| Callback-Based Async | 通过原子位完成；函数指针 |
+| DAG-Based Task Scheduling | DAG 结构；Work-Stealing 调度器 |
+| Zero-Copy Task Data Flow | Ring Buffer 中的缓冲区描述符 |
+| Lock-Free Concurrency | 仅 C11 原子操作；热路径中无 mutex |
+| No Blocking in Hot Paths | 无同步 I/O；带 continuation 的异步等待 |
+| Deterministic Scheduling | 相同 DAG + 输入 → 相同结果 |
+| Testability | 通过函数指针进行依赖注入 |
+| Header-Only Library | 全部实现在头文件中；`static inline` 函数 |
+| Trust the Caller | 不做校验；非法输入时未定义行为 |
+| Concise Naming | 无冗余前缀；无 `dag` 前缀；名称在上下文内 |
 
-## Project Structure
+## 项目结构
 
-### Source Code (include/dag/) - Task Related Only
+### 源代码 (include/dag/) - 仅 Task 相关
 
 ```text
 include/dag/
 └── task.h             # Single header: task_desc, task_type_t, org_mode_t, helpers
 ```
 
-**Header-Only Enforcement**: All source files are headers (`.h`). No `.c` implementation files.
+**仅头文件强制要求**：所有源文件均为头文件（`.h`）。无 `.c` 实现文件。
 
-**Naming Convention**: File names use `dag_` prefix for header guard only. Type names and function names do not use `dag_` prefix.
+**命名约定**：文件名仅在头文件保护宏中使用 `dag_` 前缀。类型名与函数名不使用 `dag_` 前缀。
 
-## Phase 1: Design
+## Phase 1：设计
 
-### Task Descriptor Fields (Description Only)
+### 任务描述符字段（仅描述）
 
 ```c
 struct task_desc {
@@ -88,7 +88,7 @@ struct task_desc {
 // NO execution state fields
 ```
 
-### Task Type Enum
+### 任务类型枚举
 
 ```c
 typedef enum {
@@ -98,7 +98,7 @@ typedef enum {
 } task_type_t;
 ```
 
-### Organization Mode Enum
+### 组织模式枚举
 
 ```c
 typedef enum {
@@ -109,7 +109,7 @@ typedef enum {
 } org_mode_t;
 ```
 
-### Dependency Information Structure
+### 依赖信息结构
 
 ```c
 // Base entry: 3 inline successors + overflow pointer
@@ -121,25 +121,25 @@ struct dep_base {
 };
 ```
 
-- **Successor count**: Number of direct successor nodes
-- **Successor nodes**: List of successor TaskIDs (base entry 3 inline + extension via 2B next pointer)
-- **Predecessor count**: Number of direct predecessor nodes
+- **后继数量**：直接后继节点的数量
+- **后继节点**：后继 TaskID 列表（基础条目 3 个内联 + 通过 2B next 指针的扩展）
+- **前驱数量**：直接前驱节点的数量
 
-### Runtime Information (Runtime Ring Buffer)
+### 运行时信息（Runtime Ring Buffer）
 
-- **Input data address**: Pointer to input data buffer
-- **Output data address**: Pointer to output data buffer
-- **Kernel address**: Pointer to kernel code to execute
+- **输入数据地址**：指向输入数据缓冲区的指针
+- **输出数据地址**：指向输出数据缓冲区的指针
+- **Kernel 地址**：指向要执行的 kernel 代码的指针
 
-### Key Design Decisions
+### 关键设计决策
 
-1. **Single Header**: All task types and structs in one `task.h` header
-2. **Task Descriptor Contains ONLY Description**: No state, completion, executor assignment
-3. **TaskID 16-bit**: Compact representation for Ring Buffer efficiency
-4. **Dependency Info Separate**: Successor count, successor nodes, predecessor count stored in successor Ring Buffer
-5. **Runtime Info Separate**: Input/output addresses and kernel address stored in runtime Ring Buffer
-6. **No dag Prefix on Types**: `task_desc`, `task_type_t`, `org_mode_t` — dag_ only for header guard
+1. **单一头文件**：所有任务类型与结构体集中在一个 `task.h` 头文件
+2. **任务描述符仅含描述**：无状态、无完成状况、无 executor 分配
+3. **TaskID 16 位**：紧凑表示以提高 Ring Buffer 效率
+4. **依赖信息独立存储**：后继数量、后继节点、前驱数量存储在 successor Ring Buffer 中
+5. **运行时信息独立存储**：输入/输出地址与 kernel 地址存储在 runtime Ring Buffer 中
+6. **类型上无 dag 前缀**：`task_desc`、`task_type_t`、`org_mode_t` —— `dag_` 仅用于头文件保护宏
 
 ---
 
-**Status**: Plan complete. Ready for `/speckit-tasks`.
+**状态**：计划完成。可进入 `/speckit-tasks`。

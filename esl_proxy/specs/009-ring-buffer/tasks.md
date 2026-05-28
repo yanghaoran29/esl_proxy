@@ -1,177 +1,177 @@
-# Tasks: Task Ring Buffers
+# 任务：任务环形缓冲区
 
-**Input**: Design documents from `/specs/009-ring-buffer/`
+**输入**：来自 `/specs/009-ring-buffer/` 的设计文档
 
-**Prerequisites**: plan.md (required), spec.md (required for user stories)
+**前置条件**：plan.md（必需）、spec.md（用户故事所需）
 
-**Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
+**组织方式**：任务按用户故事分组，以便对每个故事进行独立的实现和测试。
 
-## Format: `[ID] [P?] [Story] Description`
+## 格式：`[ID] [P?] [Story] 描述`
 
-- **[P]**: Can run in parallel (different files, no dependencies)
-- **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
-- Include exact file paths in descriptions
+- **[P]**：可并行执行（不同文件，无依赖）
+- **[Story]**：该任务所属的用户故事（例如 US1、US2、US3）
+- 描述中包含确切的文件路径
 
-## Phase 1: Setup (Project Initialization)
+## 阶段 1：搭建（项目初始化）
 
-**Purpose**: Create project structure and basic configuration
+**目的**：创建项目结构和基本配置
 
-- [X] T001 [P] Create include/dag/ring_buf.h with header guard DAG_RING_BUF_H
-- [X] T002 [P] Create include/dag/ring_buf.c for global variable definitions
-- [X] T003 Configure C11 build flags in Makefile/CMakeLists
-
----
-
-## Phase 2: Foundational (Core Ring Buffer Infrastructure)
-
-**Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
-
-- [X] T004 Define RING_SIZE (4096) and RING_MASK constants in ring_buf.h
-- [X] T005 Create ring_cat_t enum (STATE, BASIC, DEP, RUNTIME)
-- [X] T006 [P] Declare extern global g_state_buf[RING_SIZE] in ring_buf.h
-- [X] T007 [P] Declare extern global g_basic_buf[RING_SIZE] in ring_buf.h
-- [X] T008 [P] Declare extern global g_dep_buf[RING_SIZE] in ring_buf.h
-- [X] T009 [P] Declare extern global g_runtime_buf[RING_SIZE] in ring_buf.h
-- [X] T010 Define 4 global ring buffers in ring_buf.c
-- [X] T011 [P] Implement ring_idx() function using TaskID & RING_MASK
-- [X] T012 Include dag/task.h and verify task_desc_t, dep_base_t types
-
-**Checkpoint**: Foundational ring buffer infrastructure ready
+- [X] T001 [P] 创建 include/dag/ring_buf.h，头文件保护宏为 DAG_RING_BUF_H
+- [X] T002 [P] 创建用于全局变量定义的 include/dag/ring_buf.c
+- [X] T003 在 Makefile/CMakeLists 中配置 C11 构建标志
 
 ---
 
-## Phase 3: User Story 1-3 - Ring Buffer Basics (Priority: P1)
+## 阶段 2：基础（核心 Ring Buffer 基础设施）
 
-**Goal**: Verify ring buffer size, indexing, and O(1) access
+**目的**：在任何用户故事可以实现之前必须完成的核心基础设施
 
-**Independent Test**: Verify index wraparound and bitwise AND computation
+- [X] T004 在 ring_buf.h 中定义 RING_SIZE（4096）和 RING_MASK 常量
+- [X] T005 创建 ring_cat_t 枚举（STATE、BASIC、DEP、RUNTIME）
+- [X] T006 [P] 在 ring_buf.h 中声明 extern 全局变量 g_state_buf[RING_SIZE]
+- [X] T007 [P] 在 ring_buf.h 中声明 extern 全局变量 g_basic_buf[RING_SIZE]
+- [X] T008 [P] 在 ring_buf.h 中声明 extern 全局变量 g_dep_buf[RING_SIZE]
+- [X] T009 [P] 在 ring_buf.h 中声明 extern 全局变量 g_runtime_buf[RING_SIZE]
+- [X] T010 在 ring_buf.c 中定义 4 个全局环形缓冲区
+- [X] T011 [P] 使用 TaskID & RING_MASK 实现 ring_idx() 函数
+- [X] T012 包含 dag/task.h 并验证 task_desc_t、dep_base_t 类型
 
-- [ ] T013 [US1] Verify RING_SIZE is 4096 (power of 2) - compile-time check
-- [ ] T014 [US2] Verify ring_idx(4096) returns 0 (wraparound)
-- [ ] T015 [US2] Verify ring_idx(5000) returns 904 (5000 & 4095)
-- [ ] T016 [US3] Verify O(1) access time via single bitwise AND
-
----
-
-## Phase 4: User Story 4 - Task State Storage (Priority: P1)
-
-**Goal**: Store task execution state in state ring buffer
-
-**Independent Test**: Write state to state buffer and read back
-
-- [ ] T017 [US4] Write task state to g_state_buf[ring_idx(task_id)]
-- [ ] T018 [US4] Read task state from g_state_buf[ring_idx(task_id)]
+**检查点**：基础环形缓冲区基础设施就绪
 
 ---
 
-## Phase 5: User Story 5 - Task Basic Information Storage (Priority: P1)
+## 阶段 3：用户故事 1-3 - Ring Buffer 基础（优先级：P1）
 
-**Goal**: Store task basic info in basic info ring buffer
+**目标**：验证环形缓冲区大小、索引和 O(1) 访问
 
-**Independent Test**: Write task_desc_t to basic buffer and read back
+**独立测试**：验证索引回绕和按位与运算
 
-- [ ] T019 [US5] Write task_desc_t to g_basic_buf[ring_idx(task_id)]
-- [ ] T020 [US5] Read task_desc_t from g_basic_buf[ring_idx(task_id)]
-
----
-
-## Phase 6: User Story 6 - Task Dependency Information Storage (Priority: P1)
-
-**Goal**: Store task dependency info in dependency ring buffer
-
-**Independent Test**: Write dep_base_t to dependency buffer and read back
-
-- [ ] T021 [US6] Write dep_base_t to g_dep_buf[ring_idx(task_id)]
-- [ ] T022 [US6] Read dep_base_t from g_dep_buf[ring_idx(task_id)]
+- [ ] T013 [US1] 验证 RING_SIZE 为 4096（2 的幂）—— 编译时检查
+- [ ] T014 [US2] 验证 ring_idx(4096) 返回 0（回绕）
+- [ ] T015 [US2] 验证 ring_idx(5000) 返回 904（5000 & 4095）
+- [ ] T016 [US3] 通过单次按位与运算验证 O(1) 访问时间
 
 ---
 
-## Phase 7: User Story 7 - Task Runtime Information Storage (Priority: P1)
+## 阶段 4：用户故事 4 - 任务状态存储（优先级：P1）
 
-**Goal**: Store task runtime info in runtime ring buffer
+**目标**：在状态环形缓冲区中存储任务执行状态
 
-**Independent Test**: Write runtime pointer to runtime buffer and read back
+**独立测试**：向状态缓冲区写入状态并读回
 
-- [ ] T023 [US7] Write void* runtime data to g_runtime_buf[ring_idx(task_id)]
-- [ ] T024 [US7] Read void* runtime data from g_runtime_buf[ring_idx(task_id)]
-
----
-
-## Phase 8: User Story 8 - Conditional State Insert (Priority: P1)
-
-**Goal**: Atomic state insert with empty-check using CAS
-
-**Independent Test**: Insert into empty succeeds, insert into non-empty fails
-
-- [ ] T025 [US8] Implement state_put_if_empty() with atomic CAS
-- [ ] T026 [US8] Verify state_put_if_empty() returns 0 on empty insert success
-- [ ] T027 [US8] Verify state_put_if_empty() returns -1 on non-empty insert fail
+- [ ] T017 [US4] 向 g_state_buf[ring_idx(task_id)] 写入任务状态
+- [ ] T018 [US4] 从 g_state_buf[ring_idx(task_id)] 读取任务状态
 
 ---
 
-## Phase 9: Polish & Cross-Cutting Concerns
+## 阶段 5：用户故事 5 - 任务基本信息存储（优先级：P1）
 
-**Purpose**: Verification and cleanup
+**目标**：在基本信息环形缓冲区中存储任务基本信息
 
-- [ ] T028 [P] Verify all 4 ring buffers compile and link correctly
-- [ ] T029 [P] Verify C11 atomics usage throughout
-- [ ] T030 Update checklist status and commit changes
+**独立测试**：向基本信息缓冲区写入 task_desc_t 并读回
 
----
-
-## Dependencies & Execution Order
-
-### Phase Dependencies
-
-- **Setup (Phase 1)**: No dependencies - can start immediately
-- **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
-- **User Stories (Phase 3-8)**: All depend on Foundational phase completion
-  - User stories can proceed in parallel (if staff available)
-- **Polish (Phase 9)**: Depends on all user stories being complete
-
-### User Story Dependencies
-
-- **User Story 1-3**: Can start after Foundational (Phase 2)
-- **User Story 4**: Can start after Foundational (Phase 2)
-- **User Story 5**: Can start after Foundational (Phase 2)
-- **User Story 6**: Can start after Foundational (Phase 2) - depends on dep_base_t from task.h
-- **User Story 7**: Can start after Foundational (Phase 2)
-- **User Story 8**: Can start after Foundational (Phase 2) - uses g_state_buf
-
-### Parallel Opportunities
-
-- All Setup tasks marked [P] can run in parallel
-- All Foundational tasks marked [P] can run in parallel (within Phase 2)
-- Once Foundational phase completes, all user stories can start in parallel
-- All user story phases marked [P] can run in parallel
+- [ ] T019 [US5] 向 g_basic_buf[ring_idx(task_id)] 写入 task_desc_t
+- [ ] T020 [US5] 从 g_basic_buf[ring_idx(task_id)] 读取 task_desc_t
 
 ---
 
-## Implementation Strategy
+## 阶段 6：用户故事 6 - 任务依赖信息存储（优先级：P1）
 
-### MVP First (User Story 4 as core)
+**目标**：在依赖环形缓冲区中存储任务依赖信息
 
-1. Complete Phase 1: Setup
-2. Complete Phase 2: Foundational
-3. Complete Phase 3: User Story 1-3 (basic indexing verification)
-4. Complete Phase 8: User Story 8 (conditional insert - key feature)
-5. **STOP and VALIDATE**: Core ring buffer with conditional insert working
+**独立测试**：向依赖缓冲区写入 dep_base_t 并读回
 
-### Incremental Delivery
-
-1. Setup + Foundational → Foundation ready
-2. Add US1-3 → Indexing verified
-3. Add US8 → Conditional insert working (core feature)
-4. Add US4-7 → All 4 buffers functional
-5. Polish → Complete
+- [ ] T021 [US6] 向 g_dep_buf[ring_idx(task_id)] 写入 dep_base_t
+- [ ] T022 [US6] 从 g_dep_buf[ring_idx(task_id)] 读取 dep_base_t
 
 ---
 
-## Notes
+## 阶段 7：用户故事 7 - 任务运行时信息存储（优先级：P1）
 
-- [P] tasks = different files, no dependencies
-- [Story] label maps task to specific user story for traceability
-- Each user story should be independently completable and testable
-- All ring buffer access is O(1) via ring_idx()
-- Lock-free operations use C11 atomics only
-- No mutexes in hot paths
+**目标**：在运行时环形缓冲区中存储任务运行时信息
+
+**独立测试**：向运行时缓冲区写入运行时指针并读回
+
+- [ ] T023 [US7] 向 g_runtime_buf[ring_idx(task_id)] 写入 void* 运行时数据
+- [ ] T024 [US7] 从 g_runtime_buf[ring_idx(task_id)] 读取 void* 运行时数据
+
+---
+
+## 阶段 8：用户故事 8 - 条件性状态插入（优先级：P1）
+
+**目标**：使用 CAS 进行带空检查的原子状态插入
+
+**独立测试**：向空条目插入成功，向非空条目插入失败
+
+- [ ] T025 [US8] 使用原子 CAS 实现 state_put_if_empty()
+- [ ] T026 [US8] 验证 state_put_if_empty() 在空条目插入成功时返回 0
+- [ ] T027 [US8] 验证 state_put_if_empty() 在非空条目插入失败时返回 -1
+
+---
+
+## 阶段 9：完善与跨领域关注点
+
+**目的**：验证和清理
+
+- [ ] T028 [P] 验证所有 4 个环形缓冲区正确编译和链接
+- [ ] T029 [P] 验证全程使用 C11 原子操作
+- [ ] T030 更新检查表状态并提交更改
+
+---
+
+## 依赖关系与执行顺序
+
+### 阶段依赖
+
+- **搭建（阶段 1）**：无依赖——可立即开始
+- **基础（阶段 2）**：依赖于搭建完成——阻塞所有用户故事
+- **用户故事（阶段 3-8）**：均依赖于基础阶段完成
+  - 用户故事可并行进行（如果人员充足）
+- **完善（阶段 9）**：依赖于所有用户故事完成
+
+### 用户故事依赖
+
+- **用户故事 1-3**：可在基础（阶段 2）之后开始
+- **用户故事 4**：可在基础（阶段 2）之后开始
+- **用户故事 5**：可在基础（阶段 2）之后开始
+- **用户故事 6**：可在基础（阶段 2）之后开始——依赖于 task.h 中的 dep_base_t
+- **用户故事 7**：可在基础（阶段 2）之后开始
+- **用户故事 8**：可在基础（阶段 2）之后开始——使用 g_state_buf
+
+### 并行机会
+
+- 所有标记为 [P] 的搭建任务可并行执行
+- 所有标记为 [P] 的基础任务可并行执行（在阶段 2 内）
+- 一旦基础阶段完成，所有用户故事可并行开始
+- 所有标记为 [P] 的用户故事阶段可并行执行
+
+---
+
+## 实施策略
+
+### 优先 MVP（以用户故事 4 为核心）
+
+1. 完成阶段 1：搭建
+2. 完成阶段 2：基础
+3. 完成阶段 3：用户故事 1-3（基本索引验证）
+4. 完成阶段 8：用户故事 8（条件插入——关键功能）
+5. **停止并验证**：核心环形缓冲区与条件插入工作正常
+
+### 增量交付
+
+1. 搭建 + 基础 → 基础就绪
+2. 添加 US1-3 → 索引已验证
+3. 添加 US8 → 条件插入工作正常（核心功能）
+4. 添加 US4-7 → 所有 4 个缓冲区功能完备
+5. 完善 → 完成
+
+---
+
+## 备注
+
+- [P] 任务 = 不同文件，无依赖
+- [Story] 标签将任务映射到特定用户故事以便追溯
+- 每个用户故事应可独立完成和测试
+- 所有环形缓冲区访问通过 ring_idx() 实现 O(1)
+- 无锁操作仅使用 C11 原子操作
+- 热路径中无互斥锁

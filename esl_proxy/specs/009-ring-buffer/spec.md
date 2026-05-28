@@ -1,204 +1,204 @@
-# Feature Specification: Task Ring Buffers
+# 功能规格说明：任务环形缓冲区
 
-**Feature Branch**: `009-ring-buffer`
+**功能分支**：`009-ring-buffer`
 
-**Created**: 2026-05-26
+**创建日期**：2026-05-26
 
-**Status**: Draft
+**状态**：草稿
 
-**Input**: User description: "4个ring buffer分别存储task状态，task基本信息，task后继节点信息，task运行时信息" + "ring buffer大小默认设置为4096，task通过taskID & RingBufferSize决定存储位置"
+**输入**：用户描述："4个ring buffer分别存储task状态，task基本信息，task后继节点信息，task运行时信息" + "ring buffer大小默认设置为4096，task通过taskID & RingBufferSize决定存储位置"
 
-## User Scenarios & Testing *(mandatory)*
+## 用户场景与测试 *(必填)*
 
-### User Story 1 - Ring Buffer Size Configuration (Priority: P1)
+### 用户故事 1 - 环形缓冲区大小配置（优先级：P1）
 
-A system operator configures the Ring Buffer with a fixed size of 4096 entries. The size is a power of 2, enabling efficient bitwise operations for indexing.
+系统操作员将 Ring Buffer 配置为固定大小 4096 个条目。该大小为 2 的幂，使得索引操作可以高效地使用位运算。
 
-**Why this priority**: Ring Buffer size must be fixed and power of 2 for correct and efficient indexing operation using bitwise AND.
+**为何此优先级**：Ring Buffer 大小必须固定且为 2 的幂，以便使用按位与运算实现正确且高效的索引操作。
 
-**Independent Test**: Can be verified by computing index for various TaskID values and confirming correct wraparound behavior.
+**独立测试**：可通过为不同 TaskID 值计算索引并确认其正确的回绕行为来验证。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** Ring Buffer size is 4096 (2^12), **When** the size is used in indexing, **Then** it enables efficient bitmask operation instead of modulo division
-2. **Given** Ring Buffer has 4096 entries, **When** TaskID values exceed 4096, **Then** the index wraps around via bitwise AND
-
----
-
-### User Story 2 - TaskID-Based Indexing (Priority: P1)
-
-A system operator stores task data using TaskID as the index into the Ring Buffer. The index is computed as `TaskID & (RingBufferSize - 1)`, providing O(1) access to any task entry.
-
-**Why this priority**: TaskID-based indexing provides constant-time access to task data without searching or hashing.
-
-**Independent Test**: Can be tested by computing index for known TaskID values and verifying correct storage/retrieval location.
-
-**Acceptance Scenarios**:
-
-1. **Given** TaskID is 5000 and RingBufferSize is 4096, **When** index is computed as 5000 & 4095, **Then** index equals 904
-2. **Given** TaskID is 4096 and RingBufferSize is 4096, **When** index is computed as 4096 & 4095, **Then** index equals 0 (wraps to start)
-3. **Given** TaskID is 0, **When** index is computed, **Then** index equals 0
+1. **给定** Ring Buffer 大小为 4096（2^12），**当** 该大小用于索引时，**则** 能够使用高效的位掩码运算替代取模除法
+2. **给定** Ring Buffer 有 4096 个条目，**当** TaskID 值超过 4096 时，**则** 索引通过按位与运算回绕
 
 ---
 
-### User Story 3 - O(1) Access Performance (Priority: P1)
+### 用户故事 2 - 基于 TaskID 的索引（优先级：P1）
 
-A system operator accesses task data in constant time regardless of TaskID value. The bitwise AND operation completes in a single CPU cycle, ensuring minimal latency for Ring Buffer access.
+系统操作员使用 TaskID 作为索引将任务数据存储到 Ring Buffer 中。索引计算公式为 `TaskID & (RingBufferSize - 1)`，可提供对任意任务条目的 O(1) 访问。
 
-**Why this priority**: O(1) access is critical for high-performance DAG scheduling where task lookups happen on every scheduling decision.
+**为何此优先级**：基于 TaskID 的索引提供对任务数据的常数时间访问，无需搜索或哈希。
 
-**Independent Test**: Can be verified by measuring access time for different TaskID values and confirming consistent latency.
+**独立测试**：可通过为已知的 TaskID 值计算索引并验证正确的存储/检索位置来测试。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** any valid TaskID value, **When** index is computed via bitwise AND, **Then** access time is constant (O(1))
-2. **Given** Ring Buffer is used for 10,000 tasks, **When** any task is accessed, **Then** access latency remains the same regardless of task count
-
----
-
-### User Story 4 - Task State Storage (Priority: P1)
-
-A system operator stores task execution state in a dedicated Ring Buffer. The state Ring Buffer holds task state transitions (e.g., pending, running, completed, failed) indexed by TaskID. State updates are lock-free using C11 atomics.
-
-**Why this priority**: Task state tracking is essential for DAG execution - the system must know which tasks are running, completed, or failed to make scheduling decisions.
-
-**Independent Test**: Can be tested by writing a task state to the state Ring Buffer and reading it back to verify correctness.
-
-**Acceptance Scenarios**:
-
-1. **Given** a task with TaskID 42 is in pending state, **When** the state is written to the state Ring Buffer at index (42 & RING_MASK), **Then** the same state can be read back from the same index
-2. **Given** multiple tasks updating state concurrently, **When** each task writes its state to the Ring Buffer, **Then** no state data is lost or corrupted due to concurrent access
+1. **给定** TaskID 为 5000 且 RingBufferSize 为 4096，**当** 索引计算为 5000 & 4095 时，**则** 索引等于 904
+2. **给定** TaskID 为 4096 且 RingBufferSize 为 4096，**当** 索引计算为 4096 & 4095 时，**则** 索引等于 0（回绕到起点）
+3. **给定** TaskID 为 0，**当** 计算索引时，**则** 索引等于 0
 
 ---
 
-### User Story 5 - Task Basic Information Storage (Priority: P1)
+### 用户故事 3 - O(1) 访问性能（优先级：P1）
 
-A system operator stores task basic information in a dedicated Ring Buffer. The basic info Ring Buffer holds task descriptors (id, type, mode, kernel, index, count, prio, data) indexed by TaskID.
+系统操作员以常数时间访问任务数据，与 TaskID 值无关。按位与运算在单个 CPU 周期内完成，确保 Ring Buffer 访问的最小延迟。
 
-**Why this priority**: The basic info Ring Buffer provides O(1) access to task description data via TaskID indexing.
+**为何此优先级**：O(1) 访问对高性能 DAG 调度至关重要，因为每次调度决策都会发生任务查找。
 
-**Independent Test**: Can be tested by writing a task descriptor to the basic info Ring Buffer and reading it back.
+**独立测试**：可通过测量不同 TaskID 值的访问时间并确认延迟一致来验证。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a task descriptor with id=1, type=CUBE, mode=SINGLE, **When** it is written to the basic info Ring Buffer at index (1 & RING_MASK), **Then** the same descriptor can be read back from the same index
-2. **Given** the Ring Buffer size is 4096, **When** TaskID 5000 is used, **Then** the actual index is (5000 & 4095) = 904
-
----
-
-### User Story 6 - Task Dependency Information Storage (Priority: P1)
-
-A system operator stores task dependency information in a dedicated Ring Buffer. The Dependency Information Ring Buffer holds successor count, list of successor TaskIDs, and predecessor count for each task node.
-
-**Why this priority**: DAG dependency resolution requires knowing which tasks depend on which. The successor information enables downstream traversal.
-
-**Independent Test**: Can be tested by writing successor info for a task with 3 successors and reading it back.
-
-**Acceptance Scenarios**:
-
-1. **Given** a task with TaskID 10 has 3 successors (IDs 20, 30, 40) and 2 predecessors, **When** the dependency info is written to the Dependency Information Ring Buffer at index (10 & RING_MASK), **Then** the successor count=3, successor list [20, 30, 40], and predecessor count=2 can be read back
-2. **Given** a task with no successors and no predecessors, **When** the dependency info is written, **Then** successor count=0, empty successor list, and predecessor count=0
+1. **给定** 任意有效的 TaskID 值，**当** 通过按位与运算计算索引时，**则** 访问时间是常数（O(1)）
+2. **给定** Ring Buffer 用于 10,000 个任务，**当** 访问任意任务时，**则** 访问延迟保持不变，与任务数量无关
 
 ---
 
-### User Story 7 - Task Runtime Information Storage (Priority: P1)
+### 用户故事 4 - 任务状态存储（优先级：P1）
 
-A system operator stores task runtime information in a dedicated Ring Buffer. The runtime info Ring Buffer holds per-task execution context that changes during execution (e.g., current index for SPMD, instance count, worker assignment).
+系统操作员在专用 Ring Buffer 中存储任务执行状态。状态 Ring Buffer 保存以 TaskID 索引的任务状态转换（例如 pending、running、completed、failed）。状态更新使用 C11 原子操作实现无锁。
 
-**Why this priority**: Runtime information is mutable state that changes during task execution. Separating runtime info from the static task descriptor allows descriptor reuse.
+**为何此优先级**：任务状态跟踪对 DAG 执行至关重要——系统必须知道哪些任务正在运行、已完成或失败，才能做出调度决策。
 
-**Independent Test**: Can be tested by writing runtime context to the runtime Ring Buffer and reading it back after modification.
+**独立测试**：可通过将任务状态写入状态 Ring Buffer 并读回以验证正确性来测试。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** an SPMD task with base index 100 running 8 instances, **When** instance 5 updates its current index to 105, **Then** the runtime info reflects index=105 for that instance
-2. **Given** runtime info is stored separately from task descriptor, **When** the task descriptor is reused for a new execution, **Then** the previous runtime info does not persist
-
----
-
-### User Story 8 - Conditional State Insert (Priority: P1)
-
-A system operator inserts a task state into the state Ring Buffer only if the target entry is currently empty. If the entry already contains a value, the insert operation fails and returns an error without modifying the existing value.
-
-**Why this priority**: Prevents overwriting existing state data, ensuring data integrity in the Ring Buffer. Critical for preventing accidental data loss during concurrent access.
-
-**Independent Test**: Can be tested by attempting to insert into empty and non-empty entries and verifying correct return values and behavior.
-
-**Acceptance Scenarios**:
-
-1. **Given** a state Ring Buffer entry at index is empty, **When** an insert operation is performed, **Then** the value is stored successfully and success is returned
-2. **Given** a state Ring Buffer entry at index contains a value, **When** an insert operation is performed, **Then** the operation fails and an error is returned without modifying the existing value
+1. **给定** TaskID 为 42 的任务处于 pending 状态，**当** 该状态被写入状态 Ring Buffer 索引 (42 & RING_MASK) 处时，**则** 可以从同一索引读回相同的状态
+2. **给定** 多个任务并发更新状态，**当** 每个任务将其状态写入 Ring Buffer 时，**则** 不会因并发访问而丢失或损坏状态数据
 
 ---
 
-### Edge Cases
+### 用户故事 5 - 任务基本信息存储（优先级：P1）
 
-- What happens when Ring Buffer is full and new data is written? (Wrapped overwrite behavior)
-- What happens when invalid TaskID (e.g., out of range) is used for indexing?
-- What happens when successor count exceeds maximum (3)? (Extension entry used via next pointer)
-- What happens when TaskID is at maximum value (65535)?
-- What happens when RingBufferSize is changed (not power of 2)?
-- What happens when multiple concurrent insert operations target the same empty entry?
+系统操作员在专用 Ring Buffer 中存储任务基本信息。基本信息 Ring Buffer 保存以 TaskID 索引的任务描述符（id、type、mode、kernel、index、count、prio、data）。
 
-## Requirements *(mandatory)*
+**为何此优先级**：基本信息 Ring Buffer 通过 TaskID 索引提供对任务描述数据的 O(1) 访问。
 
-### Functional Requirements
+**独立测试**：可通过将任务描述符写入基本信息 Ring Buffer 并读回来测试。
 
-- **FR-001**: Ring Buffer size MUST default to 4096 entries
-- **FR-002**: Ring Buffer size MUST be a power of 2
-- **FR-003**: Task storage location MUST be computed as `TaskID & (RingBufferSize - 1)`
-- **FR-004**: Index computation MUST complete in O(1) time via single bitwise AND operation
-- **FR-005**: TaskID MUST be 16-bit unsigned integer (0-65535)
-- **FR-006**: A Ring Buffer MUST be used for each of the 4 data categories: task state, task basic info, task successor nodes, task runtime info
-- **FR-007**: All 4 Ring Buffers MUST have fixed size of 4096 entries (power of 2)
-- **FR-008**: Ring Buffer indexing MUST use TASKID & (RING_SIZE - 1) for O(1) access
-- **FR-009**: Task state Ring Buffer MUST store task execution state (pending, running, completed, failed)
-- **FR-010**: Task basic info Ring Buffer MUST store task descriptor fields (id, type, mode, kernel, index, count, prio, data)
-- **FR-011**: Dependency Information Ring Buffer MUST store successor count, list of successor TaskIDs, and predecessor count; successor storage in base entries with 3 inline successor slots; base entries use a 2-byte next pointer to reference extension entries when more than 3 successors exist
-- **FR-012**: Task runtime info Ring Buffer MUST store mutable runtime context (current index, instance state, worker assignment)
-- **FR-013**: Ring Buffer operations MUST be lock-free using C11 atomics for concurrent access
-- **FR-014**: Ring Buffers MUST support single-producer-single-consumer (SPSC) patterns
-- **FR-015**: State buffer insert operation MUST check if target entry is empty before writing
-- **FR-016**: If target entry is non-empty during insert, operation MUST fail and return error code without modifying existing value
-- **FR-017**: If target entry is empty during insert, operation MUST store value and return success
-- **FR-018**: Insert operation MUST be atomic to prevent race conditions
+**验收场景**：
 
-### Key Entities *(include if feature involves data)*
+1. **给定** 一个 id=1、type=CUBE、mode=SINGLE 的任务描述符，**当** 它被写入基本信息 Ring Buffer 索引 (1 & RING_MASK) 处时，**则** 可以从同一索引读回相同的描述符
+2. **给定** Ring Buffer 大小为 4096，**当** 使用 TaskID 5000 时，**则** 实际索引为 (5000 & 4095) = 904
 
-- **Ring Buffer**: A fixed-size circular buffer providing O(1) indexed access. Size is power of 2 (4096) enabling fast modulo via bitmask.
-- **RingBufferSize**: Fixed constant defining Ring Buffer entry count. Default value is 4096 (power of 2).
-- **RingBufferMask**: Computed as (RingBufferSize - 1), used for bitwise AND indexing.
-- **TaskID**: 16-bit identifier used for Ring Buffer indexing via TASKID & (RING_SIZE - 1)
-- **Index**: Computed value determining actual storage location in Ring Buffer.
-- **Task State Ring Buffer**: Stores execution state enum values (pending, running, completed, failed) indexed by TaskID
-- **Task Basic Info Ring Buffer**: Stores task descriptor copies indexed by TaskID
-- **Dependency Information Ring Buffer**: Stores dependency information indexed by TaskID. Contains: successor count, list of successor TaskIDs, predecessor count. Base entry contains 3 inline successor TaskIDs (2 bytes each) plus a 2-byte next pointer to extension entry. Extension entries linked via next pointer for tasks with more than 3 successors.
-- **Task Runtime Info Ring Buffer**: Stores mutable runtime context per task instance indexed by TaskID
+---
 
-## Success Criteria *(mandatory)*
+### 用户故事 6 - 任务依赖信息存储（优先级：P1）
 
-### Measurable Outcomes
+系统操作员在专用 Ring Buffer 中存储任务依赖信息。依赖信息 Ring Buffer 保存每个任务节点的后继数量、后继 TaskID 列表以及前驱数量。
 
-- **SC-001**: Index computation uses single bitwise AND operation - no division or modulo
-- **SC-002**: Index always falls within [0, RingBufferSize-1] range
-- **SC-003**: TaskID 4096 maps to index 0 (first wraparound)
-- **SC-004**: RingBufferSize 4096 enables efficient 12-bit mask operation
-- **SC-005**: All 4 Ring Buffers can store and retrieve data for 4096 distinct TaskIDs
-- **SC-006**: Concurrent Ring Buffer writes do not cause data corruption (verified via lock-free atomics)
-- **SC-007**: Task successor storage supports up to 3 successors inline in base entry; additional successors via 2-byte next pointer to extension entries
-- **SC-008**: Insert into empty state buffer entry succeeds 100% of the time
-- **SC-009**: Insert into non-empty state buffer entry fails 100% of the time without modifying existing value
-- **SC-010**: No race conditions occur during concurrent insert operations
+**为何此优先级**：DAG 依赖解析需要知道哪些任务依赖于哪些任务。后继信息支持下游遍历。
 
-## Assumptions
+**独立测试**：可通过为具有 3 个后继的任务写入后继信息并读回来测试。
 
-- Ring Buffer size (4096) is fixed and power of 2 for efficient bitmask indexing
-- TASKID is 16-bit, allowing values 0-65535 with wraparound via bitmask
-- Bitwise AND with (RingBufferSize-1) provides same result as modulo RingBufferSize when size is power of 2
-- Successor count per node: base entry stores up to 3 inline; extension entries via 2-byte next pointer for additional successors
-- Ring Buffers use wraparound behavior - new writes overwrite oldest data when full
-- Lock-free operations use C11 atomics - no mutexes in hot path
-- Each Ring Buffer is independent and stores different data categories
-- 4096 entries is sufficient for the DAG scale (up to 10,000 tasks with TaskID reuse via wraparound)
-- State buffer insert returns integer result (0 for success, negative for error)
-- State values are integers (e.g., pending=0, running=1, completed=2, failed=3)
+**验收场景**：
+
+1. **给定** TaskID 为 10 的任务有 3 个后继（ID 20、30、40）和 2 个前驱，**当** 依赖信息被写入依赖信息 Ring Buffer 索引 (10 & RING_MASK) 处时，**则** 可以读回后继数量=3、后继列表 [20, 30, 40]、前驱数量=2
+2. **给定** 一个没有后继且没有前驱的任务，**当** 写入依赖信息时，**则** 后继数量=0、后继列表为空、前驱数量=0
+
+---
+
+### 用户故事 7 - 任务运行时信息存储（优先级：P1）
+
+系统操作员在专用 Ring Buffer 中存储任务运行时信息。运行时信息 Ring Buffer 保存每个任务在执行过程中变化的执行上下文（例如 SPMD 的当前索引、实例数量、worker 分配）。
+
+**为何此优先级**：运行时信息是在任务执行期间会变化的可变状态。将运行时信息与静态任务描述符分离允许描述符复用。
+
+**独立测试**：可通过将运行时上下文写入运行时 Ring Buffer 并在修改后读回来测试。
+
+**验收场景**：
+
+1. **给定** 一个 SPMD 任务以 base index 100 运行 8 个实例，**当** 实例 5 将其当前索引更新为 105 时，**则** 运行时信息反映该实例的 index=105
+2. **给定** 运行时信息与任务描述符分开存储，**当** 任务描述符被复用于新的执行时，**则** 先前的运行时信息不会保留
+
+---
+
+### 用户故事 8 - 条件性状态插入（优先级：P1）
+
+系统操作员仅当目标条目当前为空时才向状态 Ring Buffer 中插入任务状态。如果条目已包含值，则插入操作失败并返回错误，不会修改现有值。
+
+**为何此优先级**：防止覆盖现有状态数据，确保 Ring Buffer 中的数据完整性。对于防止并发访问期间意外的数据丢失至关重要。
+
+**独立测试**：可通过尝试向空条目和非空条目中插入并验证正确的返回值和行为来测试。
+
+**验收场景**：
+
+1. **给定** 索引处的状态 Ring Buffer 条目为空，**当** 执行插入操作时，**则** 值被成功存储并返回成功
+2. **给定** 索引处的状态 Ring Buffer 条目包含值，**当** 执行插入操作时，**则** 操作失败并返回错误，不修改现有值
+
+---
+
+### 边界情况
+
+- 当 Ring Buffer 已满且写入新数据时会发生什么？（回绕覆盖行为）
+- 当使用无效 TaskID（例如越界）进行索引时会发生什么？
+- 当后继数量超过最大值（3）时会发生什么？（通过 next 指针使用扩展条目）
+- 当 TaskID 处于最大值（65535）时会发生什么？
+- 当 RingBufferSize 改变（非 2 的幂）时会发生什么？
+- 当多个并发插入操作针对同一个空条目时会发生什么？
+
+## 需求 *(必填)*
+
+### 功能需求
+
+- **FR-001**：Ring Buffer 大小必须默认为 4096 个条目
+- **FR-002**：Ring Buffer 大小必须是 2 的幂
+- **FR-003**：任务存储位置必须通过 `TaskID & (RingBufferSize - 1)` 计算
+- **FR-004**：索引计算必须通过单次按位与运算在 O(1) 时间内完成
+- **FR-005**：TaskID 必须是 16 位无符号整数（0-65535）
+- **FR-006**：4 个数据类别（任务状态、任务基本信息、任务后继节点、任务运行时信息）必须各使用一个 Ring Buffer
+- **FR-007**：所有 4 个 Ring Buffer 必须具有 4096 个条目的固定大小（2 的幂）
+- **FR-008**：Ring Buffer 索引必须使用 TASKID & (RING_SIZE - 1) 实现 O(1) 访问
+- **FR-009**：任务状态 Ring Buffer 必须存储任务执行状态（pending、running、completed、failed）
+- **FR-010**：任务基本信息 Ring Buffer 必须存储任务描述符字段（id、type、mode、kernel、index、count、prio、data）
+- **FR-011**：依赖信息 Ring Buffer 必须存储后继数量、后继 TaskID 列表以及前驱数量；后继存储在基础条目中，含 3 个内联后继槽位；当存在超过 3 个后继时，基础条目使用 2 字节 next 指针引用扩展条目
+- **FR-012**：任务运行时信息 Ring Buffer 必须存储可变运行时上下文（当前索引、实例状态、worker 分配）
+- **FR-013**：Ring Buffer 操作必须使用 C11 原子操作实现无锁并发访问
+- **FR-014**：Ring Buffer 必须支持单生产者单消费者（SPSC）模式
+- **FR-015**：状态缓冲区插入操作必须在写入前检查目标条目是否为空
+- **FR-016**：如果在插入过程中目标条目非空，操作必须失败并返回错误码，不修改现有值
+- **FR-017**：如果在插入过程中目标条目为空，操作必须存储值并返回成功
+- **FR-018**：插入操作必须是原子的，以防止竞争条件
+
+### 关键实体 *(如涉及数据则包含)*
+
+- **Ring Buffer**：固定大小的循环缓冲区，提供 O(1) 索引访问。大小为 2 的幂（4096），可通过位掩码快速取模。
+- **RingBufferSize**：定义 Ring Buffer 条目数量的固定常量。默认值为 4096（2 的幂）。
+- **RingBufferMask**：计算为 (RingBufferSize - 1)，用于按位与索引。
+- **TaskID**：16 位标识符，通过 TASKID & (RING_SIZE - 1) 用于 Ring Buffer 索引
+- **Index**：决定 Ring Buffer 中实际存储位置的计算值。
+- **任务状态 Ring Buffer**：存储以 TaskID 索引的执行状态枚举值（pending、running、completed、failed）
+- **任务基本信息 Ring Buffer**：存储以 TaskID 索引的任务描述符副本
+- **依赖信息 Ring Buffer**：存储以 TaskID 索引的依赖信息。包含：后继数量、后继 TaskID 列表、前驱数量。基础条目包含 3 个内联后继 TaskID（每个 2 字节）加上 2 字节 next 指针指向扩展条目。当任务后继数量超过 3 时，通过 next 指针链接扩展条目。
+- **任务运行时信息 Ring Buffer**：存储以 TaskID 索引的每个任务实例的可变运行时上下文
+
+## 成功标准 *(必填)*
+
+### 可衡量结果
+
+- **SC-001**：索引计算使用单次按位与运算——无除法或取模
+- **SC-002**：索引始终落在 [0, RingBufferSize-1] 范围内
+- **SC-003**：TaskID 4096 映射到索引 0（第一次回绕）
+- **SC-004**：RingBufferSize 4096 启用高效的 12 位掩码运算
+- **SC-005**：所有 4 个 Ring Buffer 可以存储和检索 4096 个不同 TaskID 的数据
+- **SC-006**：并发 Ring Buffer 写入不会导致数据损坏（通过无锁原子操作验证）
+- **SC-007**：任务后继存储支持基础条目中最多 3 个内联后继；额外的后继通过 2 字节 next 指针指向扩展条目
+- **SC-008**：向空状态缓冲区条目插入 100% 成功
+- **SC-009**：向非空状态缓冲区条目插入 100% 失败且不修改现有值
+- **SC-010**：在并发插入操作期间不会发生竞争条件
+
+## 假设
+
+- Ring Buffer 大小（4096）固定且为 2 的幂，以便高效位掩码索引
+- TASKID 为 16 位，允许值 0-65535 并通过位掩码回绕
+- 当大小为 2 的幂时，与 (RingBufferSize-1) 按位与运算的结果与对 RingBufferSize 取模相同
+- 每个节点的后继数量：基础条目最多内联存储 3 个；通过 2 字节 next 指针的扩展条目存储额外后继
+- Ring Buffer 使用回绕行为——满时新写入会覆盖最旧数据
+- 无锁操作使用 C11 原子操作——热路径中无互斥锁
+- 每个 Ring Buffer 相互独立，存储不同的数据类别
+- 4096 个条目对于 DAG 规模足够（通过回绕实现 TaskID 复用，可支持多达 10,000 个任务）
+- 状态缓冲区插入返回整数结果（0 表示成功，负值表示错误）
+- 状态值为整数（例如 pending=0、running=1、completed=2、failed=3）

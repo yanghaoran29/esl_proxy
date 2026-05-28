@@ -1,179 +1,179 @@
-# Tasks: Task
+# 任务：Task
 
-**Input**: Design documents from `/specs/008-task/`
+**输入**：来自 `/specs/008-task/` 的设计文档
 
-**Prerequisites**: plan.md (required), spec.md (required for user stories)
+**前置条件**：plan.md（必需）、spec.md（用户故事必需）
 
-**Tests**: Tests NOT requested in feature specification
+**测试**：功能规格说明中未要求测试
 
-**Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
+**组织方式**：任务按用户故事分组，以便每个故事可独立实现与测试。
 
-## Format: `[ID] [P?] [Story] Description`
+## 格式：`[ID] [P?] [Story] Description`
 
-- **[P]**: Can run in parallel (different files, no dependencies)
-- **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
-- Include exact file paths in descriptions
+- **[P]**：可并行运行（不同文件，无依赖）
+- **[Story]**：该任务所属的用户故事（例如 US1、US2、US3）
+- 在描述中包含精确的文件路径
 
-## Path Conventions
+## 路径约定
 
-- Source code: `include/dag/` at repository root
-- Header-only C library: all implementation in `.h` files
-- Single header per feature: `task.h`
-
----
-
-## Phase 1: Setup (Project Initialization)
-
-**Purpose**: Verify directory structure for header-only library
-
-- [X] T001 Verify include/dag/ directory exists per plan.md
+- 源代码：仓库根目录下的 `include/dag/`
+- 仅头文件 C 库：所有实现位于 `.h` 文件中
+- 每个功能单一头文件：`task.h`
 
 ---
 
-## Phase 2: Foundational (Core Types & Constants)
+## Phase 1：Setup（项目初始化）
 
-**Purpose**: Core types and constants needed by all task operations
+**目的**：验证仅头文件库的目录结构
 
-**CRITICAL**: Must complete before any user story can be tested
-
-- [X] T002 [P] Define RING_SIZE (4096) and RING_MASK constants in include/dag/task.h
-- [X] T003 [P] Define task_id_t as uint16_t for 16-bit TaskID
-- [X] T004 [P] Implement ring_idx() helper for O(1) indexing via TaskID & (RING_SIZE - 1)
+- [X] T001 按 plan.md 验证 include/dag/ 目录存在
 
 ---
 
-## Phase 3: User Story 1 - Task Description Only (Priority: P1) 🎯 MVP
+## Phase 2：Foundational（核心类型与常量）
 
-**Goal**: Task descriptor contains only description fields - no execution state
+**目的**：所有任务操作所需的核心类型与常量
 
-**Independent Test**: Verify task descriptor has only description fields (id, type, mode, kernel, index, count, prio, data) and no execution state fields
+**关键**：必须在任何用户故事可被测试前完成
 
-### Implementation for User Story 1
-
-- [X] T005 [P] [US1] Define struct task_desc with description fields only (id, type, mode, kernel, index, count, prio, data) in include/dag/task.h
-- [X] T006 [US1] Add comment clarifying NO execution state fields in task_desc
-
----
-
-## Phase 4: User Story 2 - Task Type Definition (Priority: P1)
-
-**Goal**: Task type enum with CUBE, VECTOR, MIX values
-
-**Independent Test**: Verify task_type_t enum has CUBE=0, VECTOR=1, MIX=2 values
-
-### Implementation for User Story 2
-
-- [X] T007 [P] [US2] Define task_type_t enum (TASK_TYPE_CUBE=0, TASK_TYPE_VECTOR=1, TASK_TYPE_MIX=2) in include/dag/task.h
+- [X] T002 [P] 在 include/dag/task.h 中定义 RING_SIZE (4096) 与 RING_MASK 常量
+- [X] T003 [P] 将 task_id_t 定义为 uint16_t，作为 16 位 TaskID
+- [X] T004 [P] 实现 ring_idx() 辅助函数，通过 TaskID & (RING_SIZE - 1) 进行 O(1) 索引
 
 ---
 
-## Phase 5: User Story 3 - Task Organization Modes (Priority: P1)
+## Phase 3：用户故事 1 - 仅包含任务描述信息（优先级：P1） 🎯 MVP
 
-**Goal**: Organization mode enum with Single, Group, SPMD_SYNC, SPMD_ASYNC values
+**目标**：任务描述符仅包含描述字段——无执行状态
 
-**Independent Test**: Verify org_mode_t enum has correct values
+**独立测试**：验证任务描述符仅包含描述字段（id、type、mode、kernel、index、count、prio、data），不含执行状态字段
 
-### Implementation for User Story 3
+### 用户故事 1 的实现
 
-- [X] T008 [P] [US3] Define org_mode_t enum (ORG_MODE_SINGLE=0, ORG_MODE_GROUP=1, ORG_MODE_SPMD_SYNC=2, ORG_MODE_SPMD_ASYNC=3) in include/dag/task.h
-
----
-
-## Phase 6: User Story 4 - SPMD INDEX in Task Descriptor (Priority: P1)
-
-**Goal**: Base INDEX stored in task descriptor; per-instance INDEX derived during dispatch
-
-**Independent Test**: Verify task descriptor has index field for base INDEX
-
-### Implementation for User Story 4
-
-- [X] T009 [P] [US4] Add inline helper function to derive per-instance INDEX: base_index + instance_number (in include/dag/task.h)
+- [X] T005 [P] [US1] 在 include/dag/task.h 中定义仅含描述字段（id、type、mode、kernel、index、count、prio、data）的 struct task_desc
+- [X] T006 [US1] 添加注释说明 task_desc 中没有执行状态字段
 
 ---
 
-## Phase 7: User Story 5 - Task Descriptor Reuse (Priority: P1)
+## Phase 4：用户故事 2 - 任务类型定义（优先级：P1）
 
-**Goal**: Same task descriptor instance can be reused for multiple submissions
+**目标**：含 CUBE、VECTOR、MIX 取值的任务类型枚举
 
-**Independent Test**: Verify task descriptor structure is self-contained and stateless
+**独立测试**：验证 task_type_t 枚举具有 CUBE=0、VECTOR=1、MIX=2 取值
 
-### Implementation for User Story 5
+### 用户故事 2 的实现
 
-- [X] T010 [P] [US5] Add comment in task.h documenting task descriptor reuse semantics (descriptor is const after creation, execution state managed separately)
-
----
-
-## Phase 8: User Story 6 - Clear Separation of Task Description and Execution State (Priority: P1)
-
-**Goal**: Task descriptor owned by Orchestrator; execution state owned by Dispatcher/Executor
-
-**Independent Test**: Verify task descriptor has no references to execution state
-
-### Implementation for User Story 6
-
-- [X] T011 [P] [US6] Add header comment documenting ownership separation: task descriptor (Orchestrator) vs execution state (Dispatcher/Executor)
+- [X] T007 [P] [US2] 在 include/dag/task.h 中定义 task_type_t 枚举（TASK_TYPE_CUBE=0、TASK_TYPE_VECTOR=1、TASK_TYPE_MIX=2）
 
 ---
 
-## Phase 9: Polish & Cross-Cutting Concerns
+## Phase 5：用户故事 3 - 任务组织模式（优先级：P1）
 
-**Purpose**: Finalize header for distribution
+**目标**：含 Single、Group、SPMD_SYNC、SPMD_ASYNC 取值的组织模式枚举
 
-- [X] T012 [P] Add header guard (dag/task.h)
-- [X] T013 [P] Verify all types use concise naming (no dag_ prefix on types/functions)
+**独立测试**：验证 org_mode_t 枚举的取值正确
 
----
+### 用户故事 3 的实现
 
-## Dependencies & Execution Order
-
-### Phase Dependencies
-
-- **Setup (Phase 1)**: No dependencies - can start immediately
-- **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
-- **User Stories (Phase 3-8)**: All depend on Foundational phase completion, can run in parallel
-
-### User Story Dependencies
-
-- **User Story 1-6**: All can run in parallel after Foundational phase (independent stories)
-
-### Within Each User Story
-
-- Core type definitions before helpers
-- Header complete before polish
+- [X] T008 [P] [US3] 在 include/dag/task.h 中定义 org_mode_t 枚举（ORG_MODE_SINGLE=0、ORG_MODE_GROUP=1、ORG_MODE_SPMD_SYNC=2、ORG_MODE_SPMD_ASYNC=3）
 
 ---
 
-## Parallel Opportunities
+## Phase 6：用户故事 4 - 任务描述符中的 SPMD INDEX（优先级：P1）
 
-- T002, T003, T004 can run in parallel (different definitions)
-- T005, T007, T008 can run in parallel (different type definitions)
-- T009, T010, T011 can run in parallel (different helper functions/comments)
-- T012, T013 can run in parallel (polish tasks)
+**目标**：基准 INDEX 存储在任务描述符中；每个实例的 INDEX 在调度过程中导出
 
----
+**独立测试**：验证任务描述符具有用于基准 INDEX 的 index 字段
 
-## Implementation Strategy
+### 用户故事 4 的实现
 
-### MVP First (User Story 1)
-
-1. Complete Phase 1: Setup
-2. Complete Phase 2: Foundational
-3. Complete Phase 3: User Story 1
-4. **STOP and VALIDATE**: Verify task descriptor structure
-
-### Incremental Delivery
-
-1. Complete Setup + Foundational → Foundation ready
-2. Add User Story 1 → Test independently
-3. Add User Stories 2-6 → Each adds a discrete type/helper
-4. Polish → Finalize header for distribution
+- [X] T009 [P] [US4] 添加内联辅助函数，用于导出每个实例的 INDEX：base_index + instance_number（在 include/dag/task.h 中）
 
 ---
 
-## Notes
+## Phase 7：用户故事 5 - 任务描述符复用（优先级：P1）
 
-- [P] tasks = different files or different definitions within same file
-- [Story] label maps task to specific user story for traceability
-- Header-only library: no .c implementation files
-- Concise naming: types/functions do not use dag_ prefix
-- Trust the Caller: no validation, undefined on invalid input
+**目标**：同一任务描述符实例可被复用于多次提交
+
+**独立测试**：验证任务描述符结构是自包含且无状态的
+
+### 用户故事 5 的实现
+
+- [X] T010 [P] [US5] 在 task.h 中添加注释，记录任务描述符复用语义（描述符在创建后为 const，执行状态分开管理）
+
+---
+
+## Phase 8：用户故事 6 - 任务描述与执行状态的清晰分离（优先级：P1）
+
+**目标**：任务描述符由 Orchestrator 拥有；执行状态由 Dispatcher/Executor 拥有
+
+**独立测试**：验证任务描述符不引用执行状态
+
+### 用户故事 6 的实现
+
+- [X] T011 [P] [US6] 添加头文件注释，记录所有权分离：任务描述符（Orchestrator）vs 执行状态（Dispatcher/Executor）
+
+---
+
+## Phase 9：打磨与横切关注点
+
+**目的**：完成头文件以供分发
+
+- [X] T012 [P] 添加头文件保护宏（dag/task.h）
+- [X] T013 [P] 验证所有类型使用简洁命名（类型/函数上无 dag_ 前缀）
+
+---
+
+## 依赖与执行顺序
+
+### 阶段依赖
+
+- **Setup (Phase 1)**：无依赖——可立即开始
+- **Foundational (Phase 2)**：依赖 Setup 完成——阻塞所有用户故事
+- **用户故事 (Phase 3-8)**：均依赖 Foundational 阶段完成，可并行运行
+
+### 用户故事依赖
+
+- **用户故事 1-6**：在 Foundational 阶段完成后均可并行运行（故事相互独立）
+
+### 每个用户故事内部
+
+- 核心类型定义先于辅助函数
+- 头文件完成后再进入打磨
+
+---
+
+## 并行机会
+
+- T002、T003、T004 可并行运行（不同定义）
+- T005、T007、T008 可并行运行（不同类型定义）
+- T009、T010、T011 可并行运行（不同辅助函数/注释）
+- T012、T013 可并行运行（打磨任务）
+
+---
+
+## 实施策略
+
+### MVP 优先（用户故事 1）
+
+1. 完成 Phase 1：Setup
+2. 完成 Phase 2：Foundational
+3. 完成 Phase 3：用户故事 1
+4. **停止并验证**：验证任务描述符结构
+
+### 增量交付
+
+1. 完成 Setup + Foundational → 基础就绪
+2. 加入用户故事 1 → 独立测试
+3. 加入用户故事 2-6 → 每个增加一个独立的类型/辅助
+4. 打磨 → 完成头文件以供分发
+
+---
+
+## 备注
+
+- [P] 任务 = 不同文件或同一文件内的不同定义
+- [Story] 标签将任务映射到具体用户故事，便于可追溯性
+- 仅头文件库：无 .c 实现文件
+- 简洁命名：类型/函数不使用 dag_ 前缀
+- Trust the Caller：不做校验，非法输入时未定义行为

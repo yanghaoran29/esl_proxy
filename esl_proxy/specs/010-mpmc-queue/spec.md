@@ -1,291 +1,291 @@
-# Feature Specification: MPMC Queue
+# 功能规格说明：MPMC 队列
 
-**Feature Branch**: `010-mpmc-queue`
+**功能分支**：`010-mpmc-queue`
 
-**Created**: 2026-05-26
+**创建时间**：2026-05-26
 
-**Status**: Draft
+**状态**：草稿
 
-**Input**: User description: "mpmc队列", "010-mpmc-queue创建各种任务类型的全局ReadyQueue，用于任务下发", "010-mpmc-queue创建各种任务类型叠加各种组织类型的全局ReadyQueue，用于任务下发", and "010-mpmc-queue创建CompleteQueue，用于记录已完成任务"
+**输入**：用户描述："mpmc队列"、"010-mpmc-queue创建各种任务类型的全局ReadyQueue，用于任务下发"、"010-mpmc-queue创建各种任务类型叠加各种组织类型的全局ReadyQueue，用于任务下发" 以及 "010-mpmc-queue创建CompleteQueue，用于记录已完成任务"
 
-## User Scenarios & Testing *(mandatory)*
+## 用户场景与测试 *（必填）*
 
-### User Story 1 - Task Dispatch via MPMC Queue (Priority: P1)
+### 用户故事 1 - 通过 MPMC 队列进行任务下发（优先级：P1）
 
-A system operator dispatches tasks to workers through a lock-free MPMC (Multi-Producer-Multi-Consumer) queue. Multiple producer threads can enqueue tasks concurrently while multiple consumer threads dequeue tasks independently, with all operations remaining lock-free.
+系统操作员通过无锁 MPMC（多生产者多消费者）队列将任务下发给工作线程。多个生产者线程可以并发地将任务入队，同时多个消费者线程独立地将任务出队，所有操作均保持无锁。
 
-**Why this priority**: The MPMC queue is the primary mechanism for distributing tasks from the DAG scheduler to worker threads. Without it, tasks cannot be dispatched to workers.
+**为什么是此优先级**：MPMC 队列是将任务从 DAG 调度器分发到工作线程的主要机制。没有它，任务将无法下发给工作线程。
 
-**Independent Test**: Can be verified by having multiple producer threads enqueue tasks and multiple consumer threads dequeue those tasks concurrently, confirming all tasks are delivered without loss or corruption.
+**独立测试**：通过让多个生产者线程入队任务、多个消费者线程并发地将这些任务出队来验证，确认所有任务均无丢失且无损坏地被送达。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a queue with 1000 tasks enqueued, **When** 4 consumer threads dequeue concurrently, **Then** all 1000 tasks are successfully dequeued
-2. **Given** a queue is empty, **When** a consumer attempts to dequeue, **Then** the operation returns a signal indicating queue is empty
-3. **Given** a queue is full, **When** a producer attempts to enqueue, **Then** the operation returns a signal indicating queue is full
-
----
-
-### User Story 2 - Bounded Queue with Backpressure (Priority: P1)
-
-A system operator configures the MPMC queue with a fixed capacity to apply backpressure when producers outpace consumers. When the queue reaches capacity, producers block or return an error rather than unbounded memory growth.
-
-**Why this priority**: Bounded queues prevent memory exhaustion and provide flow control between producers and consumers in the DAG scheduling pipeline.
-
-**Independent Test**: Can be verified by attempting to enqueue more items than queue capacity and confirming appropriate backpressure behavior.
-
-**Acceptance Scenarios**:
-
-1. **Given** a queue with capacity 100, **When** 100 items are enqueued, **Then** the queue is full and subsequent enqueues return full status
-2. **Given** a queue with capacity 100 is full, **When** a consumer dequeues an item, **Then** the queue has room for one more item
+1. **给定**一个已入队 1000 个任务的队列，**当** 4 个消费者线程并发出队时，**则**所有 1000 个任务均成功出队
+2. **给定**队列为空，**当**消费者尝试出队时，**则**操作返回表示队列为空的信号
+3. **给定**队列已满，**当**生产者尝试入队时，**则**操作返回表示队列已满的信号
 
 ---
 
-### User Story 3 - FIFO Ordering (Priority: P2)
+### 用户故事 2 - 带反压的有界队列（优先级：P1）
 
-A system operator expects tasks to be delivered to consumers in First-In-First-Out order. Tasks enqueued first are dequeued first, ensuring deterministic task ordering within the DAG execution flow.
+系统操作员将 MPMC 队列配置为固定容量，以便在生产者速度超过消费者时施加反压。当队列达到容量上限时，生产者会阻塞或返回错误，而不是导致内存无限增长。
 
-**Why this priority**: FIFO ordering is critical for DAG scheduling where task dependencies require respecting the order in which tasks were enqueued.
+**为什么是此优先级**：有界队列可防止内存耗尽，并在 DAG 调度流水线中为生产者和消费者之间提供流量控制。
 
-**Independent Test**: Can be verified by enqueuing tasks with sequential identifiers and confirming they dequeue in the same order.
+**独立测试**：通过尝试入队超过队列容量的项数，并确认其呈现合适的反压行为来验证。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** tasks with IDs 1, 2, 3, 4, 5 are enqueued in order, **When** 5 consumers each dequeue one task, **Then** they receive tasks in order 1, 2, 3, 4, 5
-2. **Given** tasks with IDs 1, 2, 3 are enqueued concurrently by multiple producers, **When** tasks are dequeued, **Then** the relative ordering of concurrent enqueues is non-deterministic but each individual task is delivered exactly once
-
----
-
-### User Story 4 - Non-Blocking Dequeue Option (Priority: P2)
-
-A system operator can attempt to dequeue a task without blocking. If the queue is empty, the dequeue operation returns immediately with an empty status rather than waiting.
-
-**Why this priority**: Non-blocking dequeue is essential for worker threads that need to check for work without being stuck in a wait state, enabling efficient polling patterns.
-
-**Independent Test**: Can be verified by attempting to dequeue from an empty queue and confirming immediate return with empty status.
-
-**Acceptance Scenarios**:
-
-1. **Given** an empty queue, **When** a non-blocking dequeue is attempted, **Then** the operation returns immediately with empty status
-2. **Given** a queue with items, **When** a non-blocking dequeue is attempted, **Then** an item is returned without waiting
+1. **给定**容量为 100 的队列，**当** 100 个项目被入队后，**则**队列已满，后续入队返回已满状态
+2. **给定**容量为 100 的队列已满，**当**消费者出队一个项目时，**则**队列腾出一个项目的空间
 
 ---
 
-### User Story 5 - Memory-Efficient Circular Implementation (Priority: P3)
+### 用户故事 3 - FIFO 顺序（优先级：P2）
 
-A system operator leverages a circular buffer implementation for the MPMC queue that reuses memory slots. The queue size remains fixed regardless of enqueue/dequeue operations, enabling predictable memory footprint.
+系统操作员期望任务按先进先出（FIFO）顺序送达消费者。先入队的任务先出队，确保 DAG 执行流程中任务顺序的确定性。
 
-**Why this priority**: Circular buffer implementation provides O(1) enqueue and dequeue with minimal memory overhead, critical for high-throughput DAG scheduling.
+**为什么是此优先级**：FIFO 顺序对于 DAG 调度至关重要，因为任务依赖关系要求遵循任务入队的顺序。
 
-**Independent Test**: Can be verified by monitoring memory usage during sustained enqueue/dequeue operations and confirming stable memory footprint.
+**独立测试**：通过入队带顺序标识的任务并确认它们按相同顺序出队来验证。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a circular buffer queue with capacity 100, **When** 10,000 items are enqueued and dequeued over time, **Then** memory usage remains constant at approximately 100 slots
-2. **Given** a circular buffer queue, **When** the producer wraps around to the beginning of the buffer, **Then** it can overwrite slots that have been fully consumed
-
----
-
-### User Story 6 - Batch Enqueue (Priority: P2)
-
-A system operator enqueues multiple items in a single batch operation, reducing per-item overhead and improving throughput when dispatching groups of related tasks to the queue.
-
-**Why this priority**: Batch enqueue reduces syscall and atomic operation overhead when dispatching multiple tasks, critical for high-throughput DAG scheduling where groups of dependent tasks are often enqueued together.
-
-**Independent Test**: Can be verified by enqueuing a batch of 10 items in a single operation and confirming all 10 items are in the queue with correct order.
-
-**Acceptance Scenarios**:
-
-1. **Given** a queue with capacity 100 and 90 items, **When** a batch of 10 items is enqueued, **Then** all 10 items are successfully added and queue is full
-2. **Given** a queue with capacity 100 and 95 items, **When** a batch of 10 items is enqueued, **Then** the operation succeeds for 5 items and returns partial batch status for the remaining 5
-3. **Given** a batch of items [1, 2, 3, 4, 5] is enqueued together, **When** items are dequeued, **Then** items maintain relative order [1, 2, 3, 4, 5]
+1. **给定**按顺序入队 ID 为 1、2、3、4、5 的任务，**当** 5 个消费者每人出队一个任务时，**则**它们按顺序 1、2、3、4、5 接收任务
+2. **给定**由多个生产者并发入队 ID 为 1、2、3 的任务，**当**任务被出队时，**则**并发入队之间的相对顺序是不确定的，但每个独立任务恰好被送达一次
 
 ---
 
-### User Story 7 - Batch Dequeue (Priority: P2)
+### 用户故事 4 - 非阻塞出队选项（优先级：P2）
 
-A system operator dequeues multiple items in a single batch operation, allowing workers to fetch multiple waiting tasks at once and reduce per-item coordination overhead.
+系统操作员可以在不阻塞的情况下尝试出队任务。如果队列为空，出队操作会立即返回空状态而不等待。
 
-**Why this priority**: Batch dequeue enables workers to process multiple tasks with a single queue interaction, reducing contention and improving cache locality for sequential task processing.
+**为什么是此优先级**：非阻塞出队对于需要检查是否有工作而无需陷入等待状态的工作线程至关重要，可启用高效的轮询模式。
 
-**Independent Test**: Can be verified by enqueuing 100 items and dequeuing a batch of 10, confirming 10 items are returned and queue depth decreases by 10.
+**独立测试**：通过尝试从空队列出队并确认立即以空状态返回来验证。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a queue with 100 items, **When** a batch dequeue of 10 is attempted, **Then** 10 items are returned and queue has 90 remaining
-2. **Given** a queue with 5 items, **When** a batch dequeue of 10 is attempted, **Then** 5 items are returned and queue is empty
-3. **Given** a queue with 5 items, **When** a batch dequeue of 10 is attempted in non-blocking mode, **Then** 5 items are returned immediately
-
----
-
-### User Story 8 - Batch Size Limits and Partial Results (Priority: P2)
-
-A system operator configures maximum batch sizes and handles partial batch results when fewer items than requested are available. The batch API returns the actual number of items processed.
-
-**Why this priority**: Partial batch handling is essential for bounded queues where the number of available items may be less than the requested batch size, enabling graceful degradation without blocking.
-
-**Independent Test**: Can be verified by requesting more items than available and confirming partial results are returned with accurate count.
-
-**Acceptance Scenarios**:
-
-1. **Given** a queue with 3 items, **When** a batch dequeue of 10 is requested, **Then** exactly 3 items are returned with batch count of 3
-2. **Given** a queue with 3 items, **When** a batch enqueue of 10 is attempted with 7 items needing to wait, **Then** 3 items are enqueued with batch count of 3
+1. **给定**一个空队列，**当**尝试非阻塞出队时，**则**操作立即返回空状态
+2. **给定**含有项目的队列，**当**尝试非阻塞出队时，**则**返回一个项目而无需等待
 
 ---
 
-### User Story 9 - Per-TaskType+OrgMode ReadyQueues (Priority: P1)
+### 用户故事 5 - 内存高效的循环实现（优先级：P3）
 
-A system operator maintains separate ReadyQueues for each combination of task type and organization mode (SINGLE, GROUP, SPMD_SYNC, SPMD_ASYNC). The DAG scheduler enqueues tasks into the appropriate queue based on both the task descriptor type and org_mode fields. Workers consume from their specific queue, enabling fine-grained task distribution.
+系统操作员利用循环缓冲区实现来重用内存槽位。无论入队/出队操作如何，队列大小都保持固定，从而实现可预测的内存占用。
 
-**Why this priority**: Different task types combined with different organization modes may require different worker resources or scheduling policies. A 2D queue matrix (type × org_mode) enables efficient distribution of tasks with different execution characteristics.
+**为什么是此优先级**：循环缓冲区实现以最小的内存开销提供 O(1) 入队和出队，这对于高吞吐量 DAG 调度至关重要。
 
-**Independent Test**: Can be verified by enqueueing tasks of different type/org_mode combinations into their respective queues and confirming workers receive tasks matching their specific combination.
+**独立测试**：通过监控持续入队/出队操作期间的内存使用情况并确认内存占用稳定来验证。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** task type CUBE with org_mode SINGLE has 5 tasks enqueued, **When** workers consume from that queue, **Then** all 5 CUBE+SINGLE tasks are received
-2. **Given** task type VECTOR with org_mode SPMD_ASYNC has 3 tasks and CUBE with org_mode GROUP has 2 tasks, **When** workers consume from each queue, **Then** workers receive only tasks matching their specific type+org_mode combination
-3. **Given** 3 task types × 4 org_modes = 12 queue combinations, **When** scheduler enqueues tasks, **Then** each task is placed in the queue matching its specific type and org_mode
-
----
-
-### User Story 10 - Global ReadyQueue Matrix Access (Priority: P1)
-
-A system operator accesses global ReadyQueues by both task type and org_mode. The global queue matrix is globally visible and accessible via 2D indexing (task_type, org_mode), enabling O(1) lookup of the appropriate queue for any task.
-
-**Why this priority**: Global visibility with 2D indexing enables any component (scheduler, workers) to access the correct queue without passing queue references. Combined type+org_mode indexing provides O(1) access.
-
-**Independent Test**: Can be verified by looking up the queue for each type+org_mode combination and confirming correct queue is returned.
-
-**Acceptance Scenarios**:
-
-1. **Given** task type CUBE and org_mode SPMD_SYNC, **When** the scheduler accesses the corresponding ReadyQueue, **Then** the correct queue is found via 2D type+org_mode indexing
-2. **Given** task types CUBE, VECTOR, MIX and org_modes SINGLE, GROUP, SPMD_SYNC, SPMD_ASYNC, **When** any component needs to enqueue a task, **Then** it can directly access the appropriate queue via task type and org_mode
-3. **Given** 12 total queue combinations (3 types × 4 org_modes), **When** looking up any ReadyQueue, **Then** lookup completes in O(1) time
+1. **给定**容量为 100 的循环缓冲区队列，**当**随着时间推移入队和出队 10,000 个项目时，**则**内存使用保持恒定在约 100 个槽位
+2. **给定**循环缓冲区队列，**当**生产者环绕到缓冲区开头时，**则**它可以覆盖已完全消费的槽位
 
 ---
 
-### User Story 11 - CompleteQueue for Task Completion Tracking (Priority: P1)
+### 用户故事 6 - 批量入队（优先级：P2）
 
-A system operator records completed tasks in a global CompleteQueue. When workers finish executing tasks, they enqueue task IDs or results to the CompleteQueue. This enables the DAG scheduler to track task completion, trigger downstream task dependencies, and support task completion callbacks.
+系统操作员通过单次批量操作入队多个项目，减少每项目开销，并在将一组相关任务下发至队列时提升吞吐量。
 
-**Why this priority**: The CompleteQueue provides a central mechanism for tracking task completion status. Without it, the scheduler cannot know when tasks are done or trigger dependent task execution.
+**为什么是此优先级**：批量入队减少了下发多个任务时的系统调用与原子操作开销，对于经常一起入队一组依赖任务的高吞吐 DAG 调度至关重要。
 
-**Independent Test**: Can be verified by enqueueing completed task IDs into CompleteQueue and confirming they are available for consumption by the completion tracking system.
+**独立测试**：通过在单次操作中入队 10 个项目的批次并确认所有 10 个项目按正确顺序进入队列来验证。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a worker completes task ID 42, **When** it enqueues the task ID to CompleteQueue, **Then** the completion tracking system can dequeue and process it
-2. **Given** multiple workers complete tasks concurrently, **When** they enqueue completion notifications, **Then** all notifications are recorded in order
-3. **Given** CompleteQueue has 100 completed task notifications, **When** the scheduler dequeues them, **Then** it can update DAG state and trigger waiting dependent tasks
-
----
-
-### User Story 12 - Global CompleteQueue Access (Priority: P1)
-
-A system operator accesses the global CompleteQueue from any worker thread. The CompleteQueue is globally visible and accessible via a single global variable, enabling O(1) enqueue access for completion notifications.
-
-**Why this priority**: Global visibility enables any worker thread to enqueue completion notifications without needing queue references passed as parameters. Single global instance simplifies worker implementation.
-
-**Independent Test**: Can be verified by confirming the CompleteQueue global variable exists and is accessible from worker threads.
-
-**Acceptance Scenarios**:
-
-1. **Given** the CompleteQueue global variable exists, **When** any worker thread needs to record completion, **Then** it can access the queue directly
-2. **Given** CompleteQueue is globally accessible, **When** worker threads complete tasks, **Then** they do not need queue references passed as parameters
+1. **给定**容量为 100 且含 90 个项目的队列，**当**入队 10 个项目的批次时，**则**所有 10 个项目都成功添加且队列已满
+2. **给定**容量为 100 且含 95 个项目的队列，**当**入队 10 个项目的批次时，**则**操作对 5 个项目成功，并对剩余 5 个返回部分批次状态
+3. **给定**项目批次 [1, 2, 3, 4, 5] 一起入队，**当**项目被出队时，**则**项目保持相对顺序 [1, 2, 3, 4, 5]
 
 ---
 
-### Edge Cases
+### 用户故事 7 - 批量出队（优先级：P2）
 
-- What happens when multiple producers enqueue concurrently at the same slot?
-- What happens when the queue is empty and multiple consumers try to dequeue simultaneously?
-- What happens when producers enqueue faster than consumers can handle (head-of-line blocking)?
-- What happens when the queue wraps around multiple times?
-- What happens when task data contains pointers that become invalid after dequeue?
-- What happens when batch enqueue attempts more items than remaining capacity?
-- What happens when batch dequeue requests more items than are available?
-- What is the maximum batch size supported?
-- What happens when a task type is added or removed from the system?
-- What happens when all ReadyQueues are empty (no work available)?
-- What happens when CompleteQueue is full and cannot accept more completions?
-- What happens when CompleteQueue overflows and old completions are overwritten?
+系统操作员通过单次批量操作出队多个项目，使工作线程能够一次性获取多个等待中的任务，从而减少每项的协调开销。
 
-## Requirements *(mandatory)*
+**为什么是此优先级**：批量出队让工作线程通过单次队列交互处理多个任务，减少争用并改善顺序任务处理的缓存局部性。
 
-### Functional Requirements
+**独立测试**：通过入队 100 个项目并出队 10 个项目的批次来验证，确认返回 10 个项目且队列深度减少 10。
 
-- **FR-001**: The queue MUST support multiple producers enqueueing concurrently without locks
-- **FR-002**: The queue MUST support multiple consumers dequeuing concurrently without locks
-- **FR-003**: The queue MUST be bounded with configurable capacity
-- **FR-004**: Enqueue operation MUST return success when queue has capacity
-- **FR-005**: Enqueue operation MUST return full/error status when queue is at capacity
-- **FR-006**: Dequeue operation MUST return an item when queue has items
-- **FR-007**: Dequeue operation MUST return empty status when queue is empty
-- **FR-008**: The queue MUST provide FIFO ordering for items enqueued by the same producer
-- **FR-009**: Each item MUST be delivered to exactly one consumer (no duplication)
-- **FR-010**: The queue MUST use a circular buffer for memory-efficient operation
-- **FR-011**: The queue MUST support non-blocking dequeue operation
-- **FR-012**: The queue MUST support batch enqueue of multiple items in a single operation
-- **FR-013**: Batch enqueue MUST return the count of items successfully enqueued
-- **FR-014**: Batch enqueue MUST fail for items that would exceed capacity (partial batch handling)
-- **FR-015**: The queue MUST support batch dequeue of multiple items in a single operation
-- **FR-016**: Batch dequeue MUST return the count of items actually dequeued
-- **FR-017**: Batch dequeue MUST return partial results when fewer items than requested are available
-- **FR-018**: A separate ReadyQueue MUST exist for each task type (CUBE, VECTOR, MIX)
-- **FR-019**: ReadyQueues MUST be globally visible and accessible by task type
-- **FR-020**: ReadyQueue lookup by task type MUST complete in O(1) time
-- **FR-021**: Tasks MUST be enqueued into the queue matching their type field
-- **FR-022**: A separate ReadyQueue MUST exist for each combination of task type AND org_mode
-- **FR-023**: ReadyQueue lookup by (task_type, org_mode) MUST complete in O(1) time
-- **FR-024**: Tasks MUST be enqueued into the queue matching both their type and org_mode fields
-- **FR-025**: A global CompleteQueue MUST exist for recording completed task notifications
-- **FR-026**: CompleteQueue MUST be globally visible and accessible from any worker thread
-- **FR-027**: Workers MUST be able to enqueue completion notifications without needing queue references
+**验收场景**：
 
-### Key Entities *(include if feature involves data)*
+1. **给定**含 100 个项目的队列，**当**尝试出队 10 个项目的批次时，**则**返回 10 个项目且队列剩余 90 个
+2. **给定**含 5 个项目的队列，**当**尝试出队 10 个项目的批次时，**则**返回 5 个项目且队列为空
+3. **给定**含 5 个项目的队列，**当**在非阻塞模式下尝试出队 10 个项目的批次时，**则**立即返回 5 个项目
 
-- **MPMC Queue**: A bounded lock-free queue enabling multiple producers and consumers to operate concurrently. Stores task descriptors or pointers to task data.
-- **Queue Capacity**: Fixed maximum number of items the queue can hold at once. Configured at queue creation time.
-- **Enqueue Operation**: Add an item to the tail of the queue. Succeeds if queue is not full, returns error if queue is full.
-- **Dequeue Operation**: Remove and return an item from the head of the queue. Succeeds if queue is not empty, returns empty signal if queue is empty.
-- **Queue Slot**: Individual memory location within the circular buffer that holds one queue item.
-- **Batch Enqueue**: Operation that adds multiple items to the queue in a single call. Returns count of items successfully enqueued.
-- **Batch Dequeue**: Operation that removes multiple items from the queue in a single call. Returns count of items actually dequeued.
-- **Batch Count**: Return value indicating how many items were processed in a batch operation.
-- **ReadyQueue**: Per-(task_type, org_mode) MPMC queue for holding tasks ready to be dispatched to workers.
-- **TaskType**: Classification of task execution model (CUBE, VECTOR, MIX). Used as first dimension of ReadyQueue indexing.
-- **OrgMode**: Organization mode for task instances (SINGLE, GROUP, SPMD_SYNC, SPMD_ASYNC). Used as second dimension of ReadyQueue indexing.
-- **CompleteQueue**: Global MPMC queue for recording completed task notifications. Enables scheduler to track task completion and trigger dependent tasks.
+---
 
-## Success Criteria *(mandatory)*
+### 用户故事 8 - 批量大小限制与部分结果（优先级：P2）
 
-### Measurable Outcomes
+系统操作员配置最大批量大小，并在可用项目少于请求数时处理部分批次结果。批量 API 返回实际处理的项目数。
 
-- **SC-001**: System supports at least 4 producer threads enqueueing concurrently
-- **SC-002**: System supports at least 4 consumer threads dequeuing concurrently
-- **SC-003**: Enqueue and dequeue operations complete in O(1) time
-- **SC-004**: No item is lost or duplicated during concurrent operations
-- **SC-005**: Queue memory footprint remains constant regardless of total items processed
-- **SC-006**: Non-blocking dequeue returns within 1 microsecond when queue is empty
-- **SC-007**: Bounded queue correctly applies backpressure when at capacity
-- **SC-008**: Batch enqueue processes at least 10 items in a single operation
-- **SC-009**: Batch dequeue processes at least 10 items in a single operation
-- **SC-010**: Partial batch results accurately report actual item count
-- **SC-011**: System maintains at least 12 ReadyQueues (3 task types × 4 org_modes)
-- **SC-012**: ReadyQueue access by (task_type, org_mode) completes in O(1) time
-- **SC-013**: Tasks are correctly routed to (task_type, org_mode)-specific queues
-- **SC-014**: CompleteQueue exists and is globally accessible
-- **SC-015**: Completed task notifications are recorded without needing queue references
+**为什么是此优先级**：在有界队列中，可用项目数可能少于请求的批量大小，部分批次处理对此至关重要，可实现优雅降级而不阻塞。
 
-## Assumptions
+**独立测试**：通过请求多于可用的项目并确认返回带有精确计数的部分结果来验证。
 
-- MPMC queue is used for inter-thread task dispatch within the DAG scheduler
-- Queue capacity will be configured based on expected workload (typical values 100-10000)
-- Task data stored in the queue is either value types or valid pointers that remain stable until dequeue
-- The MPMC queue complements the existing ring buffer infrastructure - ring buffers store task metadata, MPMC queue dispatches tasks to workers
-- Lock-free implementation uses C11 atomics only (no mutexes/spinlocks in hot path)
-- Queue follows Constitution XI naming conventions (no dag_ prefix)
-- Task types are fixed at compile time (CUBE, VECTOR, MIX) - 3 types
-- Org modes are fixed at compile time (SINGLE, GROUP, SPMD_SYNC, SPMD_ASYNC) - 4 modes
-- There are 3×4=12 total queue combinations (task_type × org_mode)
+**验收场景**：
+
+1. **给定**含 3 个项目的队列，**当**请求出队 10 个项目的批次时，**则**恰好返回 3 个项目，批量计数为 3
+2. **给定**含 3 个项目的队列，**当**尝试入队 10 个项目的批次且其中 7 个需要等待时，**则**入队 3 个项目，批量计数为 3
+
+---
+
+### 用户故事 9 - 按 TaskType+OrgMode 划分的 ReadyQueue（优先级：P1）
+
+系统操作员为每种任务类型与组织模式（SINGLE、GROUP、SPMD_SYNC、SPMD_ASYNC）的组合维护独立的 ReadyQueue。DAG 调度器根据任务描述符的类型字段和 org_mode 字段将任务入队到相应的队列。工作线程从其特定队列消费任务，实现细粒度的任务分发。
+
+**为什么是此优先级**：不同任务类型结合不同组织模式可能需要不同的工作线程资源或调度策略。二维队列矩阵（type × org_mode）能够高效分发具有不同执行特性的任务。
+
+**独立测试**：通过将不同 type/org_mode 组合的任务入队到各自对应的队列，并确认工作线程接收到匹配其特定组合的任务来验证。
+
+**验收场景**：
+
+1. **给定** task type 为 CUBE、org_mode 为 SINGLE 的队列入队了 5 个任务，**当**工作线程从该队列消费时，**则**接收到全部 5 个 CUBE+SINGLE 任务
+2. **给定** task type 为 VECTOR、org_mode 为 SPMD_ASYNC 的队列含 3 个任务，CUBE 与 org_mode GROUP 的队列含 2 个任务，**当**工作线程从各队列消费时，**则**工作线程仅接收到匹配其特定 type+org_mode 组合的任务
+3. **给定** 3 种任务类型 × 4 种 org_mode = 12 种队列组合，**当**调度器入队任务时，**则**每个任务被放入匹配其特定 type 和 org_mode 的队列
+
+---
+
+### 用户故事 10 - 全局 ReadyQueue 矩阵访问（优先级：P1）
+
+系统操作员通过任务类型和 org_mode 同时访问全局 ReadyQueue。全局队列矩阵全局可见，可通过二维索引（task_type, org_mode）访问，实现对任何任务对应队列的 O(1) 查找。
+
+**为什么是此优先级**：带二维索引的全局可见性使任何组件（调度器、工作线程）都能访问正确的队列，而无需传递队列引用。type+org_mode 组合索引提供 O(1) 访问。
+
+**独立测试**：通过查找每个 type+org_mode 组合对应的队列并确认返回正确队列来验证。
+
+**验收场景**：
+
+1. **给定** task type 为 CUBE、org_mode 为 SPMD_SYNC，**当**调度器访问对应的 ReadyQueue 时，**则**通过二维 type+org_mode 索引找到正确队列
+2. **给定**任务类型 CUBE、VECTOR、MIX 及 org_mode SINGLE、GROUP、SPMD_SYNC、SPMD_ASYNC，**当**任何组件需要入队任务时，**则**可通过任务类型和 org_mode 直接访问对应的队列
+3. **给定**总共 12 种队列组合（3 类型 × 4 org_mode），**当**查找任何 ReadyQueue 时，**则**查找在 O(1) 时间内完成
+
+---
+
+### 用户故事 11 - 用于任务完成追踪的 CompleteQueue（优先级：P1）
+
+系统操作员将已完成任务记录到全局 CompleteQueue 中。当工作线程完成任务执行时，它们将任务 ID 或结果入队到 CompleteQueue。这使得 DAG 调度器能够追踪任务完成情况、触发下游任务依赖，并支持任务完成回调。
+
+**为什么是此优先级**：CompleteQueue 为追踪任务完成状态提供了集中机制。没有它，调度器无法知晓任务何时完成或触发依赖任务的执行。
+
+**独立测试**：通过将已完成的任务 ID 入队到 CompleteQueue 并确认完成追踪系统可消费它们来验证。
+
+**验收场景**：
+
+1. **给定**工作线程完成 ID 为 42 的任务，**当**它将任务 ID 入队到 CompleteQueue 时，**则**完成追踪系统可以将其出队并处理
+2. **给定**多个工作线程并发完成任务，**当**它们入队完成通知时，**则**所有通知按顺序被记录
+3. **给定** CompleteQueue 有 100 条已完成任务通知，**当**调度器将其出队时，**则**它可以更新 DAG 状态并触发等待中的依赖任务
+
+---
+
+### 用户故事 12 - 全局 CompleteQueue 访问（优先级：P1）
+
+系统操作员可从任何工作线程访问全局 CompleteQueue。CompleteQueue 全局可见，可通过单个全局变量访问，实现 O(1) 的完成通知入队访问。
+
+**为什么是此优先级**：全局可见性使任何工作线程都能入队完成通知，而无需通过参数传递队列引用。单一全局实例简化了工作线程的实现。
+
+**独立测试**：通过确认 CompleteQueue 全局变量存在且可从工作线程访问来验证。
+
+**验收场景**：
+
+1. **给定** CompleteQueue 全局变量存在，**当**任何工作线程需要记录完成时，**则**它可以直接访问该队列
+2. **给定** CompleteQueue 全局可访问，**当**工作线程完成任务时，**则**它们无需通过参数传递队列引用
+
+---
+
+### 边缘情况
+
+- 多个生产者并发地在同一槽位入队时会发生什么？
+- 队列为空且多个消费者同时尝试出队时会发生什么？
+- 当生产者入队速度超过消费者处理能力时会发生什么（队首阻塞）？
+- 当队列多次环绕时会发生什么？
+- 当任务数据包含在出队后失效的指针时会发生什么？
+- 当批量入队尝试的项目数超过剩余容量时会发生什么？
+- 当批量出队请求的项目数超过可用数量时会发生什么？
+- 支持的最大批量大小是多少？
+- 当向系统添加或移除某种任务类型时会发生什么？
+- 当所有 ReadyQueue 都为空（无可用工作）时会发生什么？
+- 当 CompleteQueue 已满且无法接受更多完成通知时会发生什么？
+- 当 CompleteQueue 溢出，旧完成通知被覆盖时会发生什么？
+
+## 需求 *（必填）*
+
+### 功能需求
+
+- **FR-001**：队列必须支持多生产者无锁并发入队
+- **FR-002**：队列必须支持多消费者无锁并发出队
+- **FR-003**：队列必须是有界的且容量可配置
+- **FR-004**：当队列有剩余容量时，入队操作必须返回成功
+- **FR-005**：当队列达到容量上限时，入队操作必须返回已满/错误状态
+- **FR-006**：当队列有项目时，出队操作必须返回一个项目
+- **FR-007**：当队列为空时，出队操作必须返回空状态
+- **FR-008**：对于同一生产者入队的项目，队列必须保证 FIFO 顺序
+- **FR-009**：每个项目必须恰好被交付给一个消费者（不可重复）
+- **FR-010**：队列必须使用循环缓冲区以实现内存高效运行
+- **FR-011**：队列必须支持非阻塞出队操作
+- **FR-012**：队列必须支持单次操作批量入队多个项目
+- **FR-013**：批量入队必须返回成功入队的项目数
+- **FR-014**：对于会超出容量的项目，批量入队必须失败（部分批次处理）
+- **FR-015**：队列必须支持单次操作批量出队多个项目
+- **FR-016**：批量出队必须返回实际出队的项目数
+- **FR-017**：当可用项目少于请求数时，批量出队必须返回部分结果
+- **FR-018**：每种任务类型（CUBE、VECTOR、MIX）必须存在独立的 ReadyQueue
+- **FR-019**：ReadyQueue 必须全局可见且可通过任务类型访问
+- **FR-020**：按任务类型查找 ReadyQueue 必须在 O(1) 时间内完成
+- **FR-021**：任务必须被入队到匹配其类型字段的队列
+- **FR-022**：每种任务类型与 org_mode 的组合必须存在独立的 ReadyQueue
+- **FR-023**：按 (task_type, org_mode) 查找 ReadyQueue 必须在 O(1) 时间内完成
+- **FR-024**：任务必须被入队到同时匹配其类型与 org_mode 字段的队列
+- **FR-025**：必须存在全局 CompleteQueue 以记录已完成任务通知
+- **FR-026**：CompleteQueue 必须全局可见且可从任何工作线程访问
+- **FR-027**：工作线程必须能够入队完成通知而无需队列引用
+
+### 关键实体 *（如果功能涉及数据请包含）*
+
+- **MPMC Queue**：一种有界无锁队列，使多个生产者和消费者能够并发操作。存储任务描述符或指向任务数据的指针。
+- **Queue Capacity**：队列一次能容纳的固定最大项目数。在队列创建时配置。
+- **Enqueue Operation**：在队列尾部添加项目。如果队列未满则成功，否则返回错误。
+- **Dequeue Operation**：从队列头部移除并返回项目。如果队列非空则成功，否则返回空信号。
+- **Queue Slot**：循环缓冲区中存放单个队列项目的独立内存位置。
+- **Batch Enqueue**：在单次调用中向队列添加多个项目的操作。返回成功入队的项目数。
+- **Batch Dequeue**：在单次调用中从队列移除多个项目的操作。返回实际出队的项目数。
+- **Batch Count**：指示批量操作中处理项目数量的返回值。
+- **ReadyQueue**：按 (task_type, org_mode) 划分的 MPMC 队列，用于保存即将下发给工作线程的任务。
+- **TaskType**：任务执行模型的分类（CUBE、VECTOR、MIX）。作为 ReadyQueue 索引的第一维。
+- **OrgMode**：任务实例的组织模式（SINGLE、GROUP、SPMD_SYNC、SPMD_ASYNC）。作为 ReadyQueue 索引的第二维。
+- **CompleteQueue**：用于记录已完成任务通知的全局 MPMC 队列。使调度器能够追踪任务完成并触发依赖任务。
+
+## 成功标准 *（必填）*
+
+### 可度量结果
+
+- **SC-001**：系统支持至少 4 个生产者线程并发入队
+- **SC-002**：系统支持至少 4 个消费者线程并发出队
+- **SC-003**：入队和出队操作在 O(1) 时间内完成
+- **SC-004**：并发操作中无项目丢失或重复
+- **SC-005**：无论处理的项目总数是多少，队列内存占用保持恒定
+- **SC-006**：队列为空时，非阻塞出队在 1 微秒内返回
+- **SC-007**：有界队列在达到容量时正确施加反压
+- **SC-008**：批量入队在单次操作中处理至少 10 个项目
+- **SC-009**：批量出队在单次操作中处理至少 10 个项目
+- **SC-010**：部分批次结果准确报告实际项目数
+- **SC-011**：系统维护至少 12 个 ReadyQueue（3 种任务类型 × 4 种 org_mode）
+- **SC-012**：按 (task_type, org_mode) 访问 ReadyQueue 在 O(1) 时间内完成
+- **SC-013**：任务被正确路由至 (task_type, org_mode) 对应的专属队列
+- **SC-014**：CompleteQueue 存在且全局可访问
+- **SC-015**：完成任务通知在无需队列引用的情况下被记录
+
+## 假设
+
+- MPMC 队列用于 DAG 调度器内线程间任务下发
+- 队列容量将根据预期工作负载配置（典型值 100-10000）
+- 队列中存储的任务数据为值类型，或者为在出队前保持稳定的有效指针
+- MPMC 队列与现有的 ring buffer 基础设施互补——ring buffer 存储任务元数据，MPMC 队列负责将任务下发给工作线程
+- 无锁实现仅使用 C11 atomics（热路径中无 mutex/spinlock）
+- 队列遵循 Constitution XI 命名约定（无 dag_ 前缀）
+- 任务类型在编译期固定（CUBE、VECTOR、MIX）——3 种类型
+- Org mode 在编译期固定（SINGLE、GROUP、SPMD_SYNC、SPMD_ASYNC）——4 种模式
+- 共有 3×4=12 种队列组合（task_type × org_mode）

@@ -1,38 +1,38 @@
-# Specification Quality Checklist: Task Ring Buffers
+# 规格质量检查表：任务环形缓冲区
 
-**Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-05-26
-**Feature**: [link](../spec.md)
+**目的**：在进入规划之前验证规格说明的完整性和质量
+**创建日期**：2026-05-26
+**功能**：[链接](../spec.md)
 
-## Content Quality
+## 内容质量
 
-- [x] No implementation details (languages, frameworks, APIs)
-- [x] Focused on user value and business needs
-- [x] Written for non-technical stakeholders
-- [x] All mandatory sections completed
+- [x] 无实现细节（语言、框架、API）
+- [x] 聚焦于用户价值和业务需求
+- [x] 面向非技术利益相关者编写
+- [x] 所有必填章节均已完成
 
-## Requirement Completeness
+## 需求完整性
 
-- [x] No [NEEDS CLARIFICATION] markers remain
-- [x] Requirements are testable and unambiguous
-- [x] Success criteria are measurable
-- [x] Success criteria are technology-agnostic (no implementation details)
-- [x] All acceptance scenarios are defined
-- [x] Edge cases are identified
-- [x] Scope is clearly bounded
-- [x] Dependencies and assumptions identified
+- [x] 不再有 [NEEDS CLARIFICATION] 标记
+- [x] 需求可测试且无歧义
+- [x] 成功标准可衡量
+- [x] 成功标准与技术无关（无实现细节）
+- [x] 所有验收场景均已定义
+- [x] 边界情况已识别
+- [x] 范围已明确界定
+- [x] 依赖关系和假设已识别
 
-## Feature Readiness
+## 功能就绪度
 
-- [x] All functional requirements have clear acceptance criteria
-- [x] User scenarios cover primary flows
-- [x] Feature meets measurable outcomes defined in Success Criteria
-- [x] No implementation details leak into specification
+- [x] 所有功能需求均具有清晰的验收标准
+- [x] 用户场景覆盖主要流程
+- [x] 功能满足成功标准中定义的可衡量结果
+- [x] 没有实现细节泄漏到规格说明中
 
-## Notes
+## 备注
 
-- All items pass - spec is ready for /speckit-plan
-- 7 user stories total: 3 foundational (size, indexing, O(1)) + 4 storage categories (state, basic info, dependency info, runtime)
-- FR-001 to FR-014 cover indexing fundamentals and all 4 Ring Buffer storage categories
-- Renamed "Task Successor Ring Buffer" to "Dependency Information Ring Buffer" to reflect broader scope (successor count + predecessor count + successor nodes)
-- Dependency info storage: base entry (3 inline + 2B next pointer) + extension entries for overflow
+- 所有项目均通过 —— 规格已准备好进入 /speckit-plan
+- 共 7 个用户故事：3 个基础类（大小、索引、O(1)）+ 4 个存储类别（状态、基本信息、依赖信息、运行时）
+- FR-001 至 FR-014 涵盖索引基础和所有 4 个 Ring Buffer 存储类别
+- 将"任务后继 Ring Buffer"重命名为"依赖信息 Ring Buffer"以反映更广泛的范围（后继数量 + 前驱数量 + 后继节点）
+- 依赖信息存储：基础条目（3 个内联 + 2 字节 next 指针）+ 用于溢出的扩展条目

@@ -1,39 +1,39 @@
-# Specification Quality Checklist: MPMC Queue
+# 规格质量检查清单：MPMC 队列
 
-**Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-05-26
-**Feature**: [link](../spec.md)
+**目的**：在进入规划阶段之前，验证规格说明的完整性与质量
+**创建时间**：2026-05-26
+**功能**：[link](../spec.md)
 
-## Content Quality
+## 内容质量
 
-- [x] No implementation details (languages, frameworks, APIs)
-- [x] Focused on user value and business needs
-- [x] Written for non-technical stakeholders
-- [x] All mandatory sections completed
+- [x] 无实现细节（语言、框架、API）
+- [x] 聚焦于用户价值与业务需求
+- [x] 面向非技术利益相关者撰写
+- [x] 所有必填章节均已完成
 
-## Requirement Completeness
+## 需求完整性
 
-- [x] No [NEEDS CLARIFICATION] markers remain
-- [x] Requirements are testable and unambiguous
-- [x] Success criteria are measurable
-- [x] Success criteria are technology-agnostic (no implementation details)
-- [x] All acceptance scenarios are defined
-- [x] Edge cases are identified
-- [x] Scope is clearly bounded
-- [x] Dependencies and assumptions identified
+- [x] 不再保留 [NEEDS CLARIFICATION] 标记
+- [x] 需求可测试且无歧义
+- [x] 成功标准可度量
+- [x] 成功标准与技术无关（无实现细节）
+- [x] 所有验收场景均已定义
+- [x] 已识别边缘情况
+- [x] 范围边界清晰
+- [x] 已识别依赖与假设
 
-## Feature Readiness
+## 功能就绪度
 
-- [x] All functional requirements have clear acceptance criteria
-- [x] User scenarios cover primary flows
-- [x] Feature meets measurable outcomes defined in Success Criteria
-- [x] No implementation details leak into specification
+- [x] 所有功能需求均有清晰的验收标准
+- [x] 用户场景覆盖主要流程
+- [x] 功能满足成功标准中定义的可度量结果
+- [x] 规格说明中未泄露实现细节
 
-## Notes
+## 备注
 
-- All items pass - spec is ready for /speckit-plan
-- 12 user stories (P1-P3 priority)
-- User Story 11-12: CompleteQueue for task completion tracking
-- CompleteQueue is globally visible single instance
-- Integrates with existing ring buffer infrastructure (008-task, 009-ring-buffer)
-- Lock-free design per Constitution principles
+- 所有项目均通过——规格已准备好进入 /speckit-plan
+- 12 个用户故事（P1-P3 优先级）
+- 用户故事 11-12：用于任务完成追踪的 CompleteQueue
+- CompleteQueue 是全局可见的单一实例
+- 与现有 ring buffer 基础设施集成（008-task、009-ring-buffer）
+- 按章程原则采用无锁设计

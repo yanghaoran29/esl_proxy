@@ -1,160 +1,160 @@
-# Feature Specification: Task
+# 功能规格说明：Task
 
-**Feature Branch**: `008-task`
+**功能分支**：`008-task`
 
-**Created**: 2026-05-25
+**创建日期**：2026-05-25
 
-**Status**: Draft
+**状态**：草稿
 
-**Input**: User description: "008-task仅包含task描述信息，移除执行相关信息"
+**输入**：用户描述："008-task仅包含task描述信息，移除执行相关信息"
 
-## User Scenarios & Testing *(mandatory)*
+## 用户场景与测试 *（必填）*
 
-### User Story 1 - Task Description Only (Priority: P1)
+### 用户故事 1 - 仅包含任务描述信息（优先级：P1）
 
-A system operator creates a task descriptor containing only task description information: task ID, task type, organization mode, kernel pointer, index, instance count, and priority. Execution-related information (state, completion status, executor assignment) is stored separately by the DAG engine and is not part of the task descriptor.
+系统操作者创建一个仅包含任务描述信息的任务描述符：任务 ID、任务类型、组织模式、kernel 指针、index、实例数量与优先级。执行相关信息（状态、完成状况、executor 分配）由 DAG 引擎单独存储，不属于任务描述符的一部分。
 
-**Why this priority**: Separating task description from execution state follows separation of concerns - the descriptor describes WHAT to execute, while execution state tracks HOW it is executing.
+**优先级理由**：将任务描述与执行状态分离遵循关注点分离原则——描述符描述"要执行什么"，而执行状态跟踪"如何执行"。
 
-**Independent Test**: Can be tested by creating a task descriptor and verifying it contains only description fields and no execution state fields.
+**独立测试**：可通过创建一个任务描述符并验证其仅包含描述字段、不含执行状态字段来进行测试。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a task descriptor is created, **When** it contains task ID, task type, and organization mode, **Then** it does not contain execution state fields (state, completion status)
-2. **Given** a task descriptor is created, **When** it is passed to the Orchestrator, **Then** the Orchestrator stores description data separately from execution state
-
----
-
-### User Story 2 - Task Type Definition (Priority: P1)
-
-A system operator defines tasks with three distinct types: CUBE, VECTOR, and MIX. Task type is stored in the task descriptor as a description field, not an execution state.
-
-**Why this priority**: Task type is a fundamental description of how a task should execute - the Orchestrator stores it in the task descriptor for the Dispatch to read.
-
-**Independent Test**: Can be tested by submitting tasks of each type and verifying the system correctly identifies and routes each type.
-
-**Acceptance Scenarios**:
-
-1. **Given** a task is submitted with type CUBE in its descriptor, **When** the system processes the task, **Then** it is recognized as a CUBE task with standard execution semantics
-2. **Given** a task is submitted with type VECTOR in its descriptor, **When** the system processes the task, **Then** it is recognized as a VECTOR task with standard execution semantics
-3. **Given** a task is submitted with type MIX in its descriptor, **When** the system processes the task, **Then** it is recognized as a MIX task requiring joint CUBE and VECTOR execution
+1. **Given** 已创建任务描述符，**When** 它包含任务 ID、任务类型与组织模式，**Then** 它不包含执行状态字段（状态、完成状况）
+2. **Given** 已创建任务描述符，**When** 它被传递给 Orchestrator，**Then** Orchestrator 将描述数据与执行状态分开存储
 
 ---
 
-### User Story 3 - Task Organization Modes (Priority: P1)
+### 用户故事 2 - 任务类型定义（优先级：P1）
 
-A system operator organizes tasks using one of four organization modes: Single, Group, SPMD Synchronous, or SPMD Asynchronous. Organization mode is a description field in the task descriptor, not execution state.
+系统操作者使用三种不同的类型定义任务：CUBE、VECTOR 与 MIX。任务类型作为描述字段存储在任务描述符中，而非执行状态。
 
-**Why this priority**: Organization mode is a fundamental description of how task instances are created and synchronized - stored in the task descriptor for the Dispatch to read.
+**优先级理由**：任务类型是任务如何执行的基础描述——Orchestrator 将其存储在任务描述符中，供 Dispatch 读取。
 
-**Independent Test**: Can be tested by submitting tasks with each organization mode and verifying the system handles instantiation, execution, and completion according to the specified mode semantics.
+**独立测试**：可通过提交每种类型的任务并验证系统正确识别并路由每种类型来进行测试。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a task is submitted with organization mode Single in its descriptor, **When** the system dispatches the task, **Then** a single instance of the task is created and executed independently
-2. **Given** a task is submitted with organization mode Group in its descriptor, **When** the system dispatches the task, **Then** multiple instances are created as described in the descriptor
-3. **Given** a task is submitted with organization mode SPMD Synchronous in its descriptor, **When** the system dispatches the task, **Then** multiple instances are created for lockstep execution as described
-4. **Given** a task is submitted with organization mode SPMD Asynchronous in its descriptor, **When** the system dispatches the task, **Then** multiple independent instances are created as described
-
----
-
-### User Story 4 - SPMD INDEX in Task Descriptor (Priority: P1)
-
-A system operator submits SPMD tasks where the task descriptor contains the KERNEL pointer and a base INDEX value. Each instance's unique INDEX is derived from the base INDEX plus instance number, written to Executor registers during dispatch.
-
-**Why this priority**: INDEX is a task description parameter - the base INDEX is stored in the task descriptor, and the Dispatch derives per-instance INDEX values during dispatch.
-
-**Independent Test**: Can be tested by dispatching an SPMD task with N instances and verifying each Executor receives the same KERNEL but a unique INDEX.
-
-**Acceptance Scenarios**:
-
-1. **Given** an SPMD task descriptor contains KERNEL and base INDEX, **When** the Dispatch dispatches the task, **Then** the same KERNEL is dispatched to all N Executors
-2. **Given** the KERNEL is dispatched to N Executors, **When** each Executor receives its dispatch, **Then** it receives a unique INDEX value derived from base INDEX plus instance number
-3. **Given** an Executor receives a dispatch with KERNEL and INDEX, **When** it executes, **Then** it uses the INDEX to select its data partition while running the shared KERNEL
+1. **Given** 一个在其描述符中类型为 CUBE 的任务被提交，**When** 系统处理该任务，**Then** 它被识别为具有标准执行语义的 CUBE 任务
+2. **Given** 一个在其描述符中类型为 VECTOR 的任务被提交，**When** 系统处理该任务，**Then** 它被识别为具有标准执行语义的 VECTOR 任务
+3. **Given** 一个在其描述符中类型为 MIX 的任务被提交，**When** 系统处理该任务，**Then** 它被识别为需要 CUBE 与 VECTOR 联合执行的 MIX 任务
 
 ---
 
-### User Story 5 - Task Descriptor Reuse (Priority: P1)
+### 用户故事 3 - 任务组织模式（优先级：P1）
 
-A system operator reuses the same task descriptor for multiple task submissions. The task descriptor contains static description information, while execution state is managed per-task-instance by the DAG engine.
+系统操作者使用以下四种组织模式之一来组织任务：Single、Group、SPMD 同步或 SPMD 异步。组织模式是任务描述符中的描述字段，而非执行状态。
 
-**Why this priority**: Task descriptors should be reusable - the description of a task (its type, kernel, priority) does not change between submissions, only the execution state varies per instance.
+**优先级理由**：组织模式是任务实例如何创建与同步的基础描述——存储在任务描述符中，供 Dispatch 读取。
 
-**Independent Test**: Can be tested by submitting the same task descriptor twice and verifying both instances execute correctly with independent state tracking.
+**独立测试**：可通过以每种组织模式提交任务，并验证系统按指定模式语义处理实例化、执行与完成来进行测试。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a task descriptor with type CUBE and priority 5 is created, **When** it is submitted twice, **Then** both instances execute as CUBE tasks with priority 5
-2. **Given** task descriptors are reusable, **When** the same descriptor is used for sequential submissions, **Then** execution state is tracked independently per instance
-
----
-
-### User Story 6 - Clear Separation of Task Description and Execution State (Priority: P1)
-
-A system operator relies on the DAG engine to maintain execution state separately from task description. The Orchestrator manages task descriptors (description), while the Dispatch/Executor manage execution state (state transitions, completion).
-
-**Why this priority**: Clear separation allows independent evolution of the task description model and execution state model without coupling changes.
-
-**Independent Test**: Can be tested by verifying that task descriptors do not reference execution state and execution state does not duplicate task description fields.
-
-**Acceptance Scenarios**:
-
-1. **Given** a task descriptor exists, **When** execution completes, **Then** the task descriptor remains unchanged and reusable
-2. **Given** execution state tracks task progress, **When** a task completes, **Then** the execution state is updated but the original descriptor is unchanged
+1. **Given** 一个在其描述符中组织模式为 Single 的任务被提交，**When** 系统调度该任务，**Then** 创建并独立执行该任务的单个实例
+2. **Given** 一个在其描述符中组织模式为 Group 的任务被提交，**When** 系统调度该任务，**Then** 按描述符所述创建多个实例
+3. **Given** 一个在其描述符中组织模式为 SPMD 同步的任务被提交，**When** 系统调度该任务，**Then** 按描述创建多个实例并进行同步（lockstep）执行
+4. **Given** 一个在其描述符中组织模式为 SPMD 异步的任务被提交，**When** 系统调度该任务，**Then** 按描述创建多个独立实例
 
 ---
 
-### Edge Cases
+### 用户故事 4 - 任务描述符中的 SPMD INDEX（优先级：P1）
 
-- What happens when a task descriptor contains NULL kernel pointer?
-- What happens when an executor receives a task descriptor with an unknown task type?
-- What happens when successor count exceeds 3? (Extension entry used via next pointer)
-- What happens when the same task descriptor is submitted concurrently?
+系统操作者提交 SPMD 任务，其任务描述符中包含 KERNEL 指针与基准 INDEX 值。每个实例的唯一 INDEX 由基准 INDEX 加上实例编号导出，并在调度时写入 Executor 寄存器。
 
-## Requirements *(mandatory)*
+**优先级理由**：INDEX 是任务描述参数——基准 INDEX 存储在任务描述符中，Dispatch 在调度过程中导出每个实例的 INDEX 值。
 
-### Functional Requirements
+**独立测试**：可通过调度具有 N 个实例的 SPMD 任务，并验证每个 Executor 收到相同的 KERNEL 但唯一的 INDEX 来进行测试。
 
-- **FR-001**: A task descriptor MUST contain only task description information (task ID, type, organization mode, kernel, index, instance_count, priority, userdata)
-- **FR-002**: A task descriptor MUST NOT contain execution state information (state, completion status, executor assignment, Ring Buffer indices)
-- **FR-003**: Task type MUST be stored as a description field (CUBE, VECTOR, MIX)
-- **FR-004**: Organization mode MUST be stored as a description field (Single, Group, SPMD Synchronous, SPMD Asynchronous)
-- **FR-005**: The INDEX for SPMD tasks MUST be stored as a base value in the task descriptor; per-instance INDEX is derived during dispatch
-- **FR-006**: The same task descriptor instance MAY be reused for multiple task submissions
-- **FR-007**: Task descriptor MUST NOT contain pointers or references to internal execution state
-- **FR-008**: The Dispatch MUST route tasks based on task type from the descriptor
-- **FR-009**: The Dispatch MUST derive per-instance INDEX values (base INDEX + instance number) during SPMD dispatch
-- **FR-010**: Task dependencies MUST be resolved correctly based on task ID in the descriptor; Dependency Information Ring Buffer MUST store successor count, successor node list, predecessor count; successor storage via base entry (3 inline successors) plus extension entries via 2-byte next pointer
-- **FR-011**: Task runtime information Ring Buffer MUST store input data address, output data address, and kernel address for task execution
+**验收场景**：
 
-### Key Entities *(include if feature involves data)*
+1. **Given** 一个 SPMD 任务描述符包含 KERNEL 与基准 INDEX，**When** Dispatch 调度该任务，**Then** 相同的 KERNEL 被分发到所有 N 个 Executor
+2. **Given** KERNEL 被分发到 N 个 Executor，**When** 每个 Executor 收到其调度，**Then** 它收到由基准 INDEX 加实例编号导出的唯一 INDEX 值
+3. **Given** 一个 Executor 收到带有 KERNEL 与 INDEX 的调度，**When** 它执行时，**Then** 它使用 INDEX 选择其数据分区，同时运行共享的 KERNEL
 
-- **Task Descriptor**: A data structure containing only task description fields. Contains: task ID, task type, organization mode, kernel pointer, base INDEX, instance count, priority, userdata.
-- **Task Description Information**: Static fields that describe what to execute: task ID, type (CUBE/VECTOR/MIX), organization mode (Single/Group/SPMD_SYNC/SPMD_ASYNC), kernel pointer, base INDEX, instance count, priority, userdata.
-- **Task Type**: An attribute in the task descriptor indicating its execution model. Values: CUBE, VECTOR, MIX.
-- **Task Organization Mode**: An attribute in the task descriptor defining how task instances are created. Values: Single, Group, SPMD Synchronous, SPMD Asynchronous.
-- **KERNEL**: The executable code pointer stored in the task descriptor. All SPMD instances share this same KERNEL pointer.
-- **Base INDEX**: A value stored in the task descriptor. Per-instance INDEX is derived as (base INDEX + instance number) during dispatch.
-- **Task ID**: A 2-byte identifier in the task descriptor, used for DAG dependency resolution and Ring Buffer indexing.
-- **Dependency Information**: Stored in separate Dependency Information Ring Buffer (not in task descriptor). Contains: successor count, list of successor TaskIDs, predecessor count. Base entry contains 3 inline successor TaskIDs plus 2-byte next pointer to extension entry. Extension entries linked via next pointer, each storing 3 additional successor TaskIDs.
-- **Runtime Information**: Stored in separate Ring Buffer. Contains: input data address, output data address, kernel address. Mutable per-task-instance.
-- **Execution State**: Maintained separately by DAG engine components (Dispatcher, Executor, Cutter), not part of task descriptor. Includes: state, completion status, executor assignment.
+---
 
-## Success Criteria *(mandatory)*
+### 用户故事 5 - 任务描述符复用（优先级：P1）
 
-### Measurable Outcomes
+系统操作者将同一任务描述符用于多次任务提交。任务描述符包含静态描述信息，而执行状态由 DAG 引擎按任务实例分别管理。
 
-- **SC-001**: Task descriptors contain only description fields (task ID, type, org_mode, kernel, index, instance_count, priority, userdata) - no execution state
-- **SC-002**: Task descriptors are reusable across multiple submissions without modification
-- **SC-003**: Task type and organization mode are stored as description fields in the descriptor
-- **SC-004**: Base INDEX is stored in task descriptor; per-instance INDEX is derived during dispatch
-- **SC-005**: Clear boundary between task description (Orchestrator-owned descriptor) and execution state (Dispatcher/Executor-owned)
+**优先级理由**：任务描述符应当可复用——任务的描述（其类型、kernel、优先级）在多次提交之间不变，仅执行状态因实例而异。
 
-## Assumptions
+**独立测试**：可通过两次提交同一任务描述符并验证两个实例均能正确执行且状态跟踪相互独立来进行测试。
 
-- Task description fields are populated by the Orchestrator at task creation time
-- Execution state is managed by Dispatch/Executor/Cutter components, not in the task descriptor
-- Task descriptors are created before the DAG is constructed and remain stable during execution
-- Successor information stored via base entry (3 inline successors) + extension entries (2-byte next pointer); Ring Buffer storage managed by other DAG components
-- Task ID is a 2-byte value used for Ring Buffer indexing via TASKID & RING_SIZE
-- Runtime information includes input data address, output data address, and kernel address
+**验收场景**：
+
+1. **Given** 创建了一个类型为 CUBE、优先级为 5 的任务描述符，**When** 它被提交两次，**Then** 两个实例都以优先级 5 的 CUBE 任务方式执行
+2. **Given** 任务描述符可复用，**When** 同一描述符用于顺序提交时，**Then** 执行状态按实例独立跟踪
+
+---
+
+### 用户故事 6 - 任务描述与执行状态的清晰分离（优先级：P1）
+
+系统操作者依赖 DAG 引擎独立于任务描述维护执行状态。Orchestrator 管理任务描述符（描述），而 Dispatch/Executor 管理执行状态（状态转换、完成）。
+
+**优先级理由**：清晰的分离允许任务描述模型与执行状态模型独立演进，避免耦合变更。
+
+**独立测试**：可通过验证任务描述符不引用执行状态、且执行状态不重复任务描述字段来进行测试。
+
+**验收场景**：
+
+1. **Given** 任务描述符已存在，**When** 执行完成时，**Then** 任务描述符保持不变且可复用
+2. **Given** 执行状态跟踪任务进度，**When** 任务完成时，**Then** 执行状态被更新，但原始描述符不变
+
+---
+
+### 边界情况
+
+- 当任务描述符中的 kernel 指针为 NULL 时会发生什么？
+- 当一个 executor 收到任务类型未知的任务描述符时会发生什么？
+- 当后继数量超过 3 时会发生什么？（通过 next 指针使用扩展条目）
+- 当同一任务描述符被并发提交时会发生什么？
+
+## 需求 *（必填）*
+
+### 功能需求
+
+- **FR-001**：任务描述符必须仅包含任务描述信息（任务 ID、类型、组织模式、kernel、index、instance_count、优先级、userdata）
+- **FR-002**：任务描述符不得包含执行状态信息（状态、完成状况、executor 分配、Ring Buffer 索引）
+- **FR-003**：任务类型必须作为描述字段存储（CUBE、VECTOR、MIX）
+- **FR-004**：组织模式必须作为描述字段存储（Single、Group、SPMD 同步、SPMD 异步）
+- **FR-005**：SPMD 任务的 INDEX 必须作为基准值存储在任务描述符中；每个实例的 INDEX 在调度过程中导出
+- **FR-006**：同一任务描述符实例可被复用于多次任务提交
+- **FR-007**：任务描述符不得包含指向内部执行状态的指针或引用
+- **FR-008**：Dispatch 必须根据描述符中的任务类型路由任务
+- **FR-009**：Dispatch 必须在 SPMD 调度过程中导出每个实例的 INDEX 值（基准 INDEX + 实例编号）
+- **FR-010**：任务依赖必须基于描述符中的任务 ID 正确解析；Dependency Information Ring Buffer 必须存储后继数量、后继节点列表、前驱数量；后继存储通过基础条目（3 个内联后继）加上经由 2 字节 next 指针的扩展条目实现
+- **FR-011**：任务运行时信息 Ring Buffer 必须存储任务执行所需的输入数据地址、输出数据地址与 kernel 地址
+
+### 关键实体 *（如功能涉及数据则需包含）*
+
+- **Task Descriptor**：一种仅包含任务描述字段的数据结构。包含：任务 ID、任务类型、组织模式、kernel 指针、基准 INDEX、实例数量、优先级、userdata。
+- **任务描述信息**：描述要执行什么的静态字段：任务 ID、类型（CUBE/VECTOR/MIX）、组织模式（Single/Group/SPMD_SYNC/SPMD_ASYNC）、kernel 指针、基准 INDEX、实例数量、优先级、userdata。
+- **任务类型**：任务描述符中的属性，指示其执行模型。取值：CUBE、VECTOR、MIX。
+- **任务组织模式**：任务描述符中的属性，定义任务实例如何创建。取值：Single、Group、SPMD 同步、SPMD 异步。
+- **KERNEL**：存储在任务描述符中的可执行代码指针。所有 SPMD 实例共享同一个 KERNEL 指针。
+- **基准 INDEX**：存储在任务描述符中的一个值。每个实例的 INDEX 在调度时按 (基准 INDEX + 实例编号) 导出。
+- **任务 ID**：任务描述符中的 2 字节标识符，用于 DAG 依赖解析与 Ring Buffer 索引。
+- **依赖信息**：存储在独立的 Dependency Information Ring Buffer 中（不在任务描述符内）。包含：后继数量、后继 TaskID 列表、前驱数量。基础条目包含 3 个内联后继 TaskID 加 2 字节指向扩展条目的 next 指针。扩展条目通过 next 指针链接，每个存储 3 个额外的后继 TaskID。
+- **运行时信息**：存储在独立的 Ring Buffer 中。包含：输入数据地址、输出数据地址、kernel 地址。按任务实例可变。
+- **执行状态**：由 DAG 引擎组件（Dispatcher、Executor、Cutter）独立维护，不属于任务描述符。包含：状态、完成状况、executor 分配。
+
+## 成功标准 *（必填）*
+
+### 可度量结果
+
+- **SC-001**：任务描述符仅包含描述字段（任务 ID、类型、org_mode、kernel、index、instance_count、优先级、userdata）——无执行状态
+- **SC-002**：任务描述符可跨多次提交复用而无需修改
+- **SC-003**：任务类型与组织模式作为描述字段存储在描述符中
+- **SC-004**：基准 INDEX 存储在任务描述符中；每个实例的 INDEX 在调度过程中导出
+- **SC-005**：任务描述（Orchestrator 所有的描述符）与执行状态（Dispatcher/Executor 所有）之间界限清晰
+
+## 假设
+
+- 任务描述字段由 Orchestrator 在任务创建时填充
+- 执行状态由 Dispatch/Executor/Cutter 组件管理，不存储在任务描述符中
+- 任务描述符在 DAG 构建之前创建，并在执行期间保持稳定
+- 后继信息通过基础条目（3 个内联后继）加扩展条目（2 字节 next 指针）存储；Ring Buffer 存储由其他 DAG 组件管理
+- 任务 ID 为 2 字节值，通过 TASKID & RING_SIZE 用于 Ring Buffer 索引
+- 运行时信息包含输入数据地址、输出数据地址与 kernel 地址

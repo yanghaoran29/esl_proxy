@@ -1,140 +1,140 @@
-# Feature Specification: Cutter - Dependency Resolution
+# 功能规格说明：Cutter - 依赖解析
 
-**Feature Branch**: `006-cutter`
+**功能分支**：`006-cutter`
 
-**Created**: 2026-05-22
+**创建日期**：2026-05-22
 
-**Status**: Draft
+**状态**：草稿
 
-**Input**: User description: "cutter通过共享内存的方式获取dispatch捕获的已完成任务，读取orchestator构造的图，解依赖"
+**输入**：用户描述："cutter通过共享内存的方式获取dispatch捕获的已完成任务，读取orchestator构造的图，解依赖"
 
-## User Scenarios & Testing *(mandatory)*
+## 用户场景与测试 *(必填)*
 
-### User Story 1 - Completed Task Collection via Shared Memory (Priority: P1)
+### 用户故事 1 - 通过共享内存收集已完成任务（优先级：P1）
 
-A system operator relies on the Cutter to collect completed task results from the Dispatch via shared memory. The Cutter reads the task execution results (output data, completion status) that the Dispatch has captured, enabling downstream processing.
+系统操作员依赖 Cutter 通过共享内存收集来自 Dispatch 的已完成任务结果。Cutter 读取 Dispatch 已捕获的任务执行结果（输出数据、完成状态），以支持下游处理。
 
-**Why this priority**: Completed task collection is the Cutter's primary function - it must receive task results from the Dispatch pipeline.
+**为何如此优先**：已完成任务收集是 Cutter 的主要功能 —— 它必须从 Dispatch 流水线接收任务结果。
 
-**Independent Test**: Can be tested by having Dispatch write completed tasks to shared memory and verifying Cutter reads them correctly.
+**独立测试**：可通过让 Dispatch 将已完成任务写入共享内存，并验证 Cutter 正确读取它们来进行测试。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a Dispatch captures a completed task with output data, **When** the Cutter reads from shared memory, **Then** it retrieves the complete task result
-2. **Given** multiple tasks complete around the same time, **When** the Cutter reads from shared memory, **Then** all completed tasks are retrieved in order
-3. **Given** shared memory contains completed task results, **When** the Cutter reads, **Then** the data reflects the actual task outputs without corruption
-
----
-
-### User Story 2 - Graph Reading from Orchestrator (Priority: P1)
-
-A system operator uses the Cutter to read the task dependency graph constructed by the Orchestrator. The Cutter accesses the shared memory region where the Orchestrator wrote the DAG structure, enabling dependency analysis.
-
-**Why this priority**: The Cutter must understand the task graph to determine which tasks become ready when dependencies complete.
-
-**Independent Test**: Can be tested by having Orchestrator write a graph to shared memory and verifying Cutter reads the complete structure.
-
-**Acceptance Scenarios**:
-
-1. **Given** the Orchestrator constructs and writes a DAG to shared memory, **When** the Cutter reads the graph, **Then** it retrieves the complete task nodes and edges
-2. **Given** the Orchestrator updates the graph (adding new tasks), **When** the Cutter reads, **Then** it sees the updated graph structure
-3. **Given** the Cutter reads the graph, **When** it analyzes dependencies, **Then** all precedence constraints are correctly captured
+1. **假设** Dispatch 捕获了一个带有输出数据的已完成任务，**当** Cutter 从共享内存读取时，**则**它获取到完整的任务结果
+2. **假设**多个任务在大致相同时间完成，**当** Cutter 从共享内存读取时，**则**所有已完成任务按顺序被读取
+3. **假设**共享内存包含已完成任务结果，**当** Cutter 读取时，**则**数据反映真实的任务输出且无损坏
 
 ---
 
-### User Story 3 - Dependency Resolution (Priority: P1)
+### 用户故事 2 - 从 Orchestrator 读取图（优先级：P1）
 
-A system operator relies on the Cutter to analyze completed tasks against the graph to identify newly ready tasks. When a task completes, the Cutter checks which dependent tasks now have all their predecessors satisfied, making them ready for execution.
+系统操作员使用 Cutter 读取由 Orchestrator 构造的任务依赖图。Cutter 访问 Orchestrator 写入 DAG 结构的共享内存区域，以支持依赖分析。
 
-**Why this priority**: Dependency resolution is the core logic of the Cutter - determining what tasks are now runnable.
+**为何如此优先**：Cutter 必须理解任务图，才能在依赖完成时判断哪些任务变为就绪。
 
-**Independent Test**: Can be tested by completing Task A and verifying that Task B (which depends only on A) is identified as ready.
+**独立测试**：可通过让 Orchestrator 将图写入共享内存，并验证 Cutter 读取到完整结构来进行测试。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** Task B depends on Task A (among others), **When** Task A completes but Task B still has incomplete predecessors, **Then** Task B is NOT identified as ready
-2. **Given** Task B depends only on Task A, **When** Task A completes, **Then** Task B is identified as ready for execution
-3. **Given** multiple tasks become ready simultaneously, **When** the Cutter resolves dependencies, **Then** all newly ready tasks are identified together
-
----
-
-### User Story 4 - Ready Task Notification (Priority: P1)
-
-A system operator depends on the Cutter to notify downstream components (e.g., Orchestrator or Dispatch) about newly ready tasks. The Cutter writes ready task information to shared memory or signals availability, enabling the pipeline to continue.
-
-**Why this priority**: Ready task notification closes the loop - completed tasks trigger new task execution.
-
-**Independent Test**: Can be tested by having Cutter write ready task info and verifying downstream components receive it.
-
-**Acceptance Scenarios**:
-
-1. **Given** the Cutter identifies Task B as ready, **When** it writes the ready notification, **Then** the notification is accessible to the Orchestrator or Dispatch
-2. **Given** multiple tasks become ready, **When** the Cutter writes notifications, **Then** all ready tasks are included in a single batch notification
+1. **假设** Orchestrator 构造并将 DAG 写入共享内存，**当** Cutter 读取该图时，**则**它获取到完整的任务节点和边
+2. **假设** Orchestrator 更新了图（添加新任务），**当** Cutter 读取时，**则**它看到更新后的图结构
+3. **假设** Cutter 读取了图，**当**它分析依赖时，**则**所有前置约束都被正确捕获
 
 ---
 
-### User Story 5 - Cutter Synchronization (Priority: P2)
+### 用户故事 3 - 依赖解析（优先级：P1）
 
-A system operator needs the Cutter to synchronize access to shared memory with the Dispatch (writing) and Orchestrator (writing). The Cutter must not read partial or inconsistent data during concurrent access.
+系统操作员依赖 Cutter 对照图分析已完成任务，以识别新就绪的任务。当一个任务完成时，Cutter 检查哪些依赖任务的所有前置任务已被满足，从而使其就绪以待执行。
 
-**Why this priority**: Proper synchronization ensures the Cutter reads consistent graph and task completion data.
+**为何如此优先**：依赖解析是 Cutter 的核心逻辑 —— 判定当前哪些任务可运行。
 
-**Independent Test**: Can be tested by simulating concurrent read/write and verifying the Cutter handles it correctly.
+**独立测试**：可通过完成任务 A，并验证仅依赖于 A 的任务 B 被识别为就绪来进行测试。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** the Dispatch is writing completed task data, **When** the Cutter attempts to read, **Then** proper synchronization ensures consistent data is read
-2. **Given** the Orchestrator updates the graph while the Cutter reads, **When** the Cutter synchronization operates, **Then** no corrupted graph data is processed
-
----
-
-### User Story 6 - Cutter Lifecycle (Priority: P2)
-
-A system operator creates a Cutter instance, uses it for dependency resolution, and shuts it down cleanly. The Cutter properly releases shared memory attachments on shutdown.
-
-**Why this priority**: Proper lifecycle management prevents resource leaks.
-
-**Independent Test**: Can be tested by creating and destroying Cutter and verifying clean resource release.
-
-**Acceptance Scenarios**:
-
-1. **Given** a Cutter is created and attached to shared memory, **When** it is destroyed, **Then** all shared memory attachments are released
-2. **Given** a Cutter is shutting down, **When** dependency resolution is in progress, **Then** shutdown completes cleanly without leaks
+1. **假设**任务 B 依赖任务 A（以及其他任务），**当**任务 A 完成但任务 B 仍有未完成的前置任务时，**则**任务 B **不会**被识别为就绪
+2. **假设**任务 B 仅依赖任务 A，**当**任务 A 完成时，**则**任务 B 被识别为可执行
+3. **假设**多个任务同时变为就绪，**当** Cutter 解析依赖时，**则**所有新就绪的任务被一起识别
 
 ---
 
-## Requirements *(mandatory)*
+### 用户故事 4 - 就绪任务通知（优先级：P1）
 
-### Functional Requirements
+系统操作员依赖 Cutter 将新就绪的任务通知给下游组件（例如 Orchestrator 或 Dispatch）。Cutter 将就绪任务信息写入共享内存或发出可用信号，以推动流水线继续运行。
 
-- **FR-001**: The Cutter MUST read completed task results from shared memory written by the Dispatch
-- **FR-002**: The Cutter MUST read the task dependency graph from shared memory written by the Orchestrator
-- **FR-003**: The Cutter MUST analyze completed tasks against the graph to identify newly ready tasks
-- **FR-004**: When a task's all predecessors are complete, the Cutter MUST identify that task as ready
-- **FR-005**: The Cutter MUST write ready task notifications to shared memory for downstream consumption
-- **FR-006**: The Cutter MUST synchronize access to shared memory with Dispatch and Orchestrator
-- **FR-007**: The Cutter MUST properly detach from shared memory on shutdown
+**为何如此优先**：就绪任务通知形成闭环 —— 已完成任务触发新任务的执行。
 
----
+**独立测试**：可通过让 Cutter 写入就绪任务信息，并验证下游组件能接收到它来进行测试。
 
-## Success Criteria *(mandatory)*
+**验收场景**：
 
-### Measurable Outcomes
-
-- **SC-001**: Cutter reads completed task data from shared memory within 1 microsecond of availability
-- **SC-002**: Dependency resolution identifies ready tasks within 10 microseconds of task completion
-- **SC-003**: Ready task notifications are written to shared memory within 5 microseconds of resolution
-- **SC-004**: Cutter synchronization causes no data corruption under concurrent access
-- **SC-005**: Cutter clean shutdown completes within 1 millisecond with no shared memory leaks
-- **SC-006**: The Cutter correctly identifies ready tasks for graphs with up to 10,000 tasks and 50,000 edges
+1. **假设** Cutter 将任务 B 识别为就绪，**当**它写入就绪通知时，**则** Orchestrator 或 Dispatch 可访问该通知
+2. **假设**多个任务变为就绪，**当** Cutter 写入通知时，**则**所有就绪任务被包含在一次批量通知中
 
 ---
 
-## Assumptions
+### 用户故事 5 - Cutter 同步（优先级：P2）
 
-- Shared memory regions are pre-established among Orchestrator, Dispatch, and Cutter via configuration
-- The Orchestrator, Dispatch, and Cutter agree on shared memory data formats
-- Synchronization uses atomic operations or similar lock-free primitives
-- Task completion in the graph means the task's output data is available and consistent
-- The Cutter is trusted to provide valid inputs per the Trust the Caller principle
-- Dependency resolution is performed on complete task results only (no partial results)
+系统操作员需要 Cutter 与 Dispatch（写入方）和 Orchestrator（写入方）同步访问共享内存。在并发访问期间，Cutter 不得读取部分或不一致的数据。
+
+**为何如此优先**：恰当的同步可确保 Cutter 读取到一致的图和任务完成数据。
+
+**独立测试**：可通过模拟并发读/写并验证 Cutter 正确处理来进行测试。
+
+**验收场景**：
+
+1. **假设** Dispatch 正在写入已完成任务数据，**当** Cutter 尝试读取时，**则**恰当的同步确保读取到一致的数据
+2. **假设** Orchestrator 在 Cutter 读取时更新图，**当** Cutter 同步生效时，**则**不会处理损坏的图数据
+
+---
+
+### 用户故事 6 - Cutter 生命周期（优先级：P2）
+
+系统操作员创建一个 Cutter 实例，将其用于依赖解析，并干净地关闭它。Cutter 在关闭时正确释放共享内存附着。
+
+**为何如此优先**：恰当的生命周期管理可防止资源泄漏。
+
+**独立测试**：可通过创建并销毁 Cutter 并验证资源被干净地释放来进行测试。
+
+**验收场景**：
+
+1. **假设**一个 Cutter 已创建并附着到共享内存，**当**它被销毁时，**则**所有共享内存附着均被释放
+2. **假设** Cutter 正在关闭，**当**依赖解析正在进行时，**则**关闭干净地完成且无泄漏
+
+---
+
+## 需求 *(必填)*
+
+### 功能性需求
+
+- **FR-001**：Cutter **必须**从由 Dispatch 写入的共享内存中读取已完成任务结果
+- **FR-002**：Cutter **必须**从由 Orchestrator 写入的共享内存中读取任务依赖图
+- **FR-003**：Cutter **必须**对照图分析已完成任务，以识别新就绪的任务
+- **FR-004**：当一个任务的所有前置任务均已完成时，Cutter **必须**将该任务识别为就绪
+- **FR-005**：Cutter **必须**将就绪任务通知写入共享内存以供下游消费
+- **FR-006**：Cutter **必须**与 Dispatch 和 Orchestrator 同步访问共享内存
+- **FR-007**：Cutter **必须**在关闭时正确从共享内存分离
+
+---
+
+## 成功标准 *(必填)*
+
+### 可度量结果
+
+- **SC-001**：Cutter 在数据可用后 1 微秒内从共享内存读取到已完成任务数据
+- **SC-002**：依赖解析在任务完成后 10 微秒内识别出就绪任务
+- **SC-003**：就绪任务通知在解析后 5 微秒内被写入共享内存
+- **SC-004**：Cutter 的同步在并发访问下不会造成数据损坏
+- **SC-005**：Cutter 的干净关闭在 1 毫秒内完成，且无共享内存泄漏
+- **SC-006**：Cutter 能为最多包含 10,000 个任务和 50,000 条边的图正确识别就绪任务
+
+---
+
+## 假设
+
+- 共享内存区域通过配置在 Orchestrator、Dispatch 和 Cutter 之间预先建立
+- Orchestrator、Dispatch 和 Cutter 就共享内存数据格式达成一致
+- 同步使用原子操作或类似的无锁原语
+- 图中的任务完成意味着该任务的输出数据已可用且一致
+- 按照 Trust the Caller 原则，Cutter 被信任会提供有效输入
+- 依赖解析仅在完整的任务结果上执行（不处理部分结果）

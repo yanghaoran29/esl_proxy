@@ -1,133 +1,133 @@
-# Feature Specification: Memory Pool
+# 功能规格说明：内存池
 
-**Feature Branch**: `007-memory-pool`
+**功能分支**：`007-memory-pool`
 
-**Created**: 2026-05-22
+**创建时间**：2026-05-22
 
-**Status**: Draft
+**状态**：草稿
 
-**Input**: User description: "memory预分配内存，支持task执行期间中间数据内存的分配和释放 + memory对外提供内存分配和释放接口 + memory对orchestrator提供内存分配和释放接口 + memory对orchestrator提供when2free(addr, taskID)接口，在所有小于taskID的任务已经执行完时自动释放对应的内存"
+**输入**：用户描述："memory预分配内存，支持task执行期间中间数据内存的分配和释放 + memory对外提供内存分配和释放接口 + memory对orchestrator提供内存分配和释放接口 + memory对orchestrator提供when2free(addr, taskID)接口，在所有小于taskID的任务已经执行完时自动释放对应的内存"
 
-## User Scenarios & Testing *(mandatory)*
+## 用户场景与测试 *(必需)*
 
-### User Story 1 - Pre-allocated Memory Pool (Priority: P1)
+### 用户故事 1 - 预分配内存池（优先级：P1）
 
-A system operator configures a pre-allocated memory pool before task execution begins. The memory pool reserves a fixed amount of memory upfront, allowing tasks to allocate and free intermediate data during execution without triggering costly system calls or memory fragmentation.
+系统运维人员在任务开始执行之前配置一个预分配的内存池。该内存池预先保留固定大小的内存，使任务在执行期间可以分配和释放中间数据，而无需触发昂贵的系统调用或产生内存碎片。
 
-**Why this priority**: Pre-allocating memory eliminates dynamic allocation overhead during task execution, ensuring consistent and predictable performance for latency-sensitive workloads.
+**优先级原因**：预分配内存消除了任务执行期间的动态分配开销，确保对延迟敏感的工作负载具有一致且可预测的性能。
 
-**Independent Test**: Can be tested by pre-allocating a memory pool, running tasks that allocate/free intermediate data, and verifying no system malloc/free is called during execution.
+**独立测试**：可以通过预分配一个内存池、运行分配/释放中间数据的任务，并验证执行期间未调用系统的 malloc/free 来进行测试。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a memory pool is pre-allocated with size M bytes, **When** a task requests temporary memory, **Then** the allocation is served from the pre-allocated pool within microseconds
-2. **Given** the memory pool has free space, **When** a task allocates intermediate data, **Then** the allocation succeeds without any system call
-3. **Given** the memory pool is fully allocated, **When** a task requests more memory, **Then** the allocation fails gracefully or triggers overflow handling
-4. **Given** a task completes its intermediate data usage, **When** it frees the memory, **Then** the freed memory is returned to the pool for reuse
-
----
-
-### User Story 2 - In-Task Allocation and Deallocation (Priority: P1)
-
-A system operator relies on tasks to allocate intermediate data buffers during execution and release them when no longer needed. The memory pool manages the lifecycle of these temporary allocations, ensuring memory is reclaimed immediately after use.
-
-**Why this priority**: Supporting allocation/deallocation within task execution enables complex multi-stage tasks to use temporary buffers without leaking memory or requiring long-lived allocations.
-
-**Independent Test**: Can be tested by running a task that allocates, uses, and frees intermediate data multiple times within a single execution, and verifying pool utilization remains stable.
-
-**Acceptance Scenarios**:
-
-1. **Given** a task is executing, **When** it allocates a buffer of size N bytes, **Then** the buffer is returned immediately from the available pool
-2. **Given** a task allocates multiple intermediate buffers, **When** it finishes with each buffer, **Then** each buffer is individually freed back to the pool
-3. **Given** a task allocates a large buffer that exceeds pool remaining capacity, **When** the allocation is attempted, **Then** the system handles the overflow gracefully
-4. **Given** multiple tasks execute concurrently using the same pool, **When** they allocate and free independently, **Then** pool allocations remain thread-safe with no corruption
+1. **Given** 一个大小为 M 字节的预分配内存池，**When** 任务请求临时内存，**Then** 分配在微秒级内从预分配池中完成
+2. **Given** 内存池有可用空间，**When** 任务分配中间数据，**Then** 分配成功且不触发任何系统调用
+3. **Given** 内存池已被完全分配，**When** 任务请求更多内存，**Then** 分配优雅地失败或触发溢出处理
+4. **Given** 任务完成对中间数据的使用，**When** 它释放内存，**Then** 被释放的内存归还到池中以供复用
 
 ---
 
-### User Story 3 - Zero-Copy Intermediate Data (Priority: P2)
+### 用户故事 2 - 任务内分配与释放（优先级：P1）
 
-A system operator relies on the memory pool to enable zero-copy data sharing between tasks. Intermediate data buffers allocated from the pool can be passed directly to downstream tasks without copying, as both the producer and consumer reference the same physical memory.
+系统运维人员依赖任务在执行期间分配中间数据缓冲区，并在不再需要时释放。内存池管理这些临时分配的生命周期，确保内存在使用后立即被回收。
 
-**Why this priority**: Zero-copy intermediate data minimizes memory bandwidth usage and reduces task-to-task data transfer latency, critical for high-throughput pipeline workloads.
+**优先级原因**：支持任务执行期间的分配/释放使得复杂的多阶段任务能够使用临时缓冲区，而无需泄漏内存或要求长期分配。
 
-**Independent Test**: Can be tested by having a producer task allocate a buffer, write data, pass the buffer reference to a consumer task, and verify the consumer sees the data without any memory copy.
+**独立测试**：可以通过运行一个在单次执行内多次分配、使用和释放中间数据的任务，并验证池利用率保持稳定来进行测试。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** a producer task allocates a buffer and writes data, **When** it passes the buffer reference to a consumer task, **Then** the consumer accesses the same physical memory without copying
-2. **Given** a consumer task receives a buffer reference, **When** it completes processing, **Then** it must not free the buffer (producer owns the lifecycle)
-3. **Given** a buffer is passed between tasks, **When** both tasks are finished with it, **Then** exactly one task is responsible for freeing the buffer to the pool
-
----
-
-### User Story 4 - Memory Pool Monitoring (Priority: P3)
-
-A system operator monitors the memory pool's utilization to understand memory consumption patterns and plan capacity. The operator can query pool metadata such as total size, allocated bytes, and available bytes.
-
-**Why this priority**: Visibility into pool utilization enables operators to tune pool size and detect memory exhaustion before it impacts task execution.
-
-**Independent Test**: Can be tested by querying pool metadata and verifying the values match actual allocations and frees.
-
-**Acceptance Scenarios**:
-
-1. **Given** a memory pool has been pre-allocated, **When** an operator queries total pool size, **Then** the returned value equals the pre-allocated size
-2. **Given** tasks have allocated memory from the pool, **When** an operator queries allocated bytes, **Then** the returned value equals the sum of all active allocations
-3. **Given** the pool is near exhaustion, **When** an operator monitors utilization, **Then** the operator can make informed decisions about pool resize or task throttling
+1. **Given** 任务正在执行，**When** 它分配一个大小为 N 字节的缓冲区，**Then** 缓冲区从可用池中立即返回
+2. **Given** 任务分配了多个中间缓冲区，**When** 它使用完每个缓冲区，**Then** 每个缓冲区被独立释放回池中
+3. **Given** 任务分配一个超过池剩余容量的大缓冲区，**When** 尝试分配时，**Then** 系统优雅地处理溢出
+4. **Given** 多个任务并发地使用同一个池，**When** 它们独立地分配和释放，**Then** 池分配保持线程安全且无数据损坏
 
 ---
 
-### User Story 5 - Automatic Memory Release via when2free (Priority: P1)
+### 用户故事 3 - 零拷贝中间数据（优先级：P2）
 
-A system operator relies on the Orchestrator to register memory buffers with a when2free policy. The Orchestrator calls when2free(taskID) to indicate that a specific memory buffer should be automatically freed when all tasks with smaller task IDs have completed execution. This ensures memory is reclaimed precisely when it is no longer needed by any dependent task.
+系统运维人员依赖内存池实现任务之间的零拷贝数据共享。从池中分配的中间数据缓冲区可以直接传递给下游任务而无需拷贝，因为生产者和消费者引用的是同一块物理内存。
 
-**Why this priority**: Automatic memory release via when2free eliminates manual memory management overhead for the Orchestrator and prevents memory leaks by ensuring buffers are freed exactly when all consumers have finished.
+**优先级原因**：零拷贝中间数据最小化了内存带宽使用并降低了任务间数据传输延迟，对高吞吐量流水线工作负载至关重要。
 
-**Independent Test**: Can be tested by allocating a buffer, calling when2free(taskID) with a threshold, running tasks with IDs below the threshold to completion, and verifying the buffer is freed automatically.
+**独立测试**：可以通过让生产者任务分配一个缓冲区、写入数据、将缓冲区引用传递给消费者任务，并验证消费者无任何内存拷贝即可看到数据来进行测试。
 
-**Acceptance Scenarios**:
+**验收场景**：
 
-1. **Given** the Orchestrator registers a buffer with when2free(taskID=T), **When** all tasks with ID < T complete execution, **Then** the registered buffer is automatically freed back to the pool
-2. **Given** a buffer is registered with when2free(taskID=T), **When** task T-1 has not yet completed, **Then** the buffer is not freed
-3. **Given** the Orchestrator registers multiple buffers with different when2free thresholds, **When** each threshold condition is met, **Then** each corresponding buffer is freed exactly once
-4. **Given** a buffer is registered with when2free(taskID=T), **When** no tasks with ID < T ever execute, **Then** the buffer is freed only when the Orchestrator explicitly frees it or when the pool is destroyed
+1. **Given** 生产者任务分配缓冲区并写入数据，**When** 它将缓冲区引用传递给消费者任务，**Then** 消费者访问相同的物理内存而无需拷贝
+2. **Given** 消费者任务接收到缓冲区引用，**When** 它完成处理，**Then** 它不得释放该缓冲区（生命周期由生产者拥有）
+3. **Given** 缓冲区在任务之间传递，**When** 两个任务都使用完毕，**Then** 恰好有一个任务负责将缓冲区释放回池
 
-## Requirements *(mandatory)*
+---
 
-### Functional Requirements
+### 用户故事 4 - 内存池监控（优先级：P3）
 
-- **FR-001**: The system MUST pre-allocate a memory pool of configurable size before task execution
-- **FR-002**: Tasks MUST be able to allocate intermediate data memory from the pool without system calls
-- **FR-003**: Tasks MUST be able to free allocated memory back to the pool for reuse
-- **FR-004**: Memory pool allocation and deallocation MUST be thread-safe for concurrent task access
-- **FR-005**: The system MUST handle pool exhaustion gracefully (allocation failure signal rather than crash)
-- **FR-006**: The system MUST support querying pool metadata (total size, allocated, available)
-- **FR-007**: Allocated buffers MUST support zero-copy sharing between producer and consumer tasks
-- **FR-008**: The system MUST prevent double-free errors (freeing already-freed buffers)
-- **FR-009**: The system SHOULD support pool resize (growing the pre-allocated region) at runtime
-- **FR-010**: The memory pool MUST expose allocation and deallocation interfaces to tasks for obtaining and releasing intermediate data buffers
-- **FR-011**: The memory pool MUST expose allocation and deallocation interfaces to the Orchestrator for constructing task graphs and managing task input/output data
-- **FR-012**: The memory pool MUST expose a when2free(addr, taskID) interface to the Orchestrator that registers a buffer address for automatic release when all tasks with IDs smaller than the specified threshold have completed
+系统运维人员监控内存池的利用率，以了解内存消耗模式并进行容量规划。运维人员可以查询池的元数据，例如总大小、已分配字节数和可用字节数。
 
-### Key Entities *(include if feature involves data)*
+**优先级原因**：对池利用率的可见性使运维人员能够调整池大小，并在内存耗尽影响任务执行之前进行检测。
 
-- **Memory Pool**: A pre-allocated region of memory from which task intermediate data is allocated. Attributes: total size, allocated bytes, free bytes.
-- **Buffer Handle**: A reference to an allocated buffer within the pool. Used by tasks to read/write data and to free the buffer.
-- **Allocation Request**: A task's request for a buffer of a specific size. Contains: requested size, returned buffer handle or failure status.
+**独立测试**：可以通过查询池元数据并验证返回值与实际的分配和释放情况相匹配来进行测试。
 
-## Success Criteria *(mandatory)*
+**验收场景**：
 
-### Measurable Outcomes
+1. **Given** 内存池已被预分配，**When** 运维人员查询池总大小，**Then** 返回值等于预分配的大小
+2. **Given** 任务已从池中分配了内存，**When** 运维人员查询已分配字节数，**Then** 返回值等于所有活跃分配的总和
+3. **Given** 池接近耗尽，**When** 运维人员监控利用率，**Then** 运维人员能够就池扩容或任务限流做出明智决策
 
-- **SC-001**: Task allocation from the memory pool completes in under 1 microsecond
-- **SC-002**: Task deallocation returns memory to the pool in under 1 microsecond
-- **SC-003**: Zero-copy buffer passing between tasks introduces no additional copy overhead
-- **SC-004**: The memory pool handles at least 10,000 concurrent allocations without corruption
-- **SC-005**: Pool metadata queries return accurate values reflecting current utilization
+---
 
-## Assumptions
+### 用户故事 5 - 通过 when2free 自动释放内存（优先级：P1）
 
-- Memory pool size is configured at system initialization based on workload analysis
-- Tasks are trusted to call free exactly once per allocation (Trust the Caller principle applies to lifecycle management)
-- The memory pool is private to a single Executor or Dispatch-Executor pair (not shared across processes)
-- Fragmentation is managed through a suitable allocation strategy (e.g., slab or pool-based allocator)
-- Task intermediate data does not persist beyond task completion (no durability requirements)
+系统运维人员依赖 Orchestrator 使用 when2free 策略注册内存缓冲区。Orchestrator 调用 when2free(taskID) 来声明：当所有 ID 小于该阈值的任务执行完毕时，应自动释放指定的内存缓冲区。这确保了在没有任何依赖任务需要使用时精确地回收内存。
+
+**优先级原因**：通过 when2free 实现的自动内存释放消除了 Orchestrator 的手动内存管理开销，并通过确保缓冲区在所有消费者完成时被精确释放来防止内存泄漏。
+
+**独立测试**：可以通过分配一个缓冲区、使用阈值调用 when2free(taskID)、运行 ID 低于该阈值的任务直至完成，并验证缓冲区被自动释放来进行测试。
+
+**验收场景**：
+
+1. **Given** Orchestrator 使用 when2free(taskID=T) 注册一个缓冲区，**When** 所有 ID < T 的任务执行完毕，**Then** 已注册的缓冲区被自动释放回池
+2. **Given** 一个缓冲区使用 when2free(taskID=T) 注册，**When** 任务 T-1 尚未完成，**Then** 该缓冲区不被释放
+3. **Given** Orchestrator 使用不同的 when2free 阈值注册了多个缓冲区，**When** 每个阈值条件被满足时，**Then** 每个对应的缓冲区恰好被释放一次
+4. **Given** 一个缓冲区使用 when2free(taskID=T) 注册，**When** 从未执行任何 ID < T 的任务，**Then** 该缓冲区仅在 Orchestrator 显式释放或池被销毁时才被释放
+
+## 需求 *(必需)*
+
+### 功能需求
+
+- **FR-001**：系统必须在任务执行之前预分配一个大小可配置的内存池
+- **FR-002**：任务必须能够从池中分配中间数据内存而不触发系统调用
+- **FR-003**：任务必须能够将已分配的内存释放回池中以供复用
+- **FR-004**：内存池的分配与释放必须对并发任务访问保持线程安全
+- **FR-005**：系统必须优雅地处理池耗尽情况（返回分配失败信号而非崩溃）
+- **FR-006**：系统必须支持查询池元数据（总大小、已分配、可用）
+- **FR-007**：已分配的缓冲区必须支持生产者与消费者任务之间的零拷贝共享
+- **FR-008**：系统必须防止重复释放错误（释放已被释放的缓冲区）
+- **FR-009**：系统应当支持运行时池扩容（扩大预分配区域）
+- **FR-010**：内存池必须向任务暴露分配与释放接口，用于获取和释放中间数据缓冲区
+- **FR-011**：内存池必须向 Orchestrator 暴露分配与释放接口，用于构建任务图以及管理任务的输入/输出数据
+- **FR-012**：内存池必须向 Orchestrator 暴露 when2free(addr, taskID) 接口，用于注册一个缓冲区地址，当所有 ID 小于指定阈值的任务完成时自动释放
+
+### 关键实体 *(如果功能涉及数据则包含)*
+
+- **Memory Pool**：一块预分配的内存区域，任务的中间数据从中分配。属性：总大小、已分配字节数、空闲字节数。
+- **Buffer Handle**：池内已分配缓冲区的引用。任务用其读写数据并释放缓冲区。
+- **Allocation Request**：任务对特定大小缓冲区的分配请求。包含：请求大小、返回的缓冲区句柄或失败状态。
+
+## 成功标准 *(必需)*
+
+### 可衡量结果
+
+- **SC-001**：从内存池进行任务分配的耗时低于 1 微秒
+- **SC-002**：任务释放将内存归还到池中的耗时低于 1 微秒
+- **SC-003**：任务间的零拷贝缓冲区传递不引入任何额外的拷贝开销
+- **SC-004**：内存池在不发生数据损坏的情况下至少处理 10,000 次并发分配
+- **SC-005**：池元数据查询返回反映当前利用率的准确值
+
+## 假设
+
+- 内存池大小在系统初始化时基于工作负载分析进行配置
+- 任务可被信任按每次分配恰好调用一次 free（Trust the Caller 原则适用于生命周期管理）
+- 内存池对单个 Executor 或 Dispatch-Executor 对私有（不跨进程共享）
+- 碎片化通过合适的分配策略（如 slab 或基于 pool 的分配器）来管理
+- 任务的中间数据不会在任务完成后持续存在（无持久化要求）

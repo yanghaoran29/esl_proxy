@@ -1,63 +1,63 @@
-# Implementation Plan: Dispatch
+# 实施计划：Dispatch
 
-**Branch**: `008-task` | **Date**: 2026-05-25 | **Spec**: [link](spec.md)
+**分支**：`008-task` | **日期**：2026-05-25 | **规格说明**：[link](spec.md)
 
-**Input**: Dispatch component with taskID (2 bytes), successor storage (count + IDs), 3 taskIDs per node.
+**输入**：Dispatch 组件，使用 taskID（2 字节）、后继存储（数量 + ID 列表）、每节点 3 个 taskID。
 
-## Summary
+## 概述
 
-Dispatch distributes tasks via shared memory, manages Executor pools per worker thread (60 CUBE + 60 VECTOR), and implements Work-Stealing for load balancing. Task data uses 16-bit TaskID with compact successor storage.
+Dispatch 通过共享内存分发任务，按工作线程管理 Executor 池（60 个 CUBE + 60 个 VECTOR），并实现 Work-Stealing 进行负载均衡。任务数据使用 16 位 TaskID 与紧凑的后继存储结构。
 
-## Technical Context
+## 技术背景
 
-**Language/Version**: C11 (`-std=c11`)
+**语言/版本**：C11（`-std=c11`）
 
-**Primary Dependencies**: Standard C library only
+**主要依赖**：仅标准 C 库
 
-**Storage**: Ring Buffers in shared memory (4096 slots, O(1) access)
+**存储**：共享内存中的环形缓冲区（4096 个槽位，O(1) 访问）
 
-**Testing**: Unit tests via dependency injection; chaos testing
+**测试**：通过依赖注入进行单元测试；混沌测试
 
-**Target Platform**: Cross-platform (Linux/macOS)
+**目标平台**：跨平台（Linux/macOS）
 
-**Project Type**: Header-only C library for DAG scheduling
+**项目类型**：用于 DAG 调度的仅头文件 C 库
 
-**Performance Goals**:
-- Task dispatch latency: <10 μs
-- Shared memory access: <1 μs
-- Work-Stealing redistribution: <100 μs
+**性能目标**：
+- 任务下发延迟：<10 μs
+- 共享内存访问：<1 μs
+- Work-Stealing 重分配：<100 μs
 
-**Constraints**:
-- No mutexes/spinlocks in hot paths
-- All inputs assumed valid (Trust the Caller)
-- Ring Buffer size fixed at 4096 (power of 2)
-- Header-only only — all implementation in headers, no .c files
+**约束条件**：
+- 热路径上无 mutex/spinlock
+- 假设所有输入均有效（Trust the Caller）
+- 环形缓冲区大小固定为 4096（2 的幂）
+- 仅头文件 —— 所有实现位于头文件中，无 .c 文件
 
-**Scale/Scope**:
-- Up to 10,000 tasks in DAG
-- 60 CUBE + 60 VECTOR Executors per worker thread
-- TaskID: 16-bit (2 bytes), max value 65535
-- Successor storage: count (1 byte) + up to 3 successor IDs (2 bytes each)
-- Node size: 8 bytes (3 × 2B taskIDs + 1B successor count + padding)
+**规模/范围**：
+- DAG 中最多 10,000 个任务
+- 每个工作线程 60 个 CUBE + 60 个 VECTOR Executor
+- TaskID：16 位（2 字节），最大值 65535
+- 后继存储：数量（1 字节）+ 最多 3 个后继 ID（每个 2 字节）
+- 节点大小：8 字节（3 × 2B taskID + 1B 后继数量 + 填充）
 
-## Constitution Check
+## 章程检查
 
-*GATE: Must pass before Phase 0 research.*
+*门控：必须在第 0 阶段研究之前通过。*
 
-| Principle | Compliance Requirement |
+| 原则 | 合规要求 |
 |-----------|----------------------|
-| Modern C11 | C11 standard only; `_Generic`, atomics, `restrict` |
-| Callback-Based Async | Completion via atomic bits; function pointers |
-| DAG-Based Task Scheduling | DAG structure; Work-Stealing scheduler |
-| Zero-Copy Task Data Flow | Buffer descriptors in Ring Buffers |
-| Lock-Free Concurrency | C11 atomics only; no mutexes in hot paths |
-| No Blocking in Hot Paths | No sync I/O; async waits with continuation |
-| Deterministic Scheduling | Same DAG+inputs → same results |
-| Testability | Dependency injection via function pointers |
-| Header-Only Library | All implementation in headers; `static inline` functions |
-| Trust the Caller | No validation; undefined on invalid input |
+| Modern C11 | 仅 C11 标准；`_Generic`、原子操作、`restrict` |
+| Callback-Based Async | 通过原子位完成通知；函数指针 |
+| DAG-Based Task Scheduling | DAG 结构；Work-Stealing 调度器 |
+| Zero-Copy Task Data Flow | 环形缓冲区中的缓冲区描述符 |
+| Lock-Free Concurrency | 仅使用 C11 原子操作；热路径无 mutex |
+| No Blocking in Hot Paths | 无同步 I/O；带续延的异步等待 |
+| Deterministic Scheduling | 相同 DAG + 输入 → 相同结果 |
+| Testability | 通过函数指针进行依赖注入 |
+| Header-Only Library | 所有实现位于头文件中；`static inline` 函数 |
+| Trust the Caller | 不做校验；非法输入下行为未定义 |
 
-## Project Structure
+## 项目结构
 
 ```text
 specs/004-dispatch/
@@ -69,7 +69,7 @@ specs/004-dispatch/
     └── requirements.md
 ```
 
-### Source Code (include/dag/)
+### 源代码 (include/dag/)
 
 ```text
 include/dag/
@@ -84,23 +84,23 @@ include/dag/
 └── dag_spmd.h               # SPMD barrier synchronization
 ```
 
-**Header-Only Enforcement**: All source files are headers (`.h`). No `.c` implementation files.
+**仅头文件强制要求**：所有源文件均为头文件（`.h`）。无 `.c` 实现文件。
 
-## Phase 0: Research
+## 第 0 阶段：研究
 
-1. **TaskID 16-bit Packing**: TaskID fits in 2 bytes, allows 65535 unique task IDs
-2. **Successor Compact Storage**: Successor node stores count (1 byte) + list of successor IDs
-3. **Node Capacity**: Single slot stores 3 taskIDs (6 bytes) + successor count (1 byte) = 7 bytes minimum
+1. **TaskID 16 位打包**：TaskID 适配 2 字节，可表达 65535 个唯一 task ID
+2. **紧凑后继存储**：后继节点存储数量（1 字节）+ 后继 ID 列表
+3. **节点容量**：单个槽位存储 3 个 taskID（6 字节）+ 后继数量（1 字节）= 至少 7 字节
 
-## Phase 1: Design
+## 第 1 阶段：设计
 
-### Task ID Structure
+### Task ID 结构
 
 ```c
 typedef uint16_t dag_task_id_t;  // 2 bytes, max 65535
 ```
 
-### Successor Node Structure
+### 后继节点结构
 
 ```c
 struct dag_successor_node {
@@ -110,21 +110,21 @@ struct dag_successor_node {
 // Total: 7 bytes minimum, aligned to 8 bytes
 ```
 
-### Compact Storage Layout
+### 紧凑存储布局
 
-| Field | Size | Range |
+| 字段 | 大小 | 范围 |
 |-------|------|-------|
-| task_id | 2 bytes (uint16_t) | 0 - 65535 |
-| successor_cnt | 1 byte (uint8_t) | 0 - 3 |
-| successors[] | 3 × 2 bytes | 3 × (0 - 65535) |
+| task_id | 2 字节 (uint16_t) | 0 - 65535 |
+| successor_cnt | 1 字节 (uint8_t) | 0 - 3 |
+| successors[] | 3 × 2 字节 | 3 × (0 - 65535) |
 
-### Key Design Decisions
+### 关键设计决策
 
-1. **16-bit TaskID**: Compact representation saves memory in Ring Buffers
-2. **Embedded Successor Count**: No need for separate lookup
-3. **Fixed 3-Successor Max**: Sufficient for most DAG workloads; simplifies implementation
-4. **Ring Buffer Indexing**: `task_id & 0x0FFF` provides O(1) access with 4096-slot Ring Buffer
+1. **16 位 TaskID**：紧凑表达节省环形缓冲区中的内存
+2. **嵌入式后继数量**：无需单独查找
+3. **固定 3 个后继上限**：对大多数 DAG 工作负载足够；简化实现
+4. **环形缓冲区索引**：`task_id & 0x0FFF` 在 4096 槽位环形缓冲区中提供 O(1) 访问
 
 ---
 
-**Status**: Plan complete. Ready for `/speckit-tasks`.
+**状态**：计划完成。可执行 `/speckit-tasks`。

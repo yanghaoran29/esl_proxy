@@ -1,67 +1,67 @@
-# Implementation Plan: Task Ring Buffers
+# 实现计划：任务环形缓冲区
 
-**Branch**: `009-ring-buffer` | **Date**: 2026-05-26 | **Spec**: [link](spec.md)
+**分支**：`009-ring-buffer` | **日期**：2026-05-26 | **规格说明**：[链接](spec.md)
 
-**Input**: 4 globally visible Ring Buffers for task data storage. Include `dag/task.h`. Ring Buffer size 4096, O(1) indexing via TaskID & (RING_SIZE - 1). State buffer insert with non-empty check: fails if non-empty, inserts if empty.
+**输入**：4 个用于任务数据存储的全局可见 Ring Buffer。包含 `dag/task.h`。Ring Buffer 大小为 4096，通过 TaskID & (RING_SIZE - 1) 实现 O(1) 索引。带非空检查的状态缓冲区插入：若非空则失败，若为空则插入。
 
-## Summary
+## 概述
 
-Four globally visible Ring Buffers provide O(1) storage for task data indexed by TaskID. Includes `dag/task.h` for task descriptor types. All operations are lock-free using C11 atomics. State buffer insert checks empty before writing using atomic CAS.
+四个全局可见的 Ring Buffer 提供以 TaskID 索引的任务数据 O(1) 存储。包含 `dag/task.h` 以提供任务描述符类型。所有操作均使用 C11 原子操作实现无锁。状态缓冲区插入在写入前使用原子 CAS 检查是否为空。
 
-## Technical Context
+## 技术上下文
 
-**Language/Version**: C11 (`-std=c11`)
+**语言/版本**：C11（`-std=c11`）
 
-**Primary Dependencies**: Standard C library only (`<stdint.h>`, `<stdatomic.h>`)
+**主要依赖**：仅标准 C 库（`<stdint.h>`、`<stdatomic.h>`）
 
-**Storage**: 4 Ring Buffers in memory (state, basic info, dependency, runtime)
+**存储**：内存中 4 个 Ring Buffer（状态、基本信息、依赖、运行时）
 
-**Testing**: Unit tests via dependency injection
+**测试**：通过依赖注入进行单元测试
 
-**Target Platform**: Cross-platform (Linux/macOS)
+**目标平台**：跨平台（Linux/macOS）
 
-**Project Type**: Header-only C library for DAG scheduling
+**项目类型**：用于 DAG 调度的仅头文件 C 库
 
-**Performance Goals**:
-- Ring Buffer access: O(1) via TASKID & (RING_SIZE - 1)
-- Compact storage: 16-bit TaskID
-- Lock-free operations: C11 atomics only
-- Atomic conditional insert: C11 compare-and-swap
+**性能目标**：
+- Ring Buffer 访问：通过 TASKID & (RING_SIZE - 1) 实现 O(1)
+- 紧凑存储：16 位 TaskID
+- 无锁操作：仅使用 C11 原子操作
+- 原子条件插入：C11 比较并交换
 
-**Constraints**:
-- No mutexes/spinlocks in hot paths
-- All inputs assumed valid (Trust the Caller)
-- Ring Buffer size fixed at 4096 (power of 2)
-- Header-only library design with .c file for global definitions only
-- Naming without `dag` prefix per Constitution XI
-- 4 globally visible ring buffers
-- State insert: non-empty returns error, empty inserts successfully
+**约束条件**：
+- 热路径中无互斥锁/自旋锁
+- 所有输入均假定为有效（信任调用者）
+- Ring Buffer 大小固定为 4096（2 的幂）
+- 仅头文件库设计，.c 文件仅用于全局定义
+- 命名不使用 `dag` 前缀（依据宪法 XI）
+- 4 个全局可见的环形缓冲区
+- 状态插入：非空返回错误，空则插入成功
 
-**Scale/Scope**:
-- Up to 10,000 tasks in DAG
-- TASKID: 16-bit (2 bytes)
+**规模/范围**：
+- DAG 中最多 10,000 个任务
+- TASKID：16 位（2 字节）
 
-## Constitution Check
+## 宪法检查
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+*门控：必须在阶段 0 调研之前通过。在阶段 1 设计之后重新检查。*
 
-| Principle | Compliance Requirement |
+| 原则 | 合规要求 |
 |-----------|----------------------|
-| Modern C11 | C11 standard only; `_Generic`, atomics, `restrict` |
-| Callback-Based Async | Completion via atomic bits; function pointers |
-| DAG-Based Task Scheduling | DAG structure; Work-Stealing scheduler |
-| Zero-Copy Task Data Flow | Buffer descriptors in Ring Buffers |
-| Lock-Free Concurrency | C11 atomics only; no mutexes in hot paths |
-| No Blocking in Hot Paths | No sync I/O; async waits with continuation |
-| Deterministic Scheduling | Same DAG+inputs → same results |
-| Testability | Dependency injection via function pointers |
-| Header-Only Library | All implementation in headers; `static inline` functions for API; global state in single .c |
-| Trust the Caller | No validation; undefined on invalid input |
-| Concise Naming | No redundant prefixes; no `dag` prefix; names within context |
+| 现代 C11 | 仅 C11 标准；`_Generic`、原子操作、`restrict` |
+| 基于回调的异步 | 通过原子位完成；函数指针 |
+| 基于 DAG 的任务调度 | DAG 结构；Work-Stealing 调度器 |
+| 零拷贝任务数据流 | Ring Buffer 中的缓冲区描述符 |
+| 无锁并发 | 仅 C11 原子操作；热路径中无互斥锁 |
+| 热路径中不阻塞 | 无同步 I/O；带续延的异步等待 |
+| 确定性调度 | 相同 DAG + 输入 → 相同结果 |
+| 可测试性 | 通过函数指针依赖注入 |
+| 仅头文件库 | 所有实现位于头文件中；API 使用 `static inline` 函数；全局状态位于单个 .c 文件 |
+| 信任调用者 | 不进行验证；对无效输入的行为未定义 |
+| 简洁命名 | 无冗余前缀；无 `dag` 前缀；在上下文内命名 |
 
-## Project Structure
+## 项目结构
 
-### Source Code (include/dag/)
+### 源代码（include/dag/）
 
 ```text
 include/dag/
@@ -69,11 +69,11 @@ include/dag/
 └── ring_buf.c     # Global ring buffer definitions
 ```
 
-**Header-Only Enforcement**: All API in headers with `static inline`. Only .c file is for global variable definitions.
+**仅头文件强制要求**：所有 API 位于头文件中并使用 `static inline`。唯一的 .c 文件用于全局变量定义。
 
-**Naming Convention**: File names use `dag_` prefix for header guard only. Type names and function names do not use `dag_` prefix.
+**命名约定**：文件名仅在头文件保护宏中使用 `dag_` 前缀。类型名和函数名不使用 `dag_` 前缀。
 
-## Phase 1: Design
+## 阶段 1：设计
 
 ### ring_buf.h - Ring Buffer API
 
@@ -128,7 +128,7 @@ extern _Atomic void *g_runtime_buf[RING_SIZE];
 #endif
 ```
 
-### ring_buf.c - Global Definitions
+### ring_buf.c - 全局定义
 
 ```c
 #include "ring_buf.h"
@@ -139,15 +139,15 @@ _Atomic dep_base_t g_dep_buf[RING_SIZE];
 _Atomic void *g_runtime_buf[RING_SIZE];
 ```
 
-### Key Design Decisions
+### 关键设计决策
 
-1. **Single Header API**: All Ring Buffer accessors in `ring_buf.h` as static inline functions
-2. **4 Global Buffers**: Defined in `ring_buf.c` as `g_<name>` pattern
-3. **Conditional Insert**: Uses `atomic_compare_exchange_strong` to atomically check if empty (expected=0) and insert
-4. **Ring Buffer Size 4096**: Power of 2 for efficient bitmask indexing
-5. **No dag Prefix on Types**: `ring_idx`, `ring_cat_t`, `state_put_if_empty` — dag_ only for header guard
-6. **Includes task.h**: Uses `task_desc_t`, `dep_base_t` from `dag/task.h`
+1. **单一头文件 API**：所有 Ring Buffer 访问器均位于 `ring_buf.h` 中，作为 static inline 函数
+2. **4 个全局缓冲区**：在 `ring_buf.c` 中定义为 `g_<name>` 模式
+3. **条件插入**：使用 `atomic_compare_exchange_strong` 原子地检查是否为空（expected=0）并插入
+4. **Ring Buffer 大小 4096**：2 的幂以便高效位掩码索引
+5. **类型上无 dag 前缀**：`ring_idx`、`ring_cat_t`、`state_put_if_empty` —— dag_ 仅用于头文件保护宏
+6. **包含 task.h**：使用来自 `dag/task.h` 的 `task_desc_t`、`dep_base_t`
 
 ---
 
-**Status**: Plan complete. Ready for `/speckit-tasks`.
+**状态**：计划完成。已准备好执行 `/speckit-tasks`。
