@@ -37,7 +37,7 @@
 - Updated 2026-05-27: Added FR-019 (continuous memory, variable-sized) per user input
 - Updated 2026-05-27: Added FR-020 (SPSC queue head/tail pointer) per user input
 - Updated 2026-05-27: Modified User Story 2 - Orchestrator calls alloc and when2free per user input
-- Updated 2026-05-27: Added FR-021 (when2free FIFO queue for addr/taskid) per user input
+- Updated 2026-05-27: when2free memory release implemented by updating FIFO head pointer to addr
 - Minimum uncompleted TaskID now updated ONLY from Task State Ring Buffer
 - FR-016, FR-017: Task State Ring Buffer based updates
 - FR-018: Manager thread handles when2free-based automatic release

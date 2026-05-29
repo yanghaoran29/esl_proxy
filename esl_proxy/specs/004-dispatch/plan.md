@@ -1,130 +1,107 @@
-# Implementation Plan: Dispatch
+# Implementation Plan: [FEATURE]
 
-**Branch**: `008-task` | **Date**: 2026-05-25 | **Spec**: [link](spec.md)
+**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
 
-**Input**: Dispatch component with taskID (2 bytes), successor storage (count + IDs), 3 taskIDs per node.
+**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+
+**Note**: This template is filled in by the `/speckit-plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
 ## Summary
 
-Dispatch distributes tasks via shared memory, manages Executor pools per worker thread (60 CUBE + 60 VECTOR), and implements Work-Stealing for load balancing. Task data uses 16-bit TaskID with compact successor storage.
+Dispatch component for task distribution via shared memory. Supports dual-source task acquisition (Orchestrator + Cutter), work-stealing load balancing across Dispatches, and mixed CUBE/VECTOR Executor pools. Each Dispatch worker manages 60 CUBE + 60 VECTOR Executors with 1-bit completion signaling.
 
 ## Technical Context
 
 **Language/Version**: C11 (`-std=c11`)
 
-**Primary Dependencies**: Standard C library only
+**Primary Dependencies**: None (header-only, standard C only)
 
-**Storage**: Ring Buffers in shared memory (4096 slots, O(1) access)
+**Storage**: Shared memory regions (Orchestrator-to-Dispatch, Cutter-to-Dispatch, Dispatch-to-Executor)
 
-**Testing**: Unit tests via dependency injection; chaos testing
+**Testing**: Custom test harness, shared memory simulation
 
-**Target Platform**: Cross-platform (Linux/macOS)
+**Target Platform**: Linux server, high-performance computing, NUMA-aware
 
-**Project Type**: Header-only C library for DAG scheduling
+**Project Type**: Header-only C library component
 
-**Performance Goals**:
-- Task dispatch latency: <10 μs
-- Shared memory access: <1 μs
-- Work-Stealing redistribution: <100 μs
+**Performance Goals**: <10μs dispatch latency, <100μs work-stealing redistribution, zero-copy via shared memory
 
-**Constraints**:
-- No mutexes/spinlocks in hot paths
-- All inputs assumed valid (Trust the Caller)
-- Ring Buffer size fixed at 4096 (power of 2)
-- Header-only only — all implementation in headers, no .c files
+**Constraints**: Lock-free in hot paths, atomic operations for shared memory sync, Trust the Caller principle
 
-**Scale/Scope**:
-- Up to 10,000 tasks in DAG
-- 60 CUBE + 60 VECTOR Executors per worker thread
-- TaskID: 16-bit (2 bytes), max value 65535
-- Successor storage: count (1 byte) + up to 3 successor IDs (2 bytes each)
-- Node size: 8 bytes (3 × 2B taskIDs + 1B successor count + padding)
+**Scale/Scope**: 2 Dispatch threads, each managing 120 Executors (60 CUBE + 60 VECTOR)
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research.*
+*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
 | Principle | Compliance Requirement |
 |-----------|----------------------|
-| Modern C11 | C11 standard only; `_Generic`, atomics, `restrict` |
-| Callback-Based Async | Completion via atomic bits; function pointers |
-| DAG-Based Task Scheduling | DAG structure; Work-Stealing scheduler |
-| Zero-Copy Task Data Flow | Buffer descriptors in Ring Buffers |
-| Lock-Free Concurrency | C11 atomics only; no mutexes in hot paths |
-| No Blocking in Hot Paths | No sync I/O; async waits with continuation |
-| Deterministic Scheduling | Same DAG+inputs → same results |
-| Testability | Dependency injection via function pointers |
-| Header-Only Library | All implementation in headers; `static inline` functions |
-| Trust the Caller | No validation; undefined on invalid input |
+| Modern C11 | C11 standard (`-std=c11`) only; `_Generic`, atomics, `restrict` pointers required; unsafe practices prohibited | ✓ PASS |
+| Callback-Based Async Architecture | All APIs async with callbacks; no blocking in hot paths; function pointers + userdata replace C++ lambdas | ✓ PASS |
+| DAG-Based Task Scheduling | All tasks form a DAG; cycles are defects; scheduler must respect dependency order; Work-Stealing required | ✓ PASS |
+| Zero-Copy Task Data Flow | Buffer descriptors (pointer+size), shared memory, in-place transforms; copies require benchmark justification | ✓ PASS (shared memory zero-copy) |
+| Lock-Free Concurrency | C11 atomics required; mutexes/spinlocks prohibited in hot paths; lock-free SPSC queues for task distribution | ✓ PASS |
+| No Blocking in Hot Paths | No sync I/O or blocking waits; all waits async with continuation enqueue; bounded timeouts required | ✓ PASS |
+| Deterministic Scheduling | Same DAG+inputs produce same results; hidden global state (time, random, env) prohibited | ✓ PASS |
+| Testability & Reproducibility | Dependency injection via function pointers; mock scheduler support required; chaos testing encouraged | ✓ PASS |
+| Header-Only Library | All implementation in headers; `static inline` functions; no binary dependencies | ✓ PASS |
+| Trust the Caller | All inputs assumed correct; no validation, no exception handling, no edge case testing; undefined behavior on invalid input | ✓ PASS |
+| Concise Naming | Variable and function names MUST be concise and avoid unnecessary prefixes | ✓ PASS |
 
-## Project Structure
+**Rationale**: This is a high-performance DAG task distribution system. Shared memory enables zero-copy. Work-Stealing ensures efficient load balancing.
 
-```text
-specs/004-dispatch/
-├── plan.md              # This file
-├── research.md          # Phase 0 output
-├── data-model.md        # Phase 1 output
-├── quickstart.md        # Phase 1 output
-└── checklists/
-    └── requirements.md
-```
-
-### Source Code (include/dag/)
+### Source Code (repository root)
 
 ```text
 include/dag/
-├── dag.h                    # Core DAG types
-├── dag_task.h              # Task descriptor (2B taskID)
-├── dag_task_types.h        # CUBE/VECTOR/MIX
-├── dag_org_modes.h        # SINGLE/GROUP/SPMD_SYNC/SPMD_ASYNC
-├── dag_ringbuffer.h        # Ring Buffer implementation
-├── dag_ringbuffer_ring.h   # 4 ring buffers: basic, successors, io, state
-├── dag_executor.h          # Executor with 2-slot cache
-├── dag_dispatch.h          # Dispatch with Work-Stealing
-└── dag_spmd.h               # SPMD barrier synchronization
+├── dispatch.h        # Dispatch type and functions
+├── shm_buf.h         # Shared memory buffer descriptors
+└── executor.h        # Executor type (shared)
+
+src/
+└── dispatch.c        # Dispatch implementation
 ```
 
-**Header-Only Enforcement**: All source files are headers (`.h`). No `.c` implementation files.
+**Structure Decision**: Header-only library with dispatch implementation in src/. Shared memory buffer descriptors for zero-copy communication.
 
 ## Phase 0: Research
 
-1. **TaskID 16-bit Packing**: TaskID fits in 2 bytes, allows 65535 unique task IDs
-2. **Successor Compact Storage**: Successor node stores count (1 byte) + list of successor IDs
-3. **Node Capacity**: Single slot stores 3 taskIDs (6 bytes) + successor count (1 byte) = 7 bytes minimum
+No unknowns requiring research. All technical decisions derived from spec and Constitution.
 
 ## Phase 1: Design
 
-### Task ID Structure
+No research.md needed - all design decisions from spec and Constitution.
+
+### Data Model
+
+**Shared Memory Buffer Descriptor** (`shm_buf_t`):
+- `addr: void*` - Shared memory base address
+- `size: size_t` - Buffer size
+- `tail: _Atomic size_t` - Producer position (lock-free SPSC)
+- `head: _Atomic size_t` - Consumer position
+
+**Dispatch Type** (`dispatch_t`):
+- `id: uint32_t` - Dispatch instance ID
+- `executor_pool: executor_t[120]` - 120 Executors (60 CUBE + 60 VECTOR)
+- `shm_from_orch: shm_buf_t` - Shared memory from Orchestrator
+- `shm_from_cutter: shm_buf_t` - Shared memory from Cutter
+- `completion_bits: _Atomic uint64_t` - 1-bit per Executor completion signals
+
+### Quickstart (quickstart.md)
 
 ```c
-typedef uint16_t dag_task_id_t;  // 2 bytes, max 65535
+// Attach to shared memory regions
+dispatch_t disp;
+dispatch_init(&disp, orch_shm, cutter_shm);
+
+// Read and dispatch tasks
+while (dispatch_has_work(&disp)) {
+    task_id_t tid = dispatch_acquire_task(&disp);
+    dispatch_distribute(&disp, tid);
+}
+
+// Check completion signals
+if (completion_bit_read(&disp.completion_bits, exec_idx)) {
+    dispatch_free_executor(&disp, exec_idx);
+}
 ```
-
-### Successor Node Structure
-
-```c
-struct dag_successor_node {
-    uint8_t   successor_cnt;     // 1 byte: number of successors (max 3)
-    dag_task_id_t successors[3]; // 3 × 2 bytes = 6 bytes
-};
-// Total: 7 bytes minimum, aligned to 8 bytes
-```
-
-### Compact Storage Layout
-
-| Field | Size | Range |
-|-------|------|-------|
-| task_id | 2 bytes (uint16_t) | 0 - 65535 |
-| successor_cnt | 1 byte (uint8_t) | 0 - 3 |
-| successors[] | 3 × 2 bytes | 3 × (0 - 65535) |
-
-### Key Design Decisions
-
-1. **16-bit TaskID**: Compact representation saves memory in Ring Buffers
-2. **Embedded Successor Count**: No need for separate lookup
-3. **Fixed 3-Successor Max**: Sufficient for most DAG workloads; simplifies implementation
-4. **Ring Buffer Indexing**: `task_id & 0x0FFF` provides O(1) access with 4096-slot Ring Buffer
-
----
-
-**Status**: Plan complete. Ready for `/speckit-tasks`.

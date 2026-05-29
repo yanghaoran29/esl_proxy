@@ -78,18 +78,18 @@ A system operator monitors the memory pool's utilization to understand memory co
 
 ### User Story 5 - Automatic Memory Release via when2free (Priority: P1)
 
-A system operator relies on the Orchestrator to register memory buffers with a when2free policy. The Orchestrator calls when2free(addr, taskID) to indicate that a specific memory buffer should be automatically freed when all tasks with smaller task IDs have completed execution. This ensures memory is reclaimed precisely when it is no longer needed by any dependent task.
+A system operator relies on the Orchestrator to register memory buffers with a when2free policy. The Orchestrator calls when2free(addr, taskID) to indicate that a specific memory buffer should be automatically released when all tasks with smaller task IDs have completed execution. The memory release mechanism updates the FIFO head pointer to the registered address, making the memory available for reuse without an explicit free operation.
 
-**Why this priority**: Automatic memory release via when2free eliminates manual memory management overhead for the Orchestrator and prevents memory leaks by ensuring buffers are freed exactly when all consumers have finished.
+**Why this priority**: Automatic memory release via when2free eliminates manual memory management overhead for the Orchestrator and prevents memory leaks by ensuring buffers are made available precisely when all consumers have finished.
 
-**Independent Test**: Can be tested by allocating a buffer, calling when2free(addr, taskID) with a threshold, running tasks with IDs below the threshold to completion, and verifying the buffer is freed automatically.
+**Independent Test**: Can be tested by allocating a buffer, calling when2free(addr, taskID) with a threshold, running tasks with IDs below the threshold to completion, and verifying the FIFO head pointer is updated to the registered address, making the memory available for new allocations.
 
 **Acceptance Scenarios**:
 
-1. **Given** the Orchestrator registers a buffer with when2free(addr, taskID=T), **When** all tasks with ID < T complete execution, **Then** the registered buffer is automatically freed back to the pool
-2. **Given** a buffer is registered with when2free(addr, taskID=T), **When** task T-1 has not yet completed, **Then** the buffer is not freed
-3. **Given** the Orchestrator registers multiple buffers with different when2free thresholds, **When** each threshold condition is met, **Then** each corresponding buffer is freed exactly once
-4. **Given** a buffer is registered with when2free(addr, taskID=T), **When** no tasks with ID < T ever execute, **Then** the buffer is freed only when the Orchestrator explicitly frees it or when the pool is destroyed
+1. **Given** the Orchestrator registers a buffer with when2free(addr, taskID=T), **When** all tasks with ID < T complete execution, **Then** the FIFO head pointer is updated to addr, making the memory available for reuse
+2. **Given** a buffer is registered with when2free(addr, taskID=T), **When** task T-1 has not yet completed, **Then** the FIFO head pointer is not updated for this buffer
+3. **Given** the Orchestrator registers multiple buffers with different when2free thresholds, **When** each threshold condition is met, **Then** the FIFO head pointer is updated sequentially for each buffer in threshold order
+4. **Given** a buffer is registered with when2free(addr, taskID=T), **When** the minimum uncompleted TaskID advances past T, **Then** the memory becomes available for allocation without an explicit free call
 
 ---
 
@@ -196,7 +196,7 @@ A system operator relies on a dedicated Manager thread to monitor the minimum un
 - **FR-006**: The system MUST support querying pool metadata (total size, allocated, available)
 - **FR-007**: Allocated buffers MUST support zero-copy sharing between producer and consumer tasks
 - **FR-008**: The memory pool MUST expose allocation interfaces to the Orchestrator for constructing task graphs and managing task input/output data
-- **FR-009**: The memory pool MUST expose a when2free(addr, taskID) interface to the Orchestrator that registers a buffer address for automatic release when all tasks with IDs smaller than the specified threshold have completed
+- **FR-009**: The memory pool MUST expose a when2free(addr, taskID) interface to the Orchestrator that registers a buffer address for automatic release when all tasks with IDs smaller than the specified threshold have completed; release is implemented by updating the FIFO head pointer to the registered address
 - **FR-010**: The system MUST track the minimum TaskID among all uncompleted tasks
 - **FR-011**: The system MUST automatically update the minimum uncompleted TaskID when tasks complete
 - **FR-012**: The system MUST provide an interface to query the current minimum uncompleted TaskID

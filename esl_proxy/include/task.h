@@ -9,6 +9,7 @@
 #define DAG_TASK_H
 
 #include <stdint.h>
+#include <stdatomic.h>
 
 /* Ring Buffer constants for TaskID indexing */
 #define RING_SIZE 4096
@@ -16,17 +17,6 @@
 
 typedef uint16_t task_id_t;
 
-/*
- * O(1) index computation via bitwise AND
- * Requires RING_SIZE to be power of 2
- */
-static inline uint32_t ring_idx(task_id_t id) {
-    return id & RING_MASK;
-}
-
-/*
- * Task type enum - execution model
- */
 typedef enum {
     TASK_TYPE_CUBE   = 0,
     TASK_TYPE_VECTOR = 1,
@@ -43,22 +33,19 @@ typedef enum {
     ORG_MODE_SPMD_ASYNC = 3,
 } org_mode_t;
 
+#define EMPTY  0
+#define PENDING  1
+#define COMPLETED 2
 
-typedef enum {
-    TASK_STATE_EMPTY    = 0,
-    TASK_STATE_PENDING  = 1,
-    TASK_STATE_RUNNING  = 2,
-    TASK_STATE_COMPLETED = 3,
-} task_state_t;
+typedef struct {
+    uint16_t state;
+    uint16_t task_id;
+    uint32_t successor_cnt;
+} task_state;
 
-/*
- * Task descriptor - description ONLY, no execution state
- *
- * Contains: id, type, mode, kernel, index, count, prio, data
- * Does NOT contain: state, completion, executor assignment, etc.
- *
- * Owned by Orchestrator. Execution state managed separately by Dispatcher/Executor.
- */
+_Atomic task_state g_state_buf[RING_SIZE];
+uint16_t g_task_id_buf[RING_SIZE];
+
 struct task_desc {
     uint16_t    id;        /* Task identifier (2 bytes) */
     task_type_t type;      /* CUBE/VECTOR/MIX */
@@ -66,16 +53,16 @@ struct task_desc {
     void       *kernel;    /* KERNEL code pointer */
     uint32_t    index;     /* base INDEX for SPMD */
     uint32_t    count;     /* number of instances */
-    uint32_t    prio;      /* scheduling priority */
-    void       *data;      /* user context pointer */
+    uint64_t    data[16];  
+    int64_t     scalar[32];
+    uint16_t    tensorCnt;
+    uint16_t    scalarCnt;
+    uint16_t    duration;
 };
 
-/*
- * Derive per-instance INDEX for SPMD tasks
- * Instance n gets INDEX = base_index + n
- */
-static inline uint32_t task_instance_idx(uint32_t base_index, uint32_t instance) {
-    return base_index + instance;
-}
+struct successorList {
+    uint16_t successor[3];
+    struct successorList* next;
+};
 
 #endif /* DAG_TASK_H */

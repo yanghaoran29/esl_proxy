@@ -1,0 +1,28 @@
+/*
+ * mem_pool.c - Manager thread for automatic memory release
+ *
+ * Dedicated manager thread that monitors Task State Ring Buffer
+ * and processes when2free FIFO entries to release memory.
+ */
+
+#include <pthread.h>
+#include "mem_pool.h"
+
+/*
+ * Manager thread entry point
+ * Polls ring buffer for minimum uncompleted TaskID and processes when2free entries.
+ */
+void* mem_pool_manager(void *arg) {
+    mem_pool_t *pool = (mem_pool_t *)arg;
+
+    while (1) {
+        /* Process all eligible when2free entries */
+        mem_pool_process_when2free(pool);
+
+        /* Small yield to prevent tight spinning */
+        /* In production, this could be replaced with a more sophisticated
+         * notification mechanism when new entries are added */
+    }
+
+    return NULL;
+}

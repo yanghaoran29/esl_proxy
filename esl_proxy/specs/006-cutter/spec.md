@@ -88,21 +88,6 @@ A system operator needs the Cutter to synchronize access to shared memory with t
 
 ---
 
-### User Story 6 - Cutter Lifecycle (Priority: P2)
-
-A system operator creates a Cutter instance, uses it for dependency resolution, and shuts it down cleanly. The Cutter properly releases shared memory attachments on shutdown.
-
-**Why this priority**: Proper lifecycle management prevents resource leaks.
-
-**Independent Test**: Can be tested by creating and destroying Cutter and verifying clean resource release.
-
-**Acceptance Scenarios**:
-
-1. **Given** a Cutter is created and attached to shared memory, **When** it is destroyed, **Then** all shared memory attachments are released
-2. **Given** a Cutter is shutting down, **When** dependency resolution is in progress, **Then** shutdown completes cleanly without leaks
-
----
-
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
