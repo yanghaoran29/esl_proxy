@@ -62,15 +62,12 @@ extern mem_pool_t g_mem_pool;
  */
 static inline void *mem_pool_alloc(mem_pool_t *pool, size_t size)
 {
-    /* Align size */
-    size = (size + MEM_POOL_ALIGN - 1) & ~(MEM_POOL_ALIGN - 1);
-
     uintptr_t tail = atomic_load_explicit(&pool->tail, memory_order_relaxed);
     uintptr_t new_tail = tail + size;
 
     /* Check if enough space (without wrap for simplicity) */
-    if (pool->base == NULL || new_tail > (uintptr_t)pool->base + pool->size) {
-        return NULL; /* overflow */
+    if (new_tail > (uintptr_t)pool->base + pool->size) {
+        return NULL;
     }
 
     void *result = (void *)tail;

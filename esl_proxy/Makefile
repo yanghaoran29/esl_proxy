@@ -7,7 +7,7 @@
 #   make clean    # remove build artifacts
 
 CC       := cc
-CFLAGS   := -std=c11 -Wall -Wextra -pedantic -I include -I cases
+CFLAGS   := -std=c11 -Wall -Wextra -pedantic -O3 -I include -I cases
 LDFLAGS  := -lpthread
 
 OBJ_DIR := build/obj

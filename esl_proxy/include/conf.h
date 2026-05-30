@@ -21,4 +21,7 @@
 /* 1: compile in worker logs; toggle at runtime via g_worker_log or WORKER_LOG env */
 #define WORKER_LOG 1
 
+/* 1: enable aicpu_orchestration_entry execution time logging in nanoseconds */
+#define ORCHESTRATION_TIME 1
+
 #endif /* CONF_H */

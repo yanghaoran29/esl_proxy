@@ -2,6 +2,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#if ORCHESTRATION_TIME
+#include <time.h>
+#endif
+
 #include "conf.h"
 #include "cutter.h"
 #include "dispatch.h"
@@ -15,6 +19,14 @@
 
 static uint8_t g_mem_pool_storage[MEM_POOL_BYTES];
 static when2free_entry_t g_when2free_entries[WHEN2FREE_CAP];
+
+#if ORCHESTRATION_TIME
+static uint64_t get_time_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+}
+#endif
 
 int main(void) {
     pthread_t dispatch_threads[DISPATCH_THREAD_CNT];
@@ -43,6 +55,16 @@ int main(void) {
                        (void *)(intptr_t)i);
     }
 
+#if ORCHESTRATION_TIME
+    uint64_t start_ns = get_time_ns();
     aicpu_orchestration_entry(0);
+    uint64_t end_ns = get_time_ns();
+    uint64_t elapsed_ns = end_ns - start_ns;
+    fprintf(stderr, "[orchestration] task_cnt=%d\n", g_task_id);
+    fprintf(stderr, "[orchestration] elapsed_time=%llu ns\n", elapsed_ns);
+    fprintf(stderr, "[orchestration] time_240_task=%llu ns\n", elapsed_ns / g_task_id * 240);
+#else
+    aicpu_orchestration_entry(0);
+#endif
     return 0;
 }
