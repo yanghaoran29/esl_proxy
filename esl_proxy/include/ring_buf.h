@@ -15,6 +15,7 @@
 
 #include "conf.h"
 #include "mpmc_queue.h"
+#include "swimlane.h"
 #include "task.h"
 
 #define Tensor uint64_t
@@ -129,9 +130,12 @@ static inline void batch_submit(uint16_t cnt, uint16_t task_id[])
     }
 
     for (int i = 0; i < cnt; i++) {
-        if (tmp[i] == 1)
+        if (tmp[i] == 1) {
             ready_enqueue(g_basic_buf[task_id[i] & RING_MASK].type,
                           g_basic_buf[task_id[i] & RING_MASK].mode, task_id[i]);
+            /* orchestrator lane: task became ready (single-writer: build thread) */
+            SWIM_STAMP(SL_ORCH, task_id[i], SWIM_DISPATCH);
+        }
     }
 }
 
@@ -139,9 +143,12 @@ static inline void submit(uint16_t task_id)
 {
     uint16_t tmp = (uint16_t)atomic_fetch_sub_explicit(
         &g_predecessor_buf[task_id & RING_MASK], 1, memory_order_relaxed);
-    if (tmp == 1)
+    if (tmp == 1) {
         ready_enqueue(g_basic_buf[task_id & RING_MASK].type,
                       g_basic_buf[task_id & RING_MASK].mode, task_id);
+        /* orchestrator lane: task became ready (single-writer: build thread) */
+        SWIM_STAMP(SL_ORCH, task_id, SWIM_DISPATCH);
+    }
 }
 
 static inline bool succeed(uint16_t task_id, uint16_t target)

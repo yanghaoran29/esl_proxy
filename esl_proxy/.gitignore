@@ -11,6 +11,9 @@ bin/
 obj/
 out/
 
+# Swimlane profiling output (runtime artifacts)
+outputs/
+
 # IDE
 .vscode/
 .idea/

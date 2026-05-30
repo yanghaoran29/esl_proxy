@@ -8,6 +8,7 @@
 #include "dispatch.h"
 #include "log.h"
 #include "ring_buf.h"
+#include "swimlane.h"
 
 #include <stdint.h>
 
@@ -74,6 +75,7 @@ static inline void set_completed(int tid)
         task_state s = atomic_load_explicit(&g_state_buf[slot], memory_order_relaxed);
         s.state = COMPLETED;
         atomic_store_explicit(&g_state_buf[slot], s, memory_order_release);
+        SWIM_STAMP(SL_DISPATCH(tid), task_id[i], SWIM_FINISH);
     }
     batch_enqueue(&g_ctrl_t[tid].completed_queue, task_id, (uint16_t)complete_cnt);
     atomic_fetch_add_explicit(&g_completed_cnt, complete_cnt, memory_order_acquire);
@@ -95,6 +97,7 @@ static inline void send_task(ctrl_t *ctrl, int type)
     while (cnt > 0) {
         uint64_t idx = (uint64_t)__builtin_ctzll(free_bitmap);
         task_id = ctrl->ready_queue[type].tasks[head++];
+        SWIM_STAMP(SL_DISPATCH(ctrl->tid), task_id, SWIM_DISPATCH);
         if ((ctrl->free_bitmap[type][0] & ((uint64_t)0x1 << idx)) == 0) {
             ctrl->task_id_map1[type][idx] = task_id;
             ctrl->free_bitmap[type][0] &= ~((uint64_t)0x1 << idx);

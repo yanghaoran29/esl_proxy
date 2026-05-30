@@ -9,6 +9,7 @@
 #include "manager.h"
 #include "mem_pool.h"
 #include "qwen3_decode.h"
+#include "swimlane.h"
 
 #define MEM_POOL_BYTES (512UL * 1024UL * 1024UL)
 #define WHEN2FREE_CAP 4096
@@ -31,6 +32,12 @@ int main(void) {
     mem_pool_init_fifo(&g_mem_pool, g_when2free_entries, WHEN2FREE_CAP);
     ring_buf_init();
 
+    SWIM_INIT();
+    SWIM_LANE(SL_ORCH, LANE_ORCH, "orchestrator");
+    SWIM_LANE(SL_MANAGER, LANE_MANAGER, "manager");
+    for (int i = 0; i < DISPATCH_THREAD_CNT; i++) SWIM_LANE(SL_DISPATCH(i), LANE_DISPATCH, "dispatch");
+    for (int i = 0; i < CUTTER_THREAD_CNT; i++)   SWIM_LANE(SL_CUTTER(i),   LANE_CUTTER,   "cutter");
+
     pthread_create(&manager_thread, NULL, manager_worker, &g_mem_pool);
 
     for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
@@ -43,6 +50,25 @@ int main(void) {
                        (void *)(intptr_t)i);
     }
 
+    SWIM_PHASE_BEGIN(SL_ORCH, PH_ORCH_SUBMIT);
     aicpu_orchestration_entry(0);
+    SWIM_PHASE_END(SL_ORCH);
+
+#ifdef ESL_SWIMLANE
+    /* Let the worker threads drain for a bounded window, then snapshot the
+     * swimlane and exit cleanly. Off builds keep the original return-immediately
+     * behavior. The window is spin-measured off the swimlane clock to avoid
+     * pulling in extra POSIX timing headers here. */
+    {
+        const uint64_t t0 = SWIM_NOW();
+        const uint64_t budget = swim_freq() / 2; /* ~500 ms */
+        while (SWIM_NOW() - t0 < budget) {
+            /* spin: give dispatch/cutter/manager time to make progress */
+        }
+        SWIM_DUMP("outputs/swimlane_records.json");
+        SWIM_SHUTDOWN();
+    }
+#endif
+
     return 0;
 }
