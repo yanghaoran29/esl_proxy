@@ -24,8 +24,11 @@ static inline bool batch_dequeue(queue_t *queue, uint16_t *item, uint16_t n)
 {
     if (queue->cnt < n)
         return false;
-    memcpy(item, &queue->tasks[queue->tail], n * sizeof(uint16_t));
-    queue->tail += n;
+    /* FIX: dequeue must read from head and advance head; the original read from
+     * tail (where enqueue writes), so it returned uninitialized slots and ran
+     * tail away. Tracked in docs/swimlane.md. */
+    memcpy(item, &queue->tasks[queue->head], n * sizeof(uint16_t));
+    queue->head += n;
     queue->cnt -= n;
     return true;
 }

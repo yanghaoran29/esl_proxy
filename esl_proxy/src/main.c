@@ -37,6 +37,7 @@ int main(void) {
     SWIM_LANE(SL_MANAGER, LANE_MANAGER, "manager");
     for (int i = 0; i < DISPATCH_THREAD_CNT; i++) SWIM_LANE(SL_DISPATCH(i), LANE_DISPATCH, "dispatch");
     for (int i = 0; i < CUTTER_THREAD_CNT; i++)   SWIM_LANE(SL_CUTTER(i),   LANE_CUTTER,   "cutter");
+    for (int i = 0; i < SL_EXEC_COUNT; i++)        SWIM_LANE(8 + i,          LANE_EXEC,     "executor");
 
     pthread_create(&manager_thread, NULL, manager_worker, &g_mem_pool);
 

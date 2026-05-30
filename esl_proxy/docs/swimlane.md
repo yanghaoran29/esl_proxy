@@ -45,13 +45,23 @@ Open <https://ui.perfetto.dev> (or `chrome://tracing`) and load `merged_swimlane
 
 ## What populates today
 
-main's runtime is still being wired up, so the trace reflects what actually runs:
+The orchestration→dispatch path is now connected, so root tasks flow end to end:
 
-- **Orchestrator lane** — one `orch_submit` envelope bar around `aicpu_orchestration_entry`, plus one instant mark per task that becomes ready (from `submit()` / `batch_submit()` in [ring_buf.h](../include/ring_buf.h)). This is fully populated (e.g. ~600 submit marks for the qwen3 decode case).
-- **Dispatch lanes** — work-gated dispatch/finish stamps in [src/dispatch.c](../src/dispatch.c) (`send_task` / `set_completed`). These fire once the orchestration→dispatch ready path and executor completion signalling are connected; until then they stay empty.
+- **Orchestrator lane** — one `orch_submit` envelope bar around `aicpu_orchestration_entry`, plus one instant mark per task that becomes ready (from `submit()` / `batch_submit()` in [ring_buf.h](../include/ring_buf.h)). Fully populated (~600 marks for the qwen3 decode case).
+- **Dispatch lanes** — a dispatch stamp per task handed to an executor slot and a finish stamp per completion ([src/dispatch.c](../src/dispatch.c) `send_task` / `set_completed`). Fully populated (~1200 stamps).
+- **Executor lanes** — one bar per task, width = the task's declared `duration`, on the assigned executor slot (`8 + tid*120 + exe_type*60 + idx`). ~600 bars.
 - **Cutter / manager lanes** — registered, instrumentation-ready; populate when those workers are wired.
 
 All hooks are work-gated (emit only on real sends/completions), so a hot spin loop never floods the rings.
+
+## Known issues / temporary workarounds
+
+These are stop-gaps to get the pipeline flowing for profiling; revisit as main's runtime matures.
+
+1. **Stand-in executor.** main has no executor threads/kernels yet, so [src/dispatch.c](../src/dispatch.c) `simulate_executor()` marks every busy slot as just-completed each loop, closing assign→complete. Replace with the real 003 executor; the executor-bar duration is the task's declared `duration`, not a measured one.
+2. **MIX → AIC routing.** `msg_bitmap` / `task_id_map1` / `task_id_map2` in `ctrl_t` are only `EXE_TYPE_CNT`(2) wide (no MIX column), but `send_task` is driven by `task_type_t` which includes `MIX(=2)`. Indexing those arrays with MIX overruns them, so `exe_type_of()` routes MIX onto the AIC(CUBE) pool for now. A real MIX executor pool is needed.
+3. **queue.h `batch_dequeue` read-from-tail bug (fixed).** The original `batch_dequeue` read from `queue->tail` (where `batch_enqueue` writes) and advanced `tail`, returning uninitialized slots. Fixed to read/advance `head`. Worth a proper lock-free ring with wraparound (the `// TODO: RING LOOP` / `// TODO: atomic protect` markers).
+4. **Cutter still a stub.** `cutter_worker` does not call `cutter()`, so successor predecessor counts are never decremented — only the initial root tasks drain; the rest of the DAG stays pending. Wire the cutter to drain the full graph.
 
 ## How it works
 
