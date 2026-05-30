@@ -29,28 +29,27 @@ extern task_state g_state_buf[RING_SIZE];
 extern atomic_flag g_lock_buf[RING_SIZE];
 extern struct task_desc g_basic_buf[RING_SIZE];
 extern atomic_char16_t g_predecessor_buf[RING_SIZE];
-extern struct successorList g_successor_buf[RING_SIZE];
-extern struct successorList g_successor_exp_buf[HALF_RING_SIZE];
+extern struct succ_list g_successor_buf[RING_SIZE];
+extern struct succ_list g_successor_exp_buf[HALF_RING_SIZE];
 
-extern mpmc_queue_t g_ready_queues[3][4];
 
 static inline void add_input(uint16_t task_id, Tensor t) {
-    int idx = g_basic_buf[task_id & RING_MASK].tensorCnt++;
+    int idx = g_basic_buf[task_id & RING_MASK].tensor_cnt++;
     g_basic_buf[task_id & RING_MASK].data[idx] = t;
 }
 
 static inline void add_output(uint16_t task_id, Tensor t) {
-    int idx = g_basic_buf[task_id & RING_MASK].tensorCnt++;
+    int idx = g_basic_buf[task_id & RING_MASK].tensor_cnt++;
     g_basic_buf[task_id & RING_MASK].data[idx] = t;
 }
 
 static inline void add_inout(uint16_t task_id, Tensor t) {
-    int idx = g_basic_buf[task_id & RING_MASK].tensorCnt++;
+    int idx = g_basic_buf[task_id & RING_MASK].tensor_cnt++;
     g_basic_buf[task_id & RING_MASK].data[idx] = t;
 }
 
 static inline void add_scalar(uint16_t task_id, int64_t t) {
-    int idx = g_basic_buf[task_id & RING_MASK].scalarCnt++;
+    int idx = g_basic_buf[task_id & RING_MASK].scalar_cnt++;
     g_basic_buf[task_id & RING_MASK].scalar[idx] = t;
 }
 
@@ -81,7 +80,7 @@ static inline bool batch_succeed(uint16_t cnt, uint16_t task_id[], uint16_t targ
     desired.successor_cnt = expected.successor_cnt + cnt;
     if (atomic_compare_exchange_strong(&g_state_buf[slotIdx], &expected, desired)) {
         int idx = expected.successor_cnt + 1;
-        struct successorList* ptr = &g_successor_buf[slotIdx];
+        struct succ_list* ptr = &g_successor_buf[slotIdx];
         for (int i = 0; i < cnt; i++)
         {
             while(idx > SUCC_NODE_CNT) {
@@ -133,7 +132,7 @@ static inline bool succeed(uint16_t task_id, uint16_t target) {
     desired.successor_cnt = expected.successor_cnt + 1;
     if (atomic_compare_exchange_strong(&g_state_buf[slotIdx], &expected, desired)) {
         int idx = desired.successor_cnt;
-        struct successorList* ptr = &g_successor_buf[slotIdx];
+        struct succ_list* ptr = &g_successor_buf[slotIdx];
         while(idx > SUCC_NODE_CNT) {
             idx = idx - SUCC_NODE_CNT;
             ptr = ptr->next;

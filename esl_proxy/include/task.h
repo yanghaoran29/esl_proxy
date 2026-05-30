@@ -43,9 +43,6 @@ typedef struct {
     uint32_t successor_cnt;
 } task_state;
 
-_Atomic task_state g_state_buf[RING_SIZE];
-uint16_t g_task_id_buf[RING_SIZE];
-
 struct task_desc {
     uint16_t    id;        /* Task identifier (2 bytes) */
     task_type_t type;      /* CUBE/VECTOR/MIX */
@@ -55,14 +52,14 @@ struct task_desc {
     uint32_t    count;     /* number of instances */
     uint64_t    data[16];  
     int64_t     scalar[32];
-    uint16_t    tensorCnt;
-    uint16_t    scalarCnt;
+    uint16_t    tensor_cnt;
+    uint16_t    scalar_cnt;
     uint16_t    duration;
 };
 
-struct successorList {
+struct succ_list {
     uint16_t successor[3];
-    struct successorList* next;
+    struct succ_list* next;
 };
 
 #endif /* DAG_TASK_H */
