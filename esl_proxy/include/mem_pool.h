@@ -19,7 +19,7 @@
 #include "ring_buf.h"
 
 /* Alignment requirement for allocations */
-#define MEM_POOL_ALIGN 8
+#define MEM_POOL_ALIGN 64
 
 /* Sentinel value indicating no uncompleted tasks */
 #define SENTINEL_DONE UINT32_MAX

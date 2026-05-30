@@ -7,11 +7,10 @@
 #include <stdatomic.h>
 #include <stddef.h>
 #include <stdbool.h>
+
 #include "executor.h"
 #include "task.h"
-
-#define TASK_TYPE_CNT 3
-#define EXE_TYPE_CNT 2
+#include "conf.h"
 
 typedef struct queue {
     uint64_t cnt;

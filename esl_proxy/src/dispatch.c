@@ -7,6 +7,8 @@
 
 #include "dispatch.h"
 
+#include <stdint.h>
+
 extern atomic_int g_task_cnt;
 extern atomic_int g_completed_cnt;
 ctrl_t g_ctrl_t[THREAD_CNT];
@@ -110,7 +112,7 @@ static inline void send_task(ctrl_t* ctrl, int type) {
     }
 }
 
-static inline void dispatch(int tid) {
+void dispatch(int tid) {
     update_exe_state(tid);
     set_completed(tid);
     send_task(&g_ctrl_t[tid], TASK_TYPE_MIX);
@@ -123,7 +125,7 @@ static inline void dispatch(int tid) {
  * Runs the dispatch loop for task distribution
  */
 void *dispatch_worker(void *arg) {
-    int tid = arg;
+    int tid = (int)(intptr_t)arg;
     dispatch_init(tid);
     /* Main dispatch loop */
     while (1) {

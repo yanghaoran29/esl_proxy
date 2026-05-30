@@ -8,29 +8,30 @@
  * C11 standard with _Atomic for lock-free concurrency.
  */
 
-#ifndef DAG_DISPATCH_H
-#define DAG_DISPATCH_H
+#ifndef DISPATCH_H
+#define DISPATCH_H
 
 #include <stdint.h>
-#include <stdatomic.h>
 #include <stddef.h>
-#include <stdbool.h>
-#include "executor.h"
-#include "task.h"
 
-#define TASK_TYPE_CNT 3
-#define EXE_TYPE_CNT 2
+#include "conf.h"
+#include "task.h"
+#include "queue.h"
 
 typedef struct ctrl {
     // 64CORES
     uint64_t free_bitmap[TASK_TYPE_CNT][AIC_OSTD];
     uint64_t msg_bitmap[EXE_TYPE_CNT][AIC_OSTD];
+
     uint16_t task_id_map1[EXE_TYPE_CNT][AIC_CNT];
     uint16_t task_id_map2[EXE_TYPE_CNT][AIC_CNT];
+
     uint16_t ready_cnt[TASK_TYPE_CNT];
     queue_t  ready_queue[TASK_TYPE_CNT];
     queue_t  completed_queue;
     uint16_t tid;
 } ctrl_t;
 
-#endif /* DAG_DISPATCH_H */
+void *dispatch_worker(void *arg);
+
+#endif /* DISPATCH_H */

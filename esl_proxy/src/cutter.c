@@ -1,6 +1,6 @@
-#include "conf.h"
-#include "task.h"
-#include "queue.h"
+#include "cutter.h"
+
+#include <stdint.h>
 
 void cutter(queue_t* cq, queue_t* rq) {
     uint16_t cq_buf[CUTTER_BATCH_SIZE];
@@ -29,3 +29,11 @@ void cutter(queue_t* cq, queue_t* rq) {
     }
 }
 
+void *cutter_worker(void *arg) {
+    int tid = (int)(intptr_t)arg;
+    /* Main dispatch loop */
+    while (1) {
+        wait();
+    }
+    return NULL;
+}

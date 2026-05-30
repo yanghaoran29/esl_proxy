@@ -5,14 +5,13 @@
  * and processes when2free FIFO entries to release memory.
  */
 
-#include <pthread.h>
-#include "mem_pool.h"
+#include "manager.h"
 
 /*
  * Manager thread entry point
  * Polls ring buffer for minimum uncompleted TaskID and processes when2free entries.
  */
-void* mem_pool_manager(void *arg) {
+void* manager_worker(void *arg) {
     mem_pool_t *pool = (mem_pool_t *)arg;
 
     while (1) {

@@ -16,4 +16,6 @@
 
 #define DISPATCH_THREAD_CNT 2
 
+#define EXE_TYPE_CNT 2
+
 #endif /* CONF_H */
