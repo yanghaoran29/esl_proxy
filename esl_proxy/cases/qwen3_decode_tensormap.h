@@ -2,7 +2,7 @@
 //
 // Copy of cases/qwen3_decode.h with all manual succeed()/batch_succeed() and the
 // producer-tracking arrays removed. Dependencies are discovered automatically by
-// tensormap (cases/tensormap_deps.h): every task registers its OUTPUT addresses
+// tensormap (the deps glue in include/tensormap.h): every task registers its OUTPUT addresses
 // and resolves its INPUT addresses to producer task ids, wiring edges through
 // esl_proxy's succeed(). Use tm_in/tm_out/tm_inout in place of
 // add_input/add_output/add_inout, and tm_submit(tid) to close each task.
@@ -18,7 +18,7 @@
 
 #include "mem_pool.h"
 #include "ring_buf.h"
-#include "tensormap_deps.h"
+#include "tensormap.h"
 
 void aicpu_orchestration_entry(const uint64_t orch_args) {
     // External tensors

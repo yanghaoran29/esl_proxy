@@ -63,6 +63,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
     Tensor ext_w_up = orch_args + 17;
     Tensor ext_w_down = orch_args + 18;
     Tensor ext_out = orch_args + 19;
+    (void)ext_seq_lens;
+    (void)ext_slot_mapping;
 
     const int64_t user_batch = 90;
     const int64_t batch_padded = (((user_batch + 15) / 16) * 16);
@@ -99,7 +101,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         const int64_t cur_valid = (user_batch - b0 > 16) ? 16 : (user_batch - b0);
 
         // Task 0: rmsnorm
-        uint16_t rmsnorm_id = g_task_id++;
+        g_task_id++;
+        uint16_t rmsnorm_id = g_task_id;
         while (try_new_task(g_task_id))
         {
             spin_wait();
@@ -145,7 +148,6 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             add_scalar(g_task_id, kv0);
             add_scalar(g_task_id, b0);
             add_duration(g_task_id, 17770);
-            cnt++;
             successor_list[cnt++] = g_task_id;
             k_proj_task_per_tile[tix] = g_task_id;
         }
@@ -164,11 +166,11 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             add_scalar(g_task_id, kv0);
             add_scalar(g_task_id, b0);
             add_duration(g_task_id, 19140);
-            cnt++;
             successor_list[cnt++] = g_task_id;
             v_proj_task_per_tile[tix] = g_task_id;
         }
-        batch_succeed(cnt, successor_list, rmsnorm_id);
+        batch_succeed(cnt, successor_list, rmsnorm_id);  // register rmsnorm->q/k/v edges first
+        submit(rmsnorm_id);                              // then make rmsnorm (a root) ready
         batch_submit(cnt, successor_list);
 
         // Task 4: qk_norm — fans in latest q/k/v_proj task for this tile.

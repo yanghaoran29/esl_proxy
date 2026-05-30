@@ -438,4 +438,122 @@ static inline int32_t tm_valid_count(const TmTensorMap *self) {
 }  /* extern "C" */
 #endif
 
+/* ===========================================================================
+ * esl_proxy auto-dependency glue (active only when ring_buf.h is present).
+ *
+ * Discovers each task's producers from its input tensor ADDRESSES and wires the
+ * edges through esl_proxy's succeed(); whole-buffer granularity (Tensor is a
+ * bare uint64_t address). Requires ring_buf.h to have been included FIRST — it
+ * supplies Tensor, add_input/add_output/add_inout, succeed, submit, and
+ * g_min_uncomplete_task. Standalone tensormap.h users get only the engine above.
+ *
+ * Usage in a case: tm_deps_init() once; tm_in/tm_out/tm_inout in place of
+ * add_input/add_output/add_inout; tm_submit(tid) instead of succeed()+submit(tid).
+ * =========================================================================== */
+#ifdef DAG_RING_BUF_H
+
+#ifndef TM_DEPS_POOL_SIZE
+#define TM_DEPS_POOL_SIZE 8192u
+#endif
+#define TM_DEPS_NUM_BUCKETS 4096u
+#define TM_DEPS_TASK_WINDOW 4096u
+#define TM_DEPS_MAX_IO 64
+#define TM_DEPS_MAX_PRED 1024
+
+static TmTensorMap g_tm_deps;
+static _Alignas(64) uint8_t g_tm_deps_buf[2u * 1024u * 1024u];
+static uint64_t g_tm_in[TM_DEPS_MAX_IO];
+static uint64_t g_tm_out[TM_DEPS_MAX_IO];
+static int g_tm_in_n;
+static int g_tm_out_n;
+
+/* Degenerate whole-buffer region: any producer sharing the base address overlaps
+ * (ndims==0 -> tm_overlap returns OTHER, i.e. a valid dependency edge). */
+static inline TmRegion tm_deps_region(uint64_t addr) {
+    TmRegion r;
+    memset(&r, 0, sizeof r);
+    r.base_addr = addr;
+    r.extent_elem = 1;
+    r.ndims = 0;
+    return r;
+}
+
+static inline void tm_deps_init(void) {
+    TmConfig cfg;
+    memset(&cfg, 0, sizeof cfg);
+    cfg.num_buckets = TM_DEPS_NUM_BUCKETS;
+    cfg.pool_size = TM_DEPS_POOL_SIZE;
+    cfg.num_rings = 1;
+    cfg.task_window[0] = TM_DEPS_TASK_WINDOW;
+    assert(tm_bytes_required(&cfg) <= sizeof(g_tm_deps_buf));
+    tm_init(&g_tm_deps, g_tm_deps_buf, &cfg);
+    g_tm_in_n = 0;
+    g_tm_out_n = 0;
+}
+
+static inline void tm_in(uint16_t tid, Tensor t) {
+    add_input(tid, t);
+    if (g_tm_in_n < TM_DEPS_MAX_IO) g_tm_in[g_tm_in_n++] = (uint64_t)t;
+}
+
+static inline void tm_out(uint16_t tid, Tensor t) {
+    add_output(tid, t);
+    if (g_tm_out_n < TM_DEPS_MAX_IO) g_tm_out[g_tm_out_n++] = (uint64_t)t;
+}
+
+static inline void tm_inout(uint16_t tid, Tensor t) {
+    add_inout(tid, t);
+    if (g_tm_in_n < TM_DEPS_MAX_IO) g_tm_in[g_tm_in_n++] = (uint64_t)t;
+    if (g_tm_out_n < TM_DEPS_MAX_IO) g_tm_out[g_tm_out_n++] = (uint64_t)t;
+}
+
+typedef struct {
+    uint16_t *preds;
+    int *n;
+    uint16_t self;
+} TmDepsCollect;
+
+static inline bool tm_deps_collect(TmEntry *e, TmOverlap st, void *ctx) {
+    TmDepsCollect *c = (TmDepsCollect *)ctx;
+    uint16_t p = (uint16_t)tm_local_of(e->producer_id);
+    (void)st;
+    if (p == c->self) return true;
+    for (int i = 0; i < *c->n; i++) {
+        if (c->preds[i] == p) return true; /* dedup */
+    }
+    if (*c->n < TM_DEPS_MAX_PRED) c->preds[(*c->n)++] = p;
+    return true;
+}
+
+/* Resolve inputs -> succeed() on each unique producer; register outputs; submit.
+ * Lookup runs before insert so an inout task never matches itself. */
+static inline void tm_submit(uint16_t tid) {
+    uint16_t preds[TM_DEPS_MAX_PRED];
+    int pn = 0;
+    TmDepsCollect ctx;
+    int i;
+
+    tm_sync(&g_tm_deps, 0, (int32_t)g_min_uncomplete_task);
+
+    ctx.preds = preds;
+    ctx.n = &pn;
+    ctx.self = tid;
+    for (i = 0; i < g_tm_in_n; i++) {
+        TmRegion r = tm_deps_region(g_tm_in[i]);
+        tm_lookup(&g_tm_deps, &r, tm_deps_collect, &ctx);
+    }
+    for (i = 0; i < pn; i++) {
+        succeed(tid, preds[i]);
+    }
+    for (i = 0; i < g_tm_out_n; i++) {
+        TmRegion r = tm_deps_region(g_tm_out[i]);
+        tm_insert(&g_tm_deps, &r, tm_make_id(0, tid));
+    }
+    submit(tid);
+    g_tm_in_n = 0;
+    g_tm_out_n = 0;
+}
+
+#endif /* DAG_RING_BUF_H */
+
 #endif  /* ESL_PROXY_TENSORMAP_H */
