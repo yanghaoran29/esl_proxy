@@ -53,6 +53,11 @@ static inline void add_output(uint16_t task_id, Tensor t) {
     g_basic_buf[task_id & RING_MASK].data[idx] = t;
 }
 
+static inline void add_inout(uint16_t task_id, Tensor t) {
+    int idx = g_basic_buf[task_id & RING_MASK].tensorCnt++;
+    g_basic_buf[task_id & RING_MASK].data[idx] = t;
+}
+
 static inline void add_scalar(uint16_t task_id, int64_t t) {
     int idx = g_basic_buf[task_id & RING_MASK].scalarCnt++;
     g_basic_buf[task_id & RING_MASK].scalar[idx] = t;

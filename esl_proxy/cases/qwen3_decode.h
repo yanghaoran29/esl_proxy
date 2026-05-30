@@ -195,286 +195,273 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
     uint32_t attn_out_ci_shapes[2] = {batch_padded, 5120};
     Tensor attn_out = alloc_tensors(attn_out_ci_shapes, 2, BFLOAT16);
 
-    // for (int64_t b = 0; b < user_batch; b += 1) {
-    //     uint32_t all_raw_scores_ci_shapes[2] = {4096, 128};
-    //     TensorCreateInfo all_raw_scores_ci(all_raw_scores_ci_shapes, 2, FLOAT32);
-    //     uint32_t all_exp_padded_ci_shapes[2] = {4096, 128};
-    //     TensorCreateInfo all_exp_padded_ci(all_exp_padded_ci_shapes, 2, BFLOAT16);
-    //     uint32_t all_cur_mi_ci_shapes[2] = {4096, 1};
-    //     TensorCreateInfo all_cur_mi_ci(all_cur_mi_ci_shapes, 2, FLOAT32);
-    //     uint32_t all_cur_li_ci_shapes[2] = {4096, 1};
-    //     TensorCreateInfo all_cur_li_ci(all_cur_li_ci_shapes, 2, FLOAT32);
-    //     uint32_t all_oi_tmp_ci_shapes[2] = {4096, 128};
-    //     TensorCreateInfo all_oi_tmp_ci(all_oi_tmp_ci_shapes, 2, FLOAT32);
-    //     Tensor alloc_8 = alloc_tensors(
-    //         all_raw_scores_ci, all_exp_padded_ci, all_cur_mi_ci, all_cur_li_ci, all_oi_tmp_ci);
-    //     const uint16_t batch_attn_scratch_alloc_task = alloc_8.task_id();
-    //     const Tensor& all_raw_scores = alloc_8.get_ref(0);
-    //     const Tensor& all_exp_padded = alloc_8.get_ref(1);
-    //     const Tensor& all_cur_mi = alloc_8.get_ref(2);
-    //     const Tensor& all_cur_li = alloc_8.get_ref(3);
-    //     const Tensor& all_oi_tmp = alloc_8.get_ref(4);
+    // Per-batch attention loop (Func5..Func9). Durations are V200-benchmark per-kernel
+    // averages in ns (avg_us * 1000). The proxy cannot read tensor data, so seq_lens /
+    // slot_mapping reads become fixed placeholders and rope/attn views use base tensors.
+    for (int64_t b = 0; b < user_batch; b += 1) {
+        const size_t tix = b / 16;
 
-    //     uint32_t indices_ctx_len[1] = {b)};
-    //     int32_t ctx_len = get_tensor_data<int32_t>(ext_seq_lens, 1, indices_ctx_len);
-    //     int64_t pos = (static_cast<int64_t>(ctx_len) - 1);
-    //     int64_t ctx_blocks = ((static_cast<int64_t>(ctx_len) + 127) / 128);
-    //     int64_t block_table_base = (b * 32);
-    //     uint32_t indices_slot[1] = {b)};
-    //     int32_t slot = get_tensor_data<int32_t>(ext_slot_mapping, 1, indices_slot);
-    //     int64_t slot_block = (static_cast<int64_t>(slot) / 128);
-    //     int64_t slot_offset = (static_cast<int64_t>(slot) - (slot_block * 128;
+        uint32_t all_raw_scores_ci_shapes[2] = {4096, 128};
+        Tensor all_raw_scores = alloc_tensors(all_raw_scores_ci_shapes, 2, FLOAT32);
+        uint32_t all_exp_padded_ci_shapes[2] = {4096, 128};
+        Tensor all_exp_padded = alloc_tensors(all_exp_padded_ci_shapes, 2, BFLOAT16);
+        uint32_t all_cur_mi_ci_shapes[2] = {4096, 1};
+        Tensor all_cur_mi = alloc_tensors(all_cur_mi_ci_shapes, 2, FLOAT32);
+        uint32_t all_cur_li_ci_shapes[2] = {4096, 1};
+        Tensor all_cur_li = alloc_tensors(all_cur_li_ci_shapes, 2, FLOAT32);
+        uint32_t all_oi_tmp_ci_shapes[2] = {4096, 128};
+        Tensor all_oi_tmp = alloc_tensors(all_oi_tmp_ci_shapes, 2, FLOAT32);
 
-    //     uint32_t cos_row_offsets[2] = {pos), 0};
-    //     uint32_t cos_row_shapes[2] = {
-    //         (cos_row_offsets[0] >= ext_rope_cos.shapes[0] ? 0u : std::min<uint32_t>(1, ext_rope_cos.shapes[0] - cos_row_offsets[0],
-    //         (cos_row_offsets[1] >= ext_rope_cos.shapes[1] ? 0u : std::min<uint32_t>(128, ext_rope_cos.shapes[1] - cos_row_offsets[1],
-    //     };
-    //     Tensor cos_row = ext_rope_cos.view(cos_row_shapes, cos_row_offsets);
-    //     uint32_t sin_row_offsets[2] = {pos), 0};
-    //     uint32_t sin_row_shapes[2] = {
-    //         (sin_row_offsets[0] >= ext_rope_sin.shapes[0] ? 0u : std::min<uint32_t>(1, ext_rope_sin.shapes[0] - sin_row_offsets[0],
-    //         (sin_row_offsets[1] >= ext_rope_sin.shapes[1] ? 0u : std::min<uint32_t>(128, ext_rope_sin.shapes[1] - sin_row_offsets[1],
-    //     };
-    //     Tensor sin_row = ext_rope_sin.view(sin_row_shapes, sin_row_offsets);
-    //     uint32_t cos_lo_offsets[2] = {0, 0};
-    //     uint32_t cos_lo_shapes[2] = {
-    //         (cos_lo_offsets[0] >= cos_row.shapes[0] ? 0u : std::min<uint32_t>(1, cos_row.shapes[0] - cos_lo_offsets[0],
-    //         (cos_lo_offsets[1] >= cos_row.shapes[1] ? 0u : std::min<uint32_t>(64, cos_row.shapes[1] - cos_lo_offsets[1],
-    //     };
-    //     Tensor cos_lo = cos_row.view(cos_lo_shapes, cos_lo_offsets);
-    //     uint32_t cos_hi_offsets[2] = {0, 64};
-    //     uint32_t cos_hi_shapes[2] = {
-    //         (cos_hi_offsets[0] >= cos_row.shapes[0] ? 0u : std::min<uint32_t>(1, cos_row.shapes[0] - cos_hi_offsets[0],
-    //         (cos_hi_offsets[1] >= cos_row.shapes[1] ? 0u : std::min<uint32_t>(64, cos_row.shapes[1] - cos_hi_offsets[1],
-    //     };
-    //     Tensor cos_hi = cos_row.view(cos_hi_shapes, cos_hi_offsets);
-    //     uint32_t sin_lo_offsets[2] = {0, 0};
-    //     uint32_t sin_lo_shapes[2] = {
-    //         (sin_lo_offsets[0] >= sin_row.shapes[0] ? 0u : std::min<uint32_t>(1, sin_row.shapes[0] - sin_lo_offsets[0],
-    //         (sin_lo_offsets[1] >= sin_row.shapes[1] ? 0u : std::min<uint32_t>(64, sin_row.shapes[1] - sin_lo_offsets[1],
-    //     };
-    //     Tensor sin_lo = sin_row.view(sin_lo_shapes, sin_lo_offsets);
-    //     uint32_t sin_hi_offsets[2] = {0, 64};
-    //     uint32_t sin_hi_shapes[2] = {
-    //         (sin_hi_offsets[0] >= sin_row.shapes[0] ? 0u : std::min<uint32_t>(1, sin_row.shapes[0] - sin_hi_offsets[0],
-    //         (sin_hi_offsets[1] >= sin_row.shapes[1] ? 0u : std::min<uint32_t>(64, sin_row.shapes[1] - sin_hi_offsets[1],
-    //     };
-    //     Tensor sin_hi = sin_row.view(sin_hi_shapes, sin_hi_offsets);
+        // Fixed placeholders for control values (proxy has no tensor data to read).
+        const int64_t ctx_len = 1024;
+        const int64_t ctx_blocks = ((ctx_len + 127) / 128);
+        const int64_t block_table_base = (b * 32);
+        const int64_t slot = b;
+        const int64_t slot_block = (slot / 128);
+        const int64_t slot_offset = (slot - (slot_block * 128));
 
-    //     // Task 5: rope_kv_cache
-    //     g_task_id++;
-    //     add_output(all_q_padded);
-    //     add_output(ext_k_cache);
-    //     add_output(ext_v_cache);
-    //     add_input(k_proj_norm);
-    //     add_input(cos_lo);
-    //     add_input(sin_lo);
-    //     add_input(cos_hi);
-    //     add_input(sin_hi);
-    //     add_input(v_proj);
-    //     add_input(q_proj_norm);
-    //     add_scalar(slot_block);
-    //     add_scalar(slot_offset);
-    //     add_scalar(b);
-    //     add_dep(all_q_padded_alloc_task);
-    //     add_dep(qk_norm_task_per_tile[static_cast<size_t>(b / 16)]);
-    //     Tensor __rt_rope = rt_submit_aiv_task(5, g_basic_buf[g_task_id & RING_MASK]);
-    //     const uint16_t rope_kv_id = __rt_rope.task_id();
+        // Task 5: rope_kv_cache — dep Func4 (qk_norm) for this batch's tile.
+        g_task_id++;
+        while (try_new_task(g_task_id))
+        {
+            wait();
+        }
+        add_output(g_task_id, all_q_padded);
+        add_output(g_task_id, ext_k_cache);
+        add_output(g_task_id, ext_v_cache);
+        add_input(g_task_id, k_proj_norm);
+        add_input(g_task_id, ext_rope_cos);  // cos_lo view -> base tensor
+        add_input(g_task_id, ext_rope_sin);  // sin_lo view -> base tensor
+        add_input(g_task_id, ext_rope_cos);  // cos_hi view -> base tensor
+        add_input(g_task_id, ext_rope_sin);  // sin_hi view -> base tensor
+        add_input(g_task_id, v_proj);
+        add_input(g_task_id, q_proj_norm);
+        add_scalar(g_task_id, slot_block);
+        add_scalar(g_task_id, slot_offset);
+        add_scalar(g_task_id, b);
+        add_duration(g_task_id, 9560);
+        succeed(g_task_id, qk_norm_task_per_tile[tix]);
+        submit(g_task_id);
+        const uint16_t rope_kv_id = g_task_id;
 
-    //     uint32_t attn_row_offsets[2] = {b), 0};
-    //     uint32_t attn_row_shapes[2] = {
-    //         (attn_row_offsets[0] >= attn_out.shapes[0] ? 0u : std::min<uint32_t>(1, attn_out.shapes[0] - attn_row_offsets[0],
-    //         (attn_row_offsets[1] >= attn_out.shapes[1] ? 0u : std::min<uint32_t>(5120, attn_out.shapes[1] - attn_row_offsets[1],
-    //     };
-    //     Tensor attn_row = attn_out.view(attn_row_shapes, attn_row_offsets);
+        // Task 6: qk_matmul — dep Func5.
+        g_task_id++;
+        while (try_new_task(g_task_id))
+        {
+            wait();
+        }
+        add_input(g_task_id, all_q_padded);
+        add_output(g_task_id, all_raw_scores);
+        add_input(g_task_id, ext_block_table);
+        add_input(g_task_id, ext_k_cache);
+        add_scalar(g_task_id, b);
+        add_scalar(g_task_id, ctx_blocks);
+        add_scalar(g_task_id, block_table_base);
+        add_duration(g_task_id, 29500);
+        succeed(g_task_id, rope_kv_id);
+        submit(g_task_id);
+        const uint16_t qk_matmul_id = g_task_id;
 
-    //     // Spmd qk_matmul_spmd: qk_matmul
-    //     g_task_id++;
-    //     add_input(all_q_padded);
-    //     add_output(all_raw_scores);
-    //     add_input(ext_block_table);
-    //     add_input(ext_k_cache);
-    //     add_scalar(b);
-    //     add_scalar(ctx_blocks);
-    //     add_scalar(block_table_base);
-    //     launch_spec.set_block_num(4);
-    //     add_dep(rope_kv_id);
-    //     add_dep(batch_attn_scratch_alloc_task);
-    //     Tensor __rt_qkmm = rt_submit_aic_task(6, g_basic_buf[g_task_id & RING_MASK]);
-    //     const uint16_t qk_matmul_id = __rt_qkmm.task_id();
+        // Task 7: softmax — dep Func6.
+        g_task_id++;
+        while (try_new_task(g_task_id))
+        {
+            wait();
+        }
+        add_output(g_task_id, all_cur_li);
+        add_output(g_task_id, all_cur_mi);
+        add_output(g_task_id, all_exp_padded);
+        add_input(g_task_id, all_raw_scores);
+        add_scalar(g_task_id, ctx_blocks);
+        add_scalar(g_task_id, ctx_len);
+        add_duration(g_task_id, 20010);
+        succeed(g_task_id, qk_matmul_id);
+        submit(g_task_id);
+        const uint16_t softmax_id = g_task_id;
 
-    //     // Spmd softmax_spmd: softmax
-    //     g_task_id++;
-    //     add_output(all_cur_li);
-    //     add_output(all_cur_mi);
-    //     add_output(all_exp_padded);
-    //     add_input(all_raw_scores);
-    //     add_scalar(ctx_blocks);
-    //     add_scalar(ctx_len);
-    //     launch_spec.set_block_num(4);
-    //     add_dep(qk_matmul_id);
-    //     Tensor __rt_sm = rt_submit_aiv_task(7, g_basic_buf[g_task_id & RING_MASK]);
-    //     const uint16_t softmax_id = __rt_sm.task_id();
+        // Task 8: sv_matmul — dep Func5 (KV-cache writes) and Func7 (softmax outputs).
+        g_task_id++;
+        while (try_new_task(g_task_id))
+        {
+            wait();
+        }
+        add_output(g_task_id, all_oi_tmp);
+        add_input(g_task_id, ext_block_table);
+        add_input(g_task_id, all_exp_padded);
+        add_input(g_task_id, ext_v_cache);
+        add_scalar(g_task_id, ctx_blocks);
+        add_scalar(g_task_id, block_table_base);
+        add_duration(g_task_id, 31480);
+        succeed(g_task_id, rope_kv_id);
+        succeed(g_task_id, softmax_id);
+        submit(g_task_id);
+        const uint16_t sv_matmul_id = g_task_id;
 
-    //     // Spmd sv_matmul_spmd: sv_matmul (needs rope's KV-cache writes + softmax outputs)
-    //     g_task_id++;
-    //     add_output(all_oi_tmp);
-    //     add_input(ext_block_table);
-    //     add_input(all_exp_padded);
-    //     add_input(ext_v_cache);
-    //     add_scalar(ctx_blocks);
-    //     add_scalar(block_table_base);
-    //     launch_spec.set_block_num(4);
-    //     add_dep(rope_kv_id);
-    //     add_dep(softmax_id);
-    //     Tensor __rt_sv = rt_submit_aic_task(8, g_basic_buf[g_task_id & RING_MASK]);
-    //     const uint16_t sv_matmul_id = __rt_sv.task_id();
+        // Task 9: online_softmax — four launches (gi0 = 0, 2, 4, 6), each dep Func8.
+        for (int64_t gi0 = 0; gi0 < 8; gi0 += 2) {
+            g_task_id++;
+            while (try_new_task(g_task_id))
+            {
+                wait();
+            }
+            add_input(g_task_id, all_oi_tmp);
+            add_input(g_task_id, all_cur_mi);
+            add_input(g_task_id, all_cur_li);
+            add_output(g_task_id, attn_out);  // attn_row view -> base tensor
+            add_scalar(g_task_id, gi0);
+            add_scalar(g_task_id, ctx_blocks);
+            add_duration(g_task_id, 20440);
+            succeed(g_task_id, sv_matmul_id);
+            submit(g_task_id);
+            online_softmax_tasks_by_b[b][gi0 / 2] = g_task_id;
+        }
+    }
 
-    //     // Per-chunk online_softmax: four launches (gi0 = 0, 2, 4, 6).
-    //     for (int64_t gi0 = 0; gi0 < 8; gi0 += 2) {
-    //         // Task 9: online_softmax
-    //         g_task_id++;
-    //         add_input(all_oi_tmp);
-    //         add_input(all_cur_mi);
-    //         add_input(all_cur_li);
-    //         add_output(attn_row);
-    //         add_scalar(gi0);
-    //         add_scalar(ctx_blocks);
-    //         add_dep(sv_matmul_id);
-    //         Tensor __rt_os = rt_submit_aiv_task(9, g_basic_buf[g_task_id & RING_MASK]);
-    //         online_softmax_tasks_by_b[static_cast<size_t>(b)].push_back(__rt_os.task_id(;
-    //     }
-    // }
+    for (int64_t b0 = 0; b0 < batch_padded; b0 += 16) {
+        uint32_t resid1_tile_ci_shapes[2] = {16, 5120};
+        Tensor resid1_tile = alloc_tensors(resid1_tile_ci_shapes, 2, FLOAT32);
+        uint32_t gm_pipe_buffer_0_ci_shapes[2] = {16384, 40};
+        Tensor gm_pipe_buffer_0 = alloc_tensors(gm_pipe_buffer_0_ci_shapes, 2, FLOAT32);
+        uint32_t post_norm_tile_ci_shapes[2] = {16, 5120};
+        Tensor post_norm_tile = alloc_tensors(post_norm_tile_ci_shapes, 2, BFLOAT16);
+        uint32_t mlp_tile_ci_shapes[2] = {16, 17408};
+        Tensor mlp_tile = alloc_tensors(mlp_tile_ci_shapes, 2, BFLOAT16);
+        const int64_t cur_valid = (user_batch - b0 > 16) ? 16 : (user_batch - b0);
 
-    // for (int64_t b0 = 0; b0 < batch_padded; b0 += 16) {
-    //     uint32_t resid1_tile_ci_shapes[2] = {16, 5120};
-    //     TensorCreateInfo resid1_tile_ci(resid1_tile_ci_shapes, 2, FLOAT32);
-    //     uint32_t gm_pipe_buffer_0_ci_shapes[1] = {(16384) * (40};
-    //     TensorCreateInfo gm_pipe_buffer_0_ci(gm_pipe_buffer_0_ci_shapes, 1, FLOAT32, /*manual_dep=*/true);
-    //     uint32_t post_norm_tile_ci_shapes[2] = {16, 5120};
-    //     TensorCreateInfo post_norm_tile_ci(post_norm_tile_ci_shapes, 2, BFLOAT16);
-    //     uint32_t mlp_tile_ci_shapes[2] = {16, 17408};
-    //     TensorCreateInfo mlp_tile_ci(mlp_tile_ci_shapes, 2, BFLOAT16);
-    //     Tensor alloc_9 = alloc_tensors(resid1_tile_ci, gm_pipe_buffer_0_ci, post_norm_tile_ci, mlp_tile_ci);
-    //     const Tensor& resid1_tile = alloc_9.get_ref(0);
-    //     const Tensor& gm_pipe_buffer_0 = alloc_9.get_ref(1);
-    //     const Tensor& post_norm_tile = alloc_9.get_ref(2);
-    //     const Tensor& mlp_tile = alloc_9.get_ref(3);
-    //     const int64_t cur_valid = std::min<int64_t>(user_batch - b0, 16);
+        // Task 10/11: out_proj_residual (MixedKernels AIC+AIV) — dep every Func9 for
+        // batches in [b0, b0+cur_valid). Duration = max(aic 43590, aiv 91230) ns
+        // (the two halves run synchronized).
+        g_task_id++;
+        while (try_new_task(g_task_id))
+        {
+            wait();
+        }
+        add_input(g_task_id, ext_hidden_states);
+        add_input(g_task_id, attn_out);
+        add_input(g_task_id, ext_wo);
+        add_inout(g_task_id, resid1_tile);
+        add_output(g_task_id, gm_pipe_buffer_0);
+        add_scalar(g_task_id, b0);
+        add_scalar(g_task_id, cur_valid);
+        add_duration(g_task_id, 91230);
+        for (int64_t row = 0; row < cur_valid; row += 1) {
+            const int64_t bb = b0 + row;
+            for (int gi = 0; gi < 4; gi++) {
+                succeed(g_task_id, online_softmax_tasks_by_b[bb][gi]);
+            }
+        }
+        submit(g_task_id);
+        const uint16_t out_proj_mixed_id = g_task_id;
 
-    //     // Group out_proj_residual: MixedKernels (AIC + AIV lanes) — Func10/11.
-    //     ArgWithDeps<256> g_basic_buf[g_task_id & RING_MASK]0;
-    //     g_basic_buf[g_task_id & RING_MASK]0.add_input(ext_hidden_states);
-    //     g_basic_buf[g_task_id & RING_MASK]0.add_input(attn_out);
-    //     g_basic_buf[g_task_id & RING_MASK]0.add_input(ext_wo);
-    //     g_basic_buf[g_task_id & RING_MASK]0.add_inout(resid1_tile);
-    //     g_basic_buf[g_task_id & RING_MASK]0.add_output(gm_pipe_buffer_0);
-    //     g_basic_buf[g_task_id & RING_MASK]0.add_scalar(b0);
-    //     g_basic_buf[g_task_id & RING_MASK]0.add_scalar(cur_valid);
-    //     MixedKernels mixed_10 = {10, 11, 11};
-    //     g_basic_buf[g_task_id & RING_MASK]0.launch_spec.set_block_num(40);
-    //     for (int64_t __row = 0; __row < cur_valid; ++__row) {
-    //         const int64_t bb = b0 + __row;
-    //         for (const uint16_t& __os_tid : online_softmax_tasks_by_b[static_cast<size_t>(bb)]) {
-    //             g_basic_buf[g_task_id & RING_MASK]0.add_dep(__os_tid);
-    //         }
-    //     }
-    //     Tensor __rt_op = rt_submit_task(mixed_10, g_basic_buf[g_task_id & RING_MASK]0);
-    //     const uint16_t out_proj_mixed_id = __rt_op.task_id();
+        // Task 12: post_rmsnorm — dep Func10/11.
+        g_task_id++;
+        while (try_new_task(g_task_id))
+        {
+            wait();
+        }
+        add_input(g_task_id, resid1_tile);
+        add_output(g_task_id, post_norm_tile);
+        add_input(g_task_id, ext_post_rms_weight);
+        add_duration(g_task_id, 27790);
+        succeed(g_task_id, out_proj_mixed_id);
+        submit(g_task_id);
+        const uint16_t post_rmsnorm_id = g_task_id;
 
-    //     // Task 12: post_rmsnorm
-    //     ArgWithDeps<256> g_basic_buf[g_task_id & RING_MASK]1;
-    //     g_basic_buf[g_task_id & RING_MASK]1.add_input(resid1_tile);
-    //     g_basic_buf[g_task_id & RING_MASK]1.add_output(post_norm_tile);
-    //     g_basic_buf[g_task_id & RING_MASK]1.add_input(ext_post_rms_weight);
-    //     g_basic_buf[g_task_id & RING_MASK]1.add_dep(out_proj_mixed_id);
-    //     Tensor __rt_pr = rt_submit_aiv_task(12, g_basic_buf[g_task_id & RING_MASK]1);
-    //     const uint16_t post_rmsnorm_id = __rt_pr.task_id();
+        // MLP gate/up/silu loop (34 chunks of 512 = 17408 = INTERMEDIATE).
+        uint16_t silu_task_by_ob[34];
+        for (int64_t ob = 0; ob < 34; ob += 1) {
+            uint32_t ret0__out_ci_shapes[2] = {16, 512};
+            Tensor ret0__out = alloc_tensors(ret0__out_ci_shapes, 2, FLOAT32);
+            uint32_t ret0__out_1_ci_shapes[2] = {16, 512};
+            Tensor ret0__out_1 = alloc_tensors(ret0__out_1_ci_shapes, 2, FLOAT32);
+            const int64_t mlp_o0 = (ob * 512);
 
-    //     // MLP gate/up/silu loop (34 chunks of 512 = 17408 = INTERMEDIATE)
-    //     uint16_t silu_task_by_ob(34, uint16_t::invalid(;
-    //     for (int64_t ob = 0; ob < 34; ob += 1) {
-    //         uint32_t ret0__out_ci_shapes[2] = {16, 512};
-    //         TensorCreateInfo ret0__out_ci(ret0__out_ci_shapes, 2, FLOAT32);
-    //         uint32_t ret0__out_1_ci_shapes[2] = {16, 512};
-    //         TensorCreateInfo ret0__out_1_ci(ret0__out_1_ci_shapes, 2, FLOAT32);
-    //         Tensor alloc_10 = alloc_tensors(ret0__out_ci, ret0__out_1_ci);
-    //         const Tensor& ret0__out = alloc_10.get_ref(0);
-    //         const Tensor& ret0__out_1 = alloc_10.get_ref(1);
-    //         int64_t mlp_o0 = (ob * 512);
+            // Task 13: gate_proj — dep Func12.
+            g_task_id++;
+            while (try_new_task(g_task_id))
+            {
+                wait();
+            }
+            add_input(g_task_id, post_norm_tile);
+            add_input(g_task_id, ext_w_gate);
+            add_output(g_task_id, ret0__out);
+            add_scalar(g_task_id, mlp_o0);
+            add_duration(g_task_id, 97020);
+            succeed(g_task_id, post_rmsnorm_id);
+            submit(g_task_id);
+            const uint16_t gate_id = g_task_id;
 
-    //         // Task 13: gate_proj
-    //         ArgWithDeps<256> g_basic_buf[g_task_id & RING_MASK]2;
-    //         g_basic_buf[g_task_id & RING_MASK]2.add_input(post_norm_tile);
-    //         g_basic_buf[g_task_id & RING_MASK]2.add_input(ext_w_gate);
-    //         g_basic_buf[g_task_id & RING_MASK]2.add_output(ret0__out);
-    //         g_basic_buf[g_task_id & RING_MASK]2.add_scalar(mlp_o0);
-    //         g_basic_buf[g_task_id & RING_MASK]2.add_dep(post_rmsnorm_id);
-    //         Tensor __rt_gate = rt_submit_aic_task(13, g_basic_buf[g_task_id & RING_MASK]2);
-    //         const uint16_t gate_id = __rt_gate.task_id();
+            // Task 14: up_proj — dep Func12.
+            g_task_id++;
+            while (try_new_task(g_task_id))
+            {
+                wait();
+            }
+            add_input(g_task_id, post_norm_tile);
+            add_input(g_task_id, ext_w_up);
+            add_output(g_task_id, ret0__out_1);
+            add_scalar(g_task_id, mlp_o0);
+            add_duration(g_task_id, 98440);
+            succeed(g_task_id, post_rmsnorm_id);
+            submit(g_task_id);
+            const uint16_t up_id = g_task_id;
 
-    //         // Task 14: up_proj
-    //         ArgWithDeps<256> g_basic_buf[g_task_id & RING_MASK]3;
-    //         g_basic_buf[g_task_id & RING_MASK]3.add_input(post_norm_tile);
-    //         g_basic_buf[g_task_id & RING_MASK]3.add_input(ext_w_up);
-    //         g_basic_buf[g_task_id & RING_MASK]3.add_output(ret0__out_1);
-    //         g_basic_buf[g_task_id & RING_MASK]3.add_scalar(mlp_o0);
-    //         g_basic_buf[g_task_id & RING_MASK]3.add_dep(post_rmsnorm_id);
-    //         Tensor __rt_up = rt_submit_aic_task(14, g_basic_buf[g_task_id & RING_MASK]3);
-    //         const uint16_t up_id = __rt_up.task_id();
+            // Task 15: silu — dep Func13 + Func14 for that ob.
+            g_task_id++;
+            while (try_new_task(g_task_id))
+            {
+                wait();
+            }
+            add_input(g_task_id, ret0__out);
+            add_input(g_task_id, ret0__out_1);
+            add_output(g_task_id, mlp_tile);  // ret0__out_2 view -> base tensor
+            add_scalar(g_task_id, mlp_o0);
+            add_duration(g_task_id, 2940);
+            succeed(g_task_id, gate_id);
+            succeed(g_task_id, up_id);
+            submit(g_task_id);
+            silu_task_by_ob[ob] = g_task_id;
+        }
 
-    //         uint32_t ret0__out_2_offsets[2] = {0, mlp_o0)};
-    //         uint32_t ret0__out_2_shapes[2] = {
-    //             (ret0__out_2_offsets[0] >= mlp_tile.shapes[0] ? 0u : std::min<uint32_t>(16, mlp_tile.shapes[0] - ret0__out_2_offsets[0],
-    //             (ret0__out_2_offsets[1] >= mlp_tile.shapes[1] ? 0u : std::min<uint32_t>(512, mlp_tile.shapes[1] - ret0__out_2_offsets[1],
-    //         };
-    //         Tensor ret0__out_2 = mlp_tile.view(ret0__out_2_shapes, ret0__out_2_offsets);
+        // Final down_proj + down_proj_residual loop (HIDDEN / DOWN_OUT_CHUNK = 5120/128 = 40).
+        for (int64_t dob = 0; dob < 40; dob += 1) {
+            uint32_t fp32_chunk_gm_ci_shapes[2] = {16, 128};
+            Tensor fp32_chunk_gm = alloc_tensors(fp32_chunk_gm_ci_shapes, 2, FLOAT32);
+            const int64_t d0 = (dob * 128);
 
-    //         // Task 15: silu
-    //         ArgWithDeps<256> g_basic_buf[g_task_id & RING_MASK]4;
-    //         g_basic_buf[g_task_id & RING_MASK]4.add_input(ret0__out);
-    //         g_basic_buf[g_task_id & RING_MASK]4.add_input(ret0__out_1);
-    //         g_basic_buf[g_task_id & RING_MASK]4.add_output(ret0__out_2);
-    //         g_basic_buf[g_task_id & RING_MASK]4.add_dep(gate_id);
-    //         g_basic_buf[g_task_id & RING_MASK]4.add_dep(up_id);
-    //         Tensor __rt_silu = rt_submit_aiv_task(15, g_basic_buf[g_task_id & RING_MASK]4);
-    //         silu_task_by_ob[static_cast<size_t>(ob)] = __rt_silu.task_id();
-    //     }
+            // Task 16: down_proj — reads full mlp_tile, dep every Func15.
+            g_task_id++;
+            while (try_new_task(g_task_id))
+            {
+                wait();
+            }
+            add_input(g_task_id, mlp_tile);
+            add_input(g_task_id, ext_w_down);
+            add_inout(g_task_id, fp32_chunk_gm);
+            add_scalar(g_task_id, d0);
+            add_duration(g_task_id, 74320);
+            for (int ob = 0; ob < 34; ob++) {
+                succeed(g_task_id, silu_task_by_ob[ob]);
+            }
+            submit(g_task_id);
+            const uint16_t down_proj_id = g_task_id;
 
-    //     // Final down_proj + down_proj_residual loop (HIDDEN / DOWN_OUT_CHUNK = 5120/128 = 40)
-    //     for (int64_t dob = 0; dob < 40; dob += 1) {
-    //         uint32_t fp32_chunk_gm_ci_shapes[2] = {16, 128};
-    //         TensorCreateInfo fp32_chunk_gm_ci(fp32_chunk_gm_ci_shapes, 2, FLOAT32);
-    //         Tensor alloc_11 = alloc_tensors(fp32_chunk_gm_ci);
-    //         const Tensor& fp32_chunk_gm = alloc_11.get_ref(0);
-    //         int64_t d0 = (dob * 128);
-
-    //         // Task 16: down_proj — reads full mlp_tile, must wait for every silu chunk.
-    //         ArgWithDeps<256> g_basic_buf[g_task_id & RING_MASK]5;
-    //         g_basic_buf[g_task_id & RING_MASK]5.add_input(mlp_tile);
-    //         g_basic_buf[g_task_id & RING_MASK]5.add_input(ext_w_down);
-    //         g_basic_buf[g_task_id & RING_MASK]5.add_inout(fp32_chunk_gm);
-    //         g_basic_buf[g_task_id & RING_MASK]5.add_scalar(d0);
-    //         for (const uint16_t& __silu_tid : silu_task_by_ob) {
-    //             if (__silu_tid.is_valid( {
-    //                 g_basic_buf[g_task_id & RING_MASK]5.add_dep(__silu_tid);
-    //             }
-    //         }
-    //         Tensor __rt_down = rt_submit_aic_task(16, g_basic_buf[g_task_id & RING_MASK]5);
-    //         const uint16_t down_proj_id = __rt_down.task_id();
-
-    //         // Task 17: down_proj_residual — needs this chunk's down_proj output and resid1_tile.
-    //         ArgWithDeps<256> g_basic_buf[g_task_id & RING_MASK]6;
-    //         g_basic_buf[g_task_id & RING_MASK]6.add_input(fp32_chunk_gm);
-    //         g_basic_buf[g_task_id & RING_MASK]6.add_input(resid1_tile);
-    //         g_basic_buf[g_task_id & RING_MASK]6.add_output(ext_out);
-    //         g_basic_buf[g_task_id & RING_MASK]6.add_scalar(d0);
-    //         g_basic_buf[g_task_id & RING_MASK]6.add_scalar(cur_valid);
-    //         g_basic_buf[g_task_id & RING_MASK]6.add_scalar(b0);
-    //         g_basic_buf[g_task_id & RING_MASK]6.add_dep(down_proj_id);
-    //         g_basic_buf[g_task_id & RING_MASK]6.add_dep(out_proj_mixed_id);
-    //         (void)rt_submit_aiv_task(17, g_basic_buf[g_task_id & RING_MASK]6);
-    //     }
+            // Task 17: down_proj_residual — dep Func16 and Func10/11 for that db.
+            g_task_id++;
+            while (try_new_task(g_task_id))
+            {
+                wait();
+            }
+            add_input(g_task_id, fp32_chunk_gm);
+            add_input(g_task_id, resid1_tile);
+            add_output(g_task_id, ext_out);
+            add_scalar(g_task_id, d0);
+            add_scalar(g_task_id, cur_valid);
+            add_scalar(g_task_id, b0);
+            add_duration(g_task_id, 3130);
+            succeed(g_task_id, down_proj_id);
+            succeed(g_task_id, out_proj_mixed_id);
+            submit(g_task_id);
+        }
     }
 }
