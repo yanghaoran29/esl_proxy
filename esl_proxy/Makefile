@@ -17,6 +17,10 @@ CC       := cc
 CFLAGS   := -std=c11 -Wall -Wextra -pedantic -O3 -I include -I cases -DORCH_CASE='"$(CASE)"' -MMD -MP
 LDFLAGS  := -lpthread -latomic
 
+ifneq ($(filter qwen3_decode_tensormap.h,$(CASE)),)
+CFLAGS   += -DUSE_TENSORMAP
+endif
+
 OBJ_DIR := build/obj
 BIN_DIR := bin
 TARGET  := $(BIN_DIR)/esl_proxy
