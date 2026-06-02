@@ -6,6 +6,7 @@
 
 #include "mem_pool.h"
 #include "ring_buf.h"
+#include "macro_group.h"
 
 #include "conf.h"
 
@@ -25,3 +26,10 @@ mem_pool_t g_mem_pool;
 
 atomic_int g_task_cnt;
 atomic_int g_completed_cnt;
+
+_Atomic uint16_t g_macro_predecessor_buf[MACRO_RING_SIZE];
+task_state g_macro_state_buf[MACRO_RING_SIZE];
+struct succ_list g_macro_successor_buf[MACRO_RING_SIZE];
+struct succ_list g_macro_successor_exp_buf[MACRO_HALF_RING_SIZE];
+uint16_t g_macro_entry_micro[MACRO_RING_SIZE];
+uint16_t g_micro_exit_to_macro[RING_SIZE];

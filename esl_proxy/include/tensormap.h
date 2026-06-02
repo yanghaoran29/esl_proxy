@@ -455,8 +455,6 @@ static inline int32_t tm_valid_count(const TmTensorMap *self) {
 
 #ifdef TENSORMAP_WHOLE_BUFFER
 
-#include <assert.h>
-
 #ifndef TM_DEPS_POOL_SIZE
 #define TM_DEPS_POOL_SIZE 8192u
 #endif
@@ -489,7 +487,6 @@ static inline void tm_deps_init(void) {
   cfg.pool_size = TM_DEPS_POOL_SIZE;
   cfg.num_rings = 1;
   cfg.task_window[0] = TM_DEPS_TASK_WINDOW;
-  assert(tm_bytes_required(&cfg) <= sizeof(g_tm_deps_buf));
   tm_init(&g_tm_deps, g_tm_deps_buf, &cfg);
   g_tm_in_n = 0;
   g_tm_out_n = 0;

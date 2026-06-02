@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stdatomic.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "conf.h"
 #include "mpmc_queue.h"
@@ -160,6 +161,7 @@ static inline bool batch_succeed(uint16_t cnt, uint16_t task_id[], uint16_t targ
     expected.state = PENDING;
 
     task_state desired;
+    memset(&desired, 0, sizeof desired);
     desired.state = PENDING;
     desired.task_id = expected.task_id;
     desired.successor_cnt = expected.successor_cnt + cnt;
@@ -215,6 +217,7 @@ static inline bool succeed(uint16_t task_id, uint16_t target)
     expected.state = PENDING;
 
     task_state desired;
+    memset(&desired, 0, sizeof desired);
     desired.state = PENDING;
     desired.task_id = expected.task_id;
     desired.successor_cnt = expected.successor_cnt + 1;
@@ -235,12 +238,18 @@ static inline bool succeed(uint16_t task_id, uint16_t target)
 
 static inline bool try_new_task(uint32_t task_id)
 {
+    /* task_state has padding bytes; the _Atomic CAS compares the whole object,
+     * so the padding must be deterministic (zero) to match the zero-initialized
+     * g_state_buf — otherwise the claim spuriously fails and the task (and its
+     * edges) is silently dropped. memset both operands to zero the padding. */
     task_state expected;
+    memset(&expected, 0, sizeof expected);
     expected.state = EMPTY;
     expected.successor_cnt = 0;
     expected.task_id = 0;
 
     task_state desired;
+    memset(&desired, 0, sizeof desired);
     desired.state = PENDING;
     desired.successor_cnt = 0;
     desired.task_id = (uint16_t)task_id;
@@ -255,6 +264,7 @@ static inline bool set_task_completed(uint32_t task_id, uint32_t state)
     int slotIdx = task_id & RING_MASK;
     task_state expected = atomic_load_explicit(&g_state_buf[slotIdx], memory_order_relaxed);
     task_state desired;
+    memset(&desired, 0, sizeof desired);
     desired.state = COMPLETED;
     desired.task_id = expected.task_id;
     desired.successor_cnt = 0;

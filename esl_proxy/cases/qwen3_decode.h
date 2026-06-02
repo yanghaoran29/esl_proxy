@@ -202,9 +202,9 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         add_scalar(g_task_id, 0);  // q0
         add_scalar(g_task_id, b0);
         add_duration(g_task_id, 13190);
+        // qk_norm normalizes q/k only — it reads q_proj and k_proj, not v_proj.
         succeed(g_task_id, q_proj_task_per_tile[tix]);
         succeed(g_task_id, k_proj_task_per_tile[tix]);
-        succeed(g_task_id, v_proj_task_per_tile[tix]);
         submit(g_task_id);
         qk_norm_task_per_tile[tix] = g_task_id;
     }
@@ -259,6 +259,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         add_scalar(g_task_id, b);
         add_duration(g_task_id, 9480);
         succeed(g_task_id, qk_norm_task_per_tile[tix]);
+        // rope also reads v_proj of its tile — direct edge (matches the tensormap cases).
+        succeed(g_task_id, v_proj_task_per_tile[tix]);
         submit(g_task_id);
         const uint16_t rope_kv_id = g_task_id;
 
@@ -336,6 +338,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         add_scalar(g_task_id, ctx_blocks);
         add_duration(g_task_id, 20820);
         succeed(g_task_id, sv_matmul_id);
+        // online_softmax also reads all_cur_mi/all_cur_li produced by softmax.
+        succeed(g_task_id, softmax_id);
         submit(g_task_id);
         online_softmax_task_by_b[b] = g_task_id;
     }

@@ -1,5 +1,6 @@
 #include "cutter.h"
 #include "log.h"
+#include "macro_group.h"
 #include "ring_buf.h"
 
 #include <stdint.h>
@@ -31,6 +32,7 @@ void cutter(queue_t *cq, queue_t *rq)
                 rq_buf[ready_cnt++] = succ_id;
             }
         }
+        macro_on_micro_exit(task_id, rq_buf, &ready_cnt);
     }
     while (!batch_enqueue(rq, rq_buf, ready_cnt)) {
         spin_wait();

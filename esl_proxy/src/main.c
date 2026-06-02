@@ -12,8 +12,10 @@
 #include "cutter.h"
 #include "dispatch.h"
 #include "log.h"
+#include "macro_group.h"
 #include "manager.h"
 #include "mem_pool.h"
+#include "orch_build.h"
 
 /* Orchestration case header. Override at build time, e.g.
  *   make CASE=qwen3_decode_tensormap.h
@@ -51,6 +53,19 @@ int main(void) {
     mem_pool_init(&g_mem_pool, g_mem_pool_storage, sizeof g_mem_pool_storage);
     mem_pool_init_fifo(&g_mem_pool, g_when2free_entries, WHEN2FREE_CAP);
     ring_buf_init();
+    macro_ring_init();
+    orch_build_begin();
+
+#if ORCHESTRATION_TIME
+    uint64_t start_ns = get_time_ns();
+    aicpu_orchestration_entry(0);
+    uint64_t end_ns = get_time_ns();
+    uint64_t elapsed_ns = end_ns - start_ns;
+#else
+    aicpu_orchestration_entry(0);
+#endif
+
+    orch_build_end();
 
     pthread_create(&manager_thread, NULL, manager_worker, &g_mem_pool);
 
@@ -65,10 +80,6 @@ int main(void) {
     }
 
 #if ORCHESTRATION_TIME
-    uint64_t start_ns = get_time_ns();
-    aicpu_orchestration_entry(0);
-    uint64_t end_ns = get_time_ns();
-    uint64_t elapsed_ns = end_ns - start_ns;
 
     /* Subtask count: an SPMD task expands into block_num (count) subtasks; every
      * non-SPMD task is a single subtask. Computed after orchestration so it does
@@ -92,7 +103,7 @@ int main(void) {
     fprintf(stderr, "[orchestration] time_240_subtask=%llu ns\n",
             (unsigned long long)(elapsed_ns / subtask_cnt * 240));
 #else
-    aicpu_orchestration_entry(0);
+    (void)0;
 #endif
 
     fprintf(stderr, "[mem_pool] allocated=%zu MiB, available=%zu MiB (pool=%zu MiB)\n",

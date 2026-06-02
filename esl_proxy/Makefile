@@ -4,7 +4,9 @@
 #   make          # compile (orchestration: cases/qwen3_decode.h, all-SPMD)
 #   make run      # compile and run
 #   make run WORKER_LOG=1   # run with worker logs
-#   make CASE=qwen3_decode_tensormap.h run   # run the tensormap auto-dep case
+#   make CASE=qwen3_decode_tensormap.h run          # tensormap auto-dep case
+#   make CASE=qwen3_decode_static.h run             # task-group tpl + static intra deps + macro inter
+#   make CASE=qwen3_decode_tensormap_static.h run   # static intra deps + tensormap inter
 #   make clean    # remove build artifacts
 #
 # CASE selects which cases/*.h orchestration header main.c compiles in.
@@ -17,7 +19,7 @@ CC       := cc
 CFLAGS   := -std=c11 -Wall -Wextra -pedantic -O3 -I include -I cases -DORCH_CASE='"$(CASE)"' -MMD -MP
 LDFLAGS  := -lpthread -latomic
 
-ifneq ($(filter qwen3_decode_tensormap.h,$(CASE)),)
+ifneq ($(filter qwen3_decode_tensormap.h qwen3_decode_tensormap_static.h,$(CASE)),)
 CFLAGS   += -DUSE_TENSORMAP
 endif
 
@@ -31,7 +33,8 @@ SRCS := \
 	src/cutter.c \
 	src/manager.c \
 	src/log.c \
-	src/shm.c
+	src/shm.c \
+	src/orch_build.c
 
 OBJS := $(SRCS:src/%.c=$(OBJ_DIR)/%.o)
 DEPS := $(OBJS:.o=.d)

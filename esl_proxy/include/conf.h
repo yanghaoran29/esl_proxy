@@ -24,4 +24,10 @@
 /* 1: enable aicpu_orchestration_entry execution time logging in nanoseconds */
 #define ORCHESTRATION_TIME 1
 
+/* 1: single-threaded build uses plain install + deferred submit (static). */
+#define ORCH_BUILD_PHASE 1
+
+/* 1: batch_submit/submit/roots queued until orch_build_flush(). */
+#define ORCH_USE_DEFER_SUBMIT 1
+
 #endif /* CONF_H */
