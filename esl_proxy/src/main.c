@@ -11,6 +11,7 @@
 #include "conf.h"
 #include "cutter.h"
 #include "dispatch.h"
+#include "executor.h"
 #include "log.h"
 #include "manager.h"
 #include "mem_pool.h"
@@ -19,9 +20,16 @@
  *   make CASE=qwen3_decode_tensormap.h
  * Defaults to the hand-wired all-SPMD case. */
 #ifndef ORCH_CASE
-#define ORCH_CASE "qwen3_decode.h"
+#define ORCH_CASE qwen3_decode.h
 #endif
-#include ORCH_CASE
+
+/* Macro to stringify the include directive properly */
+#define INCLUDE(x) #x
+#define INCLUDE_FILE(x) INCLUDE(x)
+#include INCLUDE_FILE(ORCH_CASE)
+
+/* Forward declaration for the orchestration entry point provided by the case */
+void aicpu_orchestration_entry(const uint64_t orch_args);
 
 #define MEM_POOL_BYTES (1024UL * 1024UL * 1024UL)
 #define WHEN2FREE_CAP 4096
@@ -40,6 +48,7 @@ static uint64_t get_time_ns(void) {
 int main(void) {
     pthread_t dispatch_threads[DISPATCH_THREAD_CNT];
     pthread_t cutter_threads[CUTTER_THREAD_CNT];
+    pthread_t executor_threads[EXECUTOR_THREAD_CNT];
     pthread_t manager_thread;
 
 #if WORKER_LOG
@@ -61,6 +70,11 @@ int main(void) {
 
     for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
         pthread_create(&cutter_threads[i], NULL, cutter_worker,
+                       (void *)(intptr_t)i);
+    }
+
+    for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
+        pthread_create(&executor_threads[i], NULL, executor_worker,
                        (void *)(intptr_t)i);
     }
 

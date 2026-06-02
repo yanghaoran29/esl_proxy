@@ -14,7 +14,8 @@ CASE     ?= qwen3_decode.h
 CC       := cc
 # -MMD -MP emits a .d alongside each .o listing the headers it included, so a
 # change to any include/*.h (e.g. tensormap.h) rebuilds the dependent objects.
-CFLAGS   := -std=c11 -Wall -Wextra -pedantic -O3 -I include -I cases -DORCH_CASE='"$(CASE)"' -MMD -MP
+CFLAGS   := -std=c11 -Wall -Wextra -pedantic -O3 -I include -I cases -DORCH_CASE=$(CASE) -MMD -MP
+
 # -latomic is needed on Linux but not on macOS (clang)
 UNAME_S  := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
@@ -29,6 +30,7 @@ TARGET  := $(BIN_DIR)/esl_proxy
 
 SRCS := \
 	src/main.c \
+	src/executor.c \
 	src/dispatch.c \
 	src/cutter.c \
 	src/manager.c \

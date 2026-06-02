@@ -44,6 +44,7 @@ void *cutter_worker(void *arg)
 {
     int tid = (int)(intptr_t)arg;
     WORKER_LOGF("cutter", "worker %d started", tid);
+    return NULL;
     while (1) {
         spin_wait();
     }

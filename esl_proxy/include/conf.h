@@ -10,13 +10,15 @@
 
 #define AIC_OSTD 2
 #define AIC_CNT 60
+#define EXE_TYPE_CNT 2
 
 #define CUTTER_BATCH_SIZE 64
 #define CUTTER_THREAD_CNT 2
 
 #define DISPATCH_THREAD_CNT 2
 
-#define EXE_TYPE_CNT 2
+#define EXECUTOR_THREAD_CNT 1
+
 
 /* 1: compile in worker logs; toggle at runtime via g_worker_log or WORKER_LOG env */
 #define WORKER_LOG 1

@@ -8,21 +8,34 @@
  * C11 standard with _Atomic for lock-free concurrency.
  */
 
-#ifndef DAG_EXECUTOR_H
-#define DAG_EXECUTOR_H
+#ifndef EXECUTOR_H
+#define EXECUTOR_H
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
+
 #include "conf.h"
 
 /*
  * Executor
- * Contains 2 slots for task caching with PING PONG selection
  */
 typedef struct executor {
+    uint8_t idx;
     uint16_t tasks[AIC_OSTD];
-    uint16_t index[AIC_OSTD];
+    uint16_t block_idx[AIC_OSTD];
+    uint16_t duration[AIC_OSTD];
     uint64_t base[AIC_OSTD];
 } executor_t;
 
-#endif /* DAG_EXECUTOR_H */
+/*
+ * executor_worker - Worker thread for executor timing
+ */
+void* executor_worker(void *arg);
+
+/*
+ * Global executor array - EXE_TYPE_CNT x AIC_CNT
+ */
+extern executor_t g_executors[EXE_TYPE_CNT][AIC_CNT];
+
+#endif /* EXECUTOR_H */

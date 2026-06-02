@@ -13,7 +13,7 @@
 
 extern atomic_int g_task_cnt;
 extern atomic_int g_completed_cnt;
-ctrl_t g_ctrl_t[THREAD_CNT];
+extern ctrl_t g_ctrl_t[THREAD_CNT];
 
 static inline void set_mix(int tid)
 {
@@ -130,6 +130,7 @@ void *dispatch_worker(void *arg)
     int tid = (int)(intptr_t)arg;
     dispatch_init(tid);
     WORKER_LOGF("dispatch", "worker %d started", tid);
+    return NULL;
     while (1) {
         dispatch(tid);
     }
