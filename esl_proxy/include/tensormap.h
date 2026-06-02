@@ -626,7 +626,7 @@ static inline void tm_tensor_insert(uint16_t tid, const Tensor *view) {
   tm_insert(&g_tm_map, &r, tm_make_id(0, tid));
 }
 
-static inline void tm_deps_init(void) {
+static inline void tm_map_init(void) {
   TmConfig cfg;
   cfg.num_buckets = TMD_NUM_BUCKETS;
   cfg.pool_size = TMD_POOL_SIZE;
@@ -636,6 +636,11 @@ static inline void tm_deps_init(void) {
     cfg.task_window[r] = 1;
   tm_init(&g_tm_map, g_tm_buf, &cfg);
 }
+
+#ifndef TM_ASYNC
+/* ---- synchronous: dependency resolution runs inline on the orch thread ---- */
+
+static inline void tm_deps_init(void) { tm_map_init(); }
 
 static inline void tm_in(uint16_t tid, Tensor t) {
   add_input(tid, t);
@@ -659,6 +664,225 @@ static inline void tm_submit(uint16_t tid) {
   submit(tid);
   tm_sync_tensormap(&g_tm_map, 0, (int32_t)g_min_uncomplete_task);
 }
+
+#else  /* TM_ASYNC: dependency resolution runs on a dedicated TensorMap thread */
+
+/* The orch thread fills the task descriptor (add_input/output) and records each
+ * task's USED I/O Tensors — packed into a flat arena, only the Tensors actually
+ * referenced (no fixed 16-slot array, no per-record copy of unused entries). A
+ * small POD descriptor (TmWork: where its Tensors start + how many) goes into
+ * g_tmq. Publication uses ONE global atomic counter g_tm_published (= number of
+ * records written): the producer release-stores it after each task; the consumer
+ * acquire-loads it to learn how many records are ready. No atomic lives inside
+ * TmWork. The consumer is the SOLE owner of g_tm_map (no lock) and processes
+ * records in submission order (FIFO).
+ *
+ * Assumes a bounded build (task count <= RING_SIZE, ids never wrap → slots are
+ * never reused within one build), which holds for every case here. */
+
+#include <pthread.h>
+
+#ifndef TM_ASYNC_SLOTS
+#define TM_ASYNC_SLOTS RING_SIZE /* one descriptor per task */
+#endif
+#ifndef TM_ASYNC_IO_CAP
+#define TM_ASYNC_IO_CAP (16u * TM_ASYNC_SLOTS) /* bound on total recorded I/O */
+#endif
+
+/* TM_ASYNC_RELAXED: drop the publish release/acquire ordering (MEASUREMENT ONLY —
+ * this is a data race; the consumer may read stale records). Default is the
+ * correct release/acquire publish barrier. */
+#ifdef TM_ASYNC_RELAXED
+#define TM_PUB_MO memory_order_relaxed
+#define TM_SUB_MO memory_order_relaxed
+#else
+#define TM_PUB_MO memory_order_release
+#define TM_SUB_MO memory_order_acquire
+#endif
+
+/* Publish the shared counter only every TM_PUB_BATCH records, so the hot
+ * g_tm_published line is written ~K× less often → ~K× fewer write-after-shared
+ * invalidations. tm_async_finish always flushes the final count. */
+#ifndef TM_PUB_BATCH
+#define TM_PUB_BATCH 16u
+#endif
+
+enum { TM_OP_IN = 0, TM_OP_OUT = 1, TM_OP_INOUT = 2 };
+
+typedef struct { /* one I/O region: Tensor geometry + op kind, kept together */
+  Tensor t;
+  uint8_t kind;
+} TmIO;
+
+typedef struct {                /* per-task descriptor */
+#if defined(TM_PUB_FLAG) || defined(TM_ASYNC_PAD)
+  _Alignas(64)                  /* pad to a full line: one record per cache line */
+#endif
+#ifdef TM_PUB_FLAG
+  _Atomic uint32_t seq;         /* per-record publish flag, on this record's own line */
+#endif
+  uint32_t io_off;              /* start index of this task's I/O in g_tm_io */
+  uint16_t tid;                 /* 0 = sentinel (no real task has id 0) */
+  uint8_t n;                    /* number of recorded I/O regions */
+} TmWork;
+
+/* Each record on its own cache line, and each task's I/O block aligned to a line,
+ * so "producer writing record/block w" and "consumer reading record/block r"
+ * never share a cache line (no false sharing). */
+static TmWork g_tmq[TM_ASYNC_SLOTS];
+static _Alignas(64) TmIO g_tm_io[TM_ASYNC_IO_CAP];
+
+/* the single cross-thread atomic: number of records published so far (own line) */
+static _Alignas(64) _Atomic uint32_t g_tm_published;
+
+static uint32_t g_tmq_w;   /* next record index (producer-private) */
+static uint32_t g_tm_io_w; /* next io index (producer-private) */
+static uint8_t g_tmq_n;    /* I/O accumulated for the in-progress record */
+static pthread_t g_tm_thread;
+static int g_tm_running;
+
+/* advance the io cursor so the NEXT task's block starts on a 64B boundary */
+static inline void tm_io_align_up(void) {
+  while (((uintptr_t)&g_tm_io[g_tm_io_w] & 63u) != 0u)
+    g_tm_io_w++;
+}
+
+/* process one record's I/O; returns 0 on the sentinel (tid==0). */
+static inline int tm_process_record(const TmWork *rec) {
+  if (rec->tid == 0)
+    return 0;
+  const uint32_t base = rec->io_off;
+  for (uint8_t i = 0; i < rec->n; i++) {
+    TmIO *io = &g_tm_io[base + i];
+    if (io->kind == TM_OP_IN) {
+      tm_tensor_lookup(rec->tid, &io->t, false);
+    } else if (io->kind == TM_OP_INOUT) {
+      tm_tensor_lookup(rec->tid, &io->t, true);
+      tm_tensor_insert(rec->tid, &io->t);
+    } else { /* TM_OP_OUT */
+      tm_tensor_insert(rec->tid, &io->t);
+    }
+  }
+  submit(rec->tid);
+  tm_sync_tensormap(&g_tm_map, 0, (int32_t)g_min_uncomplete_task);
+  return 1;
+}
+
+/* consumer: the dedicated TensorMap thread (sole owner of g_tm_map) */
+static void *tm_worker(void *arg) {
+  (void)arg;
+#ifdef TM_PUB_FLAG
+  /* per-record flag: each record's seq lives on its own cache line, so there is
+   * no single hot publish line bouncing between the two cores. */
+  for (uint32_t r = 0;; r++) {
+    while (atomic_load_explicit(&g_tmq[r].seq, TM_SUB_MO) != r + 1u)
+      __asm__ __volatile__("yield" ::: "memory");
+    const TmWork rec = g_tmq[r];
+    if (!tm_process_record(&rec))
+      return NULL;
+  }
+#else
+  /* single counter: read it once, drain the whole [r, pub) batch, repeat. */
+  uint32_t r = 0;
+  for (;;) {
+    uint32_t pub = atomic_load_explicit(&g_tm_published, TM_SUB_MO);
+    while (pub <= r) {
+      __asm__ __volatile__("yield" ::: "memory");
+      pub = atomic_load_explicit(&g_tm_published, TM_SUB_MO);
+    }
+    for (; r < pub; r++) {
+      const TmWork rec = g_tmq[r];
+      if (!tm_process_record(&rec))
+        return NULL;
+    }
+  }
+#endif
+}
+
+static inline void tm_deps_init(void) {
+  tm_map_init();
+  g_tmq_w = 0;
+  g_tm_io_w = 0;
+  g_tmq_n = 0;
+  atomic_store_explicit(&g_tm_published, 0u, memory_order_relaxed);
+#ifdef TM_ASYNC_NOTHREAD
+  /* MEASUREMENT ONLY: producer stages records but no consumer runs → the
+   * tensormap dependency work is skipped (no edges built). */
+  (void)tm_worker;
+  g_tm_running = 0;
+#else
+  g_tm_running = 1;
+  pthread_create(&g_tm_thread, NULL, tm_worker, NULL);
+#endif
+}
+
+/* producer side (orch thread): append this task's I/O Tensor to the packed arena */
+static inline void tm_async_push(Tensor t, uint8_t kind) {
+  uint32_t k = g_tm_io_w;
+  if (k < TM_ASYNC_IO_CAP) {
+    g_tm_io[k].t = t; /* copy only the Tensors that are actually used */
+    g_tm_io[k].kind = kind;
+    g_tm_io_w = k + 1;
+    g_tmq_n++;
+  }
+}
+
+static inline void tm_in(uint16_t tid, Tensor t) {
+  add_input(tid, t);
+  tm_async_push(t, TM_OP_IN);
+}
+
+static inline void tm_in_ro(uint16_t tid, Tensor t) { add_input(tid, t); }
+
+static inline void tm_out(uint16_t tid, Tensor t) {
+  add_output(tid, t);
+  tm_async_push(t, TM_OP_OUT);
+}
+
+static inline void tm_inout(uint16_t tid, Tensor t) {
+  add_inout(tid, t);
+  tm_async_push(t, TM_OP_INOUT);
+}
+
+static inline void tm_submit(uint16_t tid) {
+  uint32_t w = g_tmq_w;
+  TmWork *rec = &g_tmq[w];
+  rec->io_off = g_tm_io_w - g_tmq_n; /* this task's I/O: [io_off, io_off+n), line-aligned */
+  rec->tid = tid;
+  rec->n = g_tmq_n;
+  g_tmq_w = w + 1;
+  g_tmq_n = 0;
+#ifdef TM_ASYNC_PAD
+  tm_io_align_up(); /* next task's block starts on a fresh cache line */
+#endif
+#ifdef TM_PUB_FLAG
+  atomic_store_explicit(&rec->seq, w + 1u, TM_PUB_MO); /* publish this record (own line) */
+#else
+  if (g_tmq_w % TM_PUB_BATCH == 0u) /* publish a batch at a time (see TM_PUB_BATCH) */
+    atomic_store_explicit(&g_tm_published, g_tmq_w, TM_PUB_MO);
+#endif
+}
+
+/* orch calls this once after building the whole graph: publish sentinel + join */
+static inline void tm_async_finish(void) {
+  if (!g_tm_running)
+    return;
+  uint32_t w = g_tmq_w;
+  TmWork *rec = &g_tmq[w];
+  rec->io_off = g_tm_io_w;
+  rec->tid = 0;
+  rec->n = 0;
+  g_tmq_w = w + 1;
+#ifdef TM_PUB_FLAG
+  atomic_store_explicit(&rec->seq, w + 1u, TM_PUB_MO);
+#else
+  atomic_store_explicit(&g_tm_published, g_tmq_w, TM_PUB_MO);
+#endif
+  pthread_join(g_tm_thread, NULL);
+  g_tm_running = 0;
+}
+
+#endif /* TM_ASYNC */
 
 #endif /* TENSORMAP_WHOLE_BUFFER */
 

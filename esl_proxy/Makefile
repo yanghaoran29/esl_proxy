@@ -23,6 +23,12 @@ ifneq ($(filter qwen3_decode_tensormap.h qwen3_decode_tensormap_static.h,$(CASE)
 CFLAGS   += -DUSE_TENSORMAP
 endif
 
+# TM_ASYNC=1 runs tensormap dependency resolution on a dedicated thread
+# (orch thread publishes one record per task; see tensormap.h).
+ifeq ($(TM_ASYNC),1)
+CFLAGS   += -DTM_ASYNC
+endif
+
 OBJ_DIR := build/obj
 BIN_DIR := bin
 TARGET  := $(BIN_DIR)/esl_proxy

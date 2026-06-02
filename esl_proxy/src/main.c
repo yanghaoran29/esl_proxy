@@ -59,10 +59,16 @@ int main(void) {
 #if ORCHESTRATION_TIME
     uint64_t start_ns = get_time_ns();
     aicpu_orchestration_entry(0);
+#if defined(USE_TENSORMAP) && defined(TM_ASYNC)
+    tm_async_finish(); /* drain the TensorMap thread — counts toward build time */
+#endif
     uint64_t end_ns = get_time_ns();
     uint64_t elapsed_ns = end_ns - start_ns;
 #else
     aicpu_orchestration_entry(0);
+#if defined(USE_TENSORMAP) && defined(TM_ASYNC)
+    tm_async_finish();
+#endif
 #endif
 
     orch_build_end();

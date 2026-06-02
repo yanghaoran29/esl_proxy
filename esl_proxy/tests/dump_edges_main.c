@@ -87,6 +87,9 @@ int main(void)
 #endif
     orch_build_begin();
     aicpu_orchestration_entry(0);
+#if defined(USE_TENSORMAP) && defined(TM_ASYNC)
+    tm_async_finish(); /* drain the TensorMap thread before reading edges */
+#endif
     orch_build_end();
 
     dump_micro_edges();
