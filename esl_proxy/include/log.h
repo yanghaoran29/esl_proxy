@@ -49,12 +49,34 @@ extern int g_log_output_mode;
     } while (0)
 #else
 #define WORKER_LOGF(fmt, ...) ((void)0)
+#define MAIN_LOGF(fmt, ...) ((void)0)
 #endif
+
+// Main thread logging function
+#define _MAIN_LOG_WRITE_1(line, fmt) main_log_write(line, fmt)
+#define _MAIN_LOG_WRITE_2(line, fmt, arg1) main_log_write(line, fmt, arg1)
+#define _MAIN_LOG_WRITE_3(line, fmt, arg1, arg2) main_log_write(line, fmt, arg1, arg2)
+#define _MAIN_LOG_WRITE_4(line, fmt, arg1, arg2, arg3) main_log_write(line, fmt, arg1, arg2, arg3)
+#define _MAIN_LOG_WRITE_5(line, fmt, arg1, arg2, arg3, arg4) main_log_write(line, fmt, arg1, arg2, arg3, arg4)
+#define _MAIN_LOG_WRITE_GET(_1, _2, _3, _4, _5, NAME, ...) NAME
+
+#define MAIN_LOGF(fmt, ...)                                                  \
+    do {                                                                     \
+        if (g_worker_log) {                                                  \
+            _MAIN_LOG_WRITE_GET(_, ## __VA_ARGS__, _MAIN_LOG_WRITE_5,         \
+                               _MAIN_LOG_WRITE_4, _MAIN_LOG_WRITE_3,          \
+                               _MAIN_LOG_WRITE_2, _MAIN_LOG_WRITE_1)         \
+                (__LINE__, fmt, ## __VA_ARGS__);                              \
+        }                                                                    \
+    } while (0)
 
 void log_init(const char *base_filename);
 void log_close(void);
 
 // Internal function called by WORKER_LOGF macro
 void log_write(const char *file, int line, const char *fmt, ...);
+
+// Internal function called by MAIN_LOGF macro
+void main_log_write(int line, const char *fmt, ...);
 
 #endif /* LOG_H */

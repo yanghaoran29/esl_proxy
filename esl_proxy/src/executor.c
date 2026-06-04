@@ -34,8 +34,7 @@ void executor_init(void)
 
 void* executor_worker(void *arg)
 {
-    (void)arg;
-    WORKER_LOGF("worker started");
+    return NULL;
     int total_write_cnt = 0;
     while (atomic_load(&g_completed_cnt) < atomic_load(&g_task_id))
     {

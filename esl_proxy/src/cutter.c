@@ -11,8 +11,6 @@ extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
 void *cutter_worker(void *arg)
 {
     int tid = (int)(intptr_t)arg;
-    WORKER_LOGF("worker %d started", tid);
-    
     while (atomic_load(&g_completed_cnt) < atomic_load(&g_task_id)) {
         // 从所有 ctrl 的 completed_queue 取任务处理依赖
         for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {

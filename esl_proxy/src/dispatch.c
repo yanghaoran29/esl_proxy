@@ -56,9 +56,9 @@ static inline void get_completed(uint64_t* bitmap, uint16_t task_id[], int *comp
         // 从二进制最最右边开始向高位看，连续的 0 的个数。
         uint64_t idx = (uint64_t)__builtin_ctzll(*bitmap);
         task_id[(*complete_cnt)++] = task_id_map[idx];
+        WORKER_LOGF("completed task_id,%u,core,%d,bitmap,%d", task_id_map[idx], idx, *bitmap);
         cnt--;
         *bitmap &= (*bitmap - 1);
-        WORKER_LOGF("completed task_id,%u,core,%d", task_id_map[idx], idx);
     }
 }
 
@@ -142,7 +142,6 @@ void *dispatch_worker(void *arg)
 {
     int tid = (int)(intptr_t)arg;
     dispatch_init(tid);
-    WORKER_LOGF("worker %d started, g_completed_cnt %d, g_task_id %d", tid, g_completed_cnt, g_task_id);
 
     int loop_cnt = 0;
     int total_sent = 0;

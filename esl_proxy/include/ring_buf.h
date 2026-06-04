@@ -173,6 +173,7 @@ static inline bool batch_succeed(uint16_t cnt, uint16_t task_id[], uint16_t targ
             }
             ptr->successor[idx] = task_id[i];
             atomic_fetch_add_explicit(&g_predecessor_buf[task_id[i] & RING_MASK], 1, memory_order_relaxed);
+            WORKER_LOGF("succeed task_id,%u,predecessor,%d,target,%u", task_id[i], g_predecessor_buf[task_id[i] & RING_MASK], target);
             idx++;
         }
         return true;
@@ -193,6 +194,7 @@ static inline void batch_submit(uint16_t cnt, uint16_t task_id[])
             uint16_t type = g_basic_buf[task_id[i] & RING_MASK].type;
             int ctrl_id = task_id[i] & (uint16_t)0x1;
             queue_t* queue = &g_ctrl_t[ctrl_id].ready_queue[type];
+            WORKER_LOGF("enqueue task_id,%u, type,%u, ctrl_id,%d", task_id[i], type, ctrl_id);
             enqueue(queue, task_id[i]);
         }
     }
@@ -231,6 +233,7 @@ static inline bool succeed(uint16_t task_id, uint16_t target)
         }
         ptr->successor[idx] = task_id;
         atomic_fetch_add_explicit(&g_predecessor_buf[task_id & RING_MASK], 1, memory_order_relaxed);
+        WORKER_LOGF("succeed task_id,%u,predecessor,%d,target,%u", task_id, g_predecessor_buf[task_id & RING_MASK], target);
         return true;
     }
     return false;

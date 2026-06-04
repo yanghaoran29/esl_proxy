@@ -44,13 +44,6 @@ void init_ctrl_t(void)
             }
         }
 
-        // Update free_bitmap with msg_bitmap for EXE_TYPE
-        for (int i = 0; i < EXE_TYPE_CNT; i++) {
-            for (int j = 0; j < AIC_OSTD; j++) {
-                g_ctrl_t[tid].free_bitmap[i][j] |= g_ctrl_t[tid].msg_bitmap[i][j];
-            }
-        }
-
         // Initialize task_id_map
         for (int i = 0; i < EXE_TYPE_CNT; i++) {
             for (int j = 0; j < AIC_CNT; j++) {

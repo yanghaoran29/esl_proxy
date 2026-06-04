@@ -71,7 +71,8 @@ int main(void) {
     ring_buf_init();
     init_ctrl_t();
     executor_init();
-    fprintf(stderr, "[orchestration] init done\n");
+    MAIN_LOGF("[orchestration] init done");
+    atomic_thread_fence(memory_order_seq_cst);
     pthread_create(&manager_thread, NULL, manager_worker, &g_mem_pool);
 
     for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
@@ -88,7 +89,7 @@ int main(void) {
         pthread_create(&executor_threads[i], NULL, executor_worker,
                        (void *)(intptr_t)i);
     }
-    fprintf(stderr, "[orchestration] thread created\n");
+    MAIN_LOGF("[orchestration] thread created");
 #if ORCHESTRATION_TIME
     uint64_t start_ns = get_time_ns();
     aicpu_orchestration_entry(0);
@@ -104,14 +105,14 @@ int main(void) {
             subtask_cnt += 1;
     }
 
-    fprintf(stderr, "[orchestration] task_cnt=%d\n", g_task_id);
-    fprintf(stderr, "[orchestration] subtask_cnt=%llu\n",
+    MAIN_LOGF("[orchestration] task_cnt=%d", g_task_id);
+    MAIN_LOGF("[orchestration] subtask_cnt=%llu",
             (unsigned long long)subtask_cnt);
-    fprintf(stderr, "[orchestration] elapsed_time=%llu ns\n",
+    MAIN_LOGF("[orchestration] elapsed_time=%llu ns",
             (unsigned long long)elapsed_ns);
-    fprintf(stderr, "[orchestration] time_240_task=%llu ns\n",
+    MAIN_LOGF("[orchestration] time_240_task=%llu ns",
             (unsigned long long)(elapsed_ns / g_task_id * 240));
-    fprintf(stderr, "[orchestration] time_240_subtask=%llu ns\n",
+    MAIN_LOGF("[orchestration] time_240_subtask=%llu ns",
             (unsigned long long)(elapsed_ns / subtask_cnt * 240));
 #else
     aicpu_orchestration_entry(0);
@@ -120,18 +121,16 @@ int main(void) {
 
 #ifdef USE_TENSORMAP
 #ifndef TENSORMAP_WHOLE_BUFFER
-    fprintf(stderr,
-            "[tensormap] pool_high_water=%d valid_now=%d freed=%d (pool_size=%u)\n",
+    MAIN_LOGF("[tensormap] pool_high_water=%d valid_now=%d freed=%d (pool_size=%u)",
             tm_hdr(&g_tm_map)->next_entry_idx, tm_valid_count(&g_tm_map),
             tm_hdr(&g_tm_map)->free_num, tm_hdr(&g_tm_map)->cfg.pool_size);
 #else
-    fprintf(stderr,
-            "[tensormap] pool_high_water=%d valid_now=%d freed=%d (pool_size=%u)\n",
+    MAIN_LOGF("[tensormap] pool_high_water=%d valid_now=%d freed=%d (pool_size=%u)",
             tm_hdr(&g_tm_deps)->next_entry_idx, tm_valid_count(&g_tm_deps),
             tm_hdr(&g_tm_deps)->free_num, tm_hdr(&g_tm_deps)->cfg.pool_size);
 #endif
 #endif
-/*
+
     for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
         pthread_join(executor_threads[i], NULL);
     }
@@ -142,7 +141,7 @@ int main(void) {
         pthread_join(dispatch_threads[i], NULL);
     }
     pthread_join(manager_thread, NULL);
-*/
+
 #if WORKER_LOG
     log_close();
 #endif
