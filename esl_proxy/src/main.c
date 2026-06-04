@@ -71,9 +71,8 @@ int main(void) {
     ring_buf_init();
     init_ctrl_t();
     executor_init();
-    MAIN_LOGF("[orchestration] init done");
-    atomic_thread_fence(memory_order_seq_cst);
-    pthread_create(&manager_thread, NULL, manager_worker, &g_mem_pool);
+    // MAIN_LOGF("[orchestration] init done");
+    // pthread_create(&manager_thread, NULL, manager_worker, &g_mem_pool);
 
     for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
         pthread_create(&dispatch_threads[i], NULL, dispatch_worker,
@@ -85,11 +84,11 @@ int main(void) {
                        (void *)(intptr_t)i);
     }
 
-    for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
-        pthread_create(&executor_threads[i], NULL, executor_worker,
-                       (void *)(intptr_t)i);
-    }
-    MAIN_LOGF("[orchestration] thread created");
+    // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
+    //     pthread_create(&executor_threads[i], NULL, executor_worker,
+    //                    (void *)(intptr_t)i);
+    // }
+    // MAIN_LOGF("[orchestration] thread created");
 #if ORCHESTRATION_TIME
     uint64_t start_ns = get_time_ns();
     aicpu_orchestration_entry(0);
@@ -131,16 +130,16 @@ int main(void) {
 #endif
 #endif
 
-    for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
-        pthread_join(executor_threads[i], NULL);
-    }
+    // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
+    //     pthread_join(executor_threads[i], NULL);
+    // }
     for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
         pthread_join(cutter_threads[i], NULL);
     }
     for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
         pthread_join(dispatch_threads[i], NULL);
     }
-    pthread_join(manager_thread, NULL);
+    // pthread_join(manager_thread, NULL);
 
 #if WORKER_LOG
     log_close();

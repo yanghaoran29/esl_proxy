@@ -50,7 +50,8 @@ void *cutter_worker(void *arg)
             for (uint16_t j = 0; j < ready_cnt; j++) {
                 task_id = rq_buf[j];
                 task_type_t type = g_basic_buf[task_id & RING_MASK].type;
-                int target_ctrl = task_id & (uint16_t)0x1;
+                // int target_ctrl = task_id & (uint16_t)0x1;
+                int target_ctrl = 0;
                 queue_t *rq = &g_ctrl_t[target_ctrl].ready_queue[type];
                 WORKER_LOGF("tid,%d,task_id,%u,task_type,%d", tid, task_id, type);
                 enqueue(rq, task_id);

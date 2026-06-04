@@ -192,7 +192,8 @@ static inline void batch_submit(uint16_t cnt, uint16_t task_id[])
     for (int i = 0; i < cnt; i++) {
         if (tmp[i] == 1) {
             uint16_t type = g_basic_buf[task_id[i] & RING_MASK].type;
-            int ctrl_id = task_id[i] & (uint16_t)0x1;
+            // int ctrl_id = task_id[i] & (uint16_t)0x1;
+            int ctrl_id = 0;
             queue_t* queue = &g_ctrl_t[ctrl_id].ready_queue[type];
             WORKER_LOGF("enqueue task_id,%u, type,%u, ctrl_id,%d", task_id[i], type, ctrl_id);
             enqueue(queue, task_id[i]);
@@ -205,7 +206,8 @@ static inline void submit(uint16_t task_id)
     uint16_t tmp = (uint16_t)atomic_fetch_sub_explicit(&g_predecessor_buf[task_id & RING_MASK], 1, memory_order_relaxed);
     if (tmp == 1) {
         uint16_t type = g_basic_buf[task_id & RING_MASK].type;
-        int ctrl_id = task_id & (uint16_t)0x1;
+        // int ctrl_id = task_id & (uint16_t)0x1;
+        int ctrl_id = 0;
         queue_t* queue = &g_ctrl_t[ctrl_id].ready_queue[type];
         WORKER_LOGF("enqueue task_id,%u, type,%u, ctrl_id,%d", task_id, type, ctrl_id);
         enqueue(queue, task_id);
@@ -243,7 +245,7 @@ static inline bool try_new_task(uint32_t task_id)
 {
     // Initialize predecessor count to 0 before marking task as PENDING
     // This ensures tasks with no predecessors can be submitted immediately
-    atomic_store_explicit(&g_predecessor_buf[task_id & RING_MASK], 0, memory_order_relaxed);
+    atomic_store_explicit(&g_predecessor_buf[task_id & RING_MASK], 1, memory_order_relaxed);
     
     task_state expected;
     expected.state = EMPTY;

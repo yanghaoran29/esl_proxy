@@ -116,6 +116,8 @@ static inline int send_task(ctrl_t *ctrl, int type)
         }
         
         ctrl->free_bitmap[type][slot] &= ~mask;
+        // Fake Return
+        ctrl->msg_bitmap[type][slot] |= mask;
         WORKER_LOGF("task_id,%u,core,%d,slot,%d,type,%d", task_id, core, slot, type);
         sent++;
         free_bitmap &= ~mask;

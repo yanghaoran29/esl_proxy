@@ -137,8 +137,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         add_scalar(g_task_id, cur_valid);
         add_duration(g_task_id, 23950);
         const uint16_t rmsnorm_id = g_task_id;
-        queue_t* queue = &g_ctrl_t[g_task_id & (uint16_t)0x1].ready_queue[TASK_TYPE_VECTOR];
-        enqueue(queue, rmsnorm_id);
+        submit(g_task_id);
 
         // Spmd q_proj (AIC, block_num 20): HIDDEN / Q_OUT_CHUNK = 5120/256 = 20
         g_task_id++;

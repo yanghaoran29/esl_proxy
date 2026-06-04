@@ -112,7 +112,7 @@ void log_write(const char *file, int line, const char *fmt, ...)
     
     // Output to file (mode 0 or 2)
     if (g_log_output_mode != 1 && log_file) {
-        fprintf(log_file, "%s:%d,", filename, line);
+        fprintf(log_file, "%s,%d,", filename, line);
         vfprintf(log_file, fmt, args);
         fprintf(log_file, "\n");
     }
