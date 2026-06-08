@@ -78,12 +78,6 @@ int main(void) {
                        (void *)(intptr_t)i);
     }
 
-    // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
-    //     pthread_create(&executor_threads[i], NULL, executor_worker,
-    //                    (void *)(intptr_t)i);
-    // }
-    // MAIN_LOGF("[orchestration] thread created");
-
 #if ORCHESTRATION_TIME
     uint64_t start_ns = get_time_ns();
     aicpu_orchestration_entry(0);
@@ -138,15 +132,9 @@ int main(void) {
 #endif
 
 #if defined(ORCH_TM_DEPS) && defined(USE_TENSORMAP)
-#ifndef TENSORMAP_WHOLE_BUFFER
     MAIN_LOGF("[tensormap] pool_high_water=%d valid_now=%d freed=%d (pool_size=%u)",
             tm_hdr(&g_tm_map)->next_entry_idx, tm_valid_count(&g_tm_map),
             tm_hdr(&g_tm_map)->free_num, tm_hdr(&g_tm_map)->cfg.pool_size);
-#else
-    MAIN_LOGF("[tensormap] pool_high_water=%d valid_now=%d freed=%d (pool_size=%u)",
-            tm_hdr(&g_tm_deps)->next_entry_idx, tm_valid_count(&g_tm_deps),
-            tm_hdr(&g_tm_deps)->free_num, tm_hdr(&g_tm_deps)->cfg.pool_size);
-#endif
 #endif
 
     // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
