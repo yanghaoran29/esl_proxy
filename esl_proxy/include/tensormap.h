@@ -559,6 +559,32 @@ static inline void tm_insert_tensor(TmTensorMap *self, const Tensor *t,
   tm_link_entry(self, idx, t->base, tm_make_id(0, tid));
 }
 
+/* Immediate lookup/insert for static build-phase orchestration (orch_build). */
+typedef struct {
+  uint16_t consumer;
+  bool is_inout;
+} TmGeoMatchCtx;
+
+static inline bool tm_geo_on_match(TmEntry *e, TmOverlap st, void *ctx) {
+  TmGeoMatchCtx *c = (TmGeoMatchCtx *)ctx;
+  const uint16_t producer = (uint16_t)tm_local_of(e->producer_id);
+  if (producer != c->consumer)
+    succeed(c->consumer, producer);
+  if (c->is_inout && st == TM_OVERLAP_COVERED)
+    tm_remove(&g_tm_map, e);
+  return true;
+}
+
+static inline void tm_tensor_lookup(uint16_t tid, const Tensor *view,
+                                    bool is_inout) {
+  TmGeoMatchCtx ctx = {.consumer = tid, .is_inout = is_inout};
+  tm_lookup_tensor(&g_tm_map, view, tm_geo_on_match, &ctx);
+}
+
+static inline void tm_tensor_insert(uint16_t tid, const Tensor *view) {
+  tm_insert_tensor(&g_tm_map, view, tid);
+}
+
 static inline void tm_pending_push(const Tensor *t, uint8_t kind) {
   if (g_tm_pend_n < (int)TM_PENDING_MAX_IO) {
     g_tm_pend[g_tm_pend_n].t = t;

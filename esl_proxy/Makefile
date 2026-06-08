@@ -10,6 +10,8 @@
 #   make CASE=qwen3_dynamic_tensormap.h run
 #   make CASE=paged_attention_unroll.h run
 #   make CASE=paged_attention_unroll_manual_scope.h run
+#   make CASE=qwen3_decode_static.h run
+#   make CASE=qwen3_decode_tensormap_static.h run
 #
 # Qwen3 SPMD tier (0=non-spmd .. 4=all-spmd; default 2 = spmd-4 for qwen3 cases):
 #   make CASE=qwen3_dynamic_tensormap.h QWEN3_SPMD_TIER=0 run
@@ -28,7 +30,11 @@ ALL_CASES := \
 	qwen3_dynamic_manual_scope.h \
 	qwen3_dynamic_tensormap.h \
 	paged_attention_unroll.h \
-	paged_attention_unroll_manual_scope.h
+	paged_attention_unroll_manual_scope.h \
+	qwen3_decode_static.h \
+	qwen3_decode_tensormap_static.h
+
+STATIC_CASES := qwen3_decode_static.h qwen3_decode_tensormap_static.h
 
 CASE ?= qwen3_dynamic_manual_scope.h
 
@@ -36,7 +42,11 @@ ifneq ($(filter $(CASE),$(ALL_CASES)),$(CASE))
 $(error Unknown CASE='$(CASE)'. Valid: $(ALL_CASES))
 endif
 
-QWEN3_CASES := qwen3_dynamic_manual_scope.h qwen3_dynamic_tensormap.h
+QWEN3_CASES := \
+	qwen3_dynamic_manual_scope.h \
+	qwen3_dynamic_tensormap.h \
+	qwen3_decode_static.h \
+	qwen3_decode_tensormap_static.h
 
 CC       := cc
 # -MMD -MP emits a .d alongside each .o listing the headers it included, so a
@@ -74,6 +84,10 @@ ifneq ($(MAIN_LOG),)
 CFLAGS   += -DMAIN_LOG=$(MAIN_LOG)
 endif
 
+ifneq ($(filter $(CASE),$(STATIC_CASES)),)
+CFLAGS   += -DORCH_STATIC_CASE=1 -DORCH_BUILD_PHASE=1 -DORCH_USE_DEFER_SUBMIT=1
+endif
+
 OBJ_DIR := build/obj
 BIN_DIR := bin
 TARGET  := $(BIN_DIR)/esl_proxy
@@ -85,7 +99,8 @@ SRCS := \
 	src/cutter.c \
 	src/manager.c \
 	src/log.c \
-	src/shm.c
+	src/shm.c \
+	src/orch_build.c
 
 ifeq ($(DEP_DUMP),1)
 DEP_DUMP_OBJ := $(OBJ_DIR)/dep_dump.o

@@ -14,8 +14,10 @@
 #include "dispatch.h"
 #include "executor.h"
 #include "log.h"
+#include "macro_group.h"
 #include "manager.h"
 #include "mem_pool.h"
+#include "orch_build.h"
 
 /* Orchestration case header. Override at build time, e.g.
  *   make CASE=qwen3_dynamic_tensormap.h
@@ -49,13 +51,13 @@ int main(void) {
     const char *log_env = getenv("WORKER_LOG");
     if (log_env != NULL && log_env[0] == '1') {
         g_worker_log = 1;
-
+        
         // Check LOG_OUTPUT_MODE env var (0=file, 1=stdout, 2=both)
         const char *output_env = getenv("LOG_OUTPUT_MODE");
         if (output_env != NULL) {
             g_log_output_mode = atoi(output_env);
         }
-
+        
         log_init("pto.");
     }
 #endif
@@ -63,12 +65,20 @@ int main(void) {
     mem_pool_init(&g_mem_pool, g_mem_pool_storage, sizeof g_mem_pool_storage);
     mem_pool_init_fifo(&g_mem_pool, g_when2free_entries, WHEN2FREE_CAP);
     ring_buf_init();
+    macro_ring_init();
+    orch_build_begin();
     init_ctrl_t();
     executor_init();
 
     /* Orchestration-only benchmark: scheduler threads not started (see README). */
     (void)dispatch_threads;
     (void)cutter_threads;
+
+    // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
+    //     pthread_create(&executor_threads[i], NULL, executor_worker,
+    //                    (void *)(intptr_t)i);
+    // }
+    // MAIN_LOGF("[orchestration] thread created");
 
 #if ORCHESTRATION_TIME
     uint64_t start_ns = get_time_ns();
@@ -104,6 +114,8 @@ int main(void) {
     aicpu_orchestration_entry(0);
 #endif
 
+    orch_build_end();
+
     dep_dump_maybe();
 #if NO_DEPS
     MAIN_LOGF("[deps] NO_DEPS=1 edges=0");
@@ -132,7 +144,7 @@ int main(void) {
 #if ORCHESTRATION_TIME
     {
         uint64_t total_end_ns = get_time_ns();
-        MAIN_LOGF("[total] elapsed_time=%llu ns",
+        MAIN_LOGF("[total] elapsed_time=%llu ns (orch-only)",
                   (unsigned long long)(total_end_ns - total_start_ns));
     }
 #endif

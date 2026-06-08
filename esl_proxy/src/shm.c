@@ -7,11 +7,17 @@
 #include "mem_pool.h"
 #include "ring_buf.h"
 #include "executor.h"
+#include "macro_group.h"
 #include "conf.h"
 #include "dispatch.h"
 
+#if ORCH_STATIC_CASE
+atomic_int g_task_id = 0;
+uint16_t g_min_uncomplete_task = 0;
+#else
 atomic_int g_task_id = 1;
 uint16_t g_min_uncomplete_task = 2;
+#endif
 atomic_int g_completed_cnt = 0;
 atomic_bool g_is_done = false;
 
@@ -60,3 +66,10 @@ void init_ctrl_t(void)
         memset(&g_ctrl_t[tid].completed_queue, 0, sizeof(queue_t));
     }
 }
+
+_Atomic uint16_t g_macro_predecessor_buf[MACRO_RING_SIZE];
+task_state g_macro_state_buf[MACRO_RING_SIZE];
+struct succ_list g_macro_successor_buf[MACRO_RING_SIZE];
+struct succ_list g_macro_successor_exp_buf[MACRO_HALF_RING_SIZE];
+uint16_t g_macro_entry_micro[MACRO_RING_SIZE];
+uint16_t g_micro_exit_to_macro[RING_SIZE];
