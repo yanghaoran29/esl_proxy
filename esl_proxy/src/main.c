@@ -49,13 +49,13 @@ int main(void) {
     const char *log_env = getenv("WORKER_LOG");
     if (log_env != NULL && log_env[0] == '1') {
         g_worker_log = 1;
-        
+
         // Check LOG_OUTPUT_MODE env var (0=file, 1=stdout, 2=both)
         const char *output_env = getenv("LOG_OUTPUT_MODE");
         if (output_env != NULL) {
             g_log_output_mode = atoi(output_env);
         }
-        
+
         log_init("pto.");
     }
 #endif
@@ -65,24 +65,10 @@ int main(void) {
     ring_buf_init();
     init_ctrl_t();
     executor_init();
-    // MAIN_LOGF("[orchestration] init done");
-    // pthread_create(&manager_thread, NULL, manager_worker, &g_mem_pool);
 
-    for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
-        pthread_create(&dispatch_threads[i], NULL, dispatch_worker,
-                       (void *)(intptr_t)i);
-    }
-
-    for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
-        pthread_create(&cutter_threads[i], NULL, cutter_worker,
-                       (void *)(intptr_t)i);
-    }
-
-    // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
-    //     pthread_create(&executor_threads[i], NULL, executor_worker,
-    //                    (void *)(intptr_t)i);
-    // }
-    // MAIN_LOGF("[orchestration] thread created");
+    /* Orchestration-only benchmark: scheduler threads not started (see README). */
+    (void)dispatch_threads;
+    (void)cutter_threads;
 
 #if ORCHESTRATION_TIME
     uint64_t start_ns = get_time_ns();
@@ -138,27 +124,18 @@ int main(void) {
 #endif
 
 #if defined(ORCH_TM_DEPS) && defined(USE_TENSORMAP)
-#ifndef TENSORMAP_WHOLE_BUFFER
     MAIN_LOGF("[tensormap] pool_high_water=%d valid_now=%d freed=%d (pool_size=%u)",
             tm_hdr(&g_tm_map)->next_entry_idx, tm_valid_count(&g_tm_map),
             tm_hdr(&g_tm_map)->free_num, tm_hdr(&g_tm_map)->cfg.pool_size);
-#else
-    MAIN_LOGF("[tensormap] pool_high_water=%d valid_now=%d freed=%d (pool_size=%u)",
-            tm_hdr(&g_tm_deps)->next_entry_idx, tm_valid_count(&g_tm_deps),
-            tm_hdr(&g_tm_deps)->free_num, tm_hdr(&g_tm_deps)->cfg.pool_size);
-#endif
 #endif
 
-    // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
-    //     pthread_join(executor_threads[i], NULL);
-    // }
-    for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
-        pthread_join(cutter_threads[i], NULL);
+#if ORCHESTRATION_TIME
+    {
+        uint64_t total_end_ns = get_time_ns();
+        MAIN_LOGF("[total] elapsed_time=%llu ns",
+                  (unsigned long long)(total_end_ns - total_start_ns));
     }
-    for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
-        pthread_join(dispatch_threads[i], NULL);
-    }
-    // pthread_join(manager_thread, NULL);
+#endif
 
 #if WORKER_LOG
     log_close();

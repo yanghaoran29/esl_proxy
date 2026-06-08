@@ -432,127 +432,10 @@ static inline int32_t tm_valid_count(const TmTensorMap *self) {
  * High-level tensormap dependency layer: tm_deps_init / tm_in / tm_out /
  * tm_inout / tm_submit.
  *
- * Two modes (pick one via compile flags):
- *   - Default (struct Tensor): sub-range geometry via tensor_view(dim);
- * immediate lookup on tm_in / insert on tm_out.  Requires USE_TENSORMAP.
- *   - TENSORMAP_WHOLE_BUFFER: whole-buffer address granularity (uint64_t
- *     Tensor); deferred batch lookup/insert at tm_submit.  Merged from the
- *     former cases/custom_tensormap.h.
- *
- * Include ring_buf.h before tensormap.h in case files.
+ * struct Tensor sub-range geometry via tensor_view(); lookup on tm_in, insert
+ * on tm_out.  Requires USE_TENSORMAP and ring_buf.h before tensormap.h.
  * ========================================================================== */
 #ifdef DAG_RING_BUF_H
-
-#ifdef TENSORMAP_WHOLE_BUFFER
-
-#include <assert.h>
-
-#ifndef TM_DEPS_POOL_SIZE
-#define TM_DEPS_POOL_SIZE 8192u
-#endif
-#define TM_DEPS_NUM_BUCKETS 4096u
-#define TM_DEPS_TASK_WINDOW 4096u
-#define TM_DEPS_MAX_IO 64
-#define TM_DEPS_MAX_PRED 1024
-
-static TmTensorMap g_tm_deps;
-static _Alignas(64) uint8_t g_tm_deps_buf[2u * 1024u * 1024u];
-static uint64_t g_tm_in[TM_DEPS_MAX_IO];
-static uint64_t g_tm_out[TM_DEPS_MAX_IO];
-static int g_tm_in_n;
-static int g_tm_out_n;
-
-static inline TmRegion tm_deps_region(uint64_t addr) {
-  TmRegion r;
-  memset(&r, 0, sizeof r);
-  r.base_addr = addr;
-  r.elem_size = 1;
-  r.shapes[0] = 1;
-  r.shapes[1] = 1;
-  return r;
-}
-
-static inline void tm_deps_init(void) {
-  TmConfig cfg;
-  memset(&cfg, 0, sizeof cfg);
-  cfg.num_buckets = TM_DEPS_NUM_BUCKETS;
-  cfg.pool_size = TM_DEPS_POOL_SIZE;
-  cfg.num_rings = 1;
-  cfg.task_window[0] = TM_DEPS_TASK_WINDOW;
-  assert(tm_bytes_required(&cfg) <= sizeof(g_tm_deps_buf));
-  tm_init(&g_tm_deps, g_tm_deps_buf, &cfg);
-  g_tm_in_n = 0;
-  g_tm_out_n = 0;
-}
-
-static inline void tm_in(uint16_t tid, Tensor t) {
-  add_input(tid, t);
-  if (g_tm_in_n < TM_DEPS_MAX_IO)
-    g_tm_in[g_tm_in_n++] = (uint64_t)t;
-}
-
-static inline void tm_out(uint16_t tid, Tensor t) {
-  add_output(tid, t);
-  if (g_tm_out_n < TM_DEPS_MAX_IO)
-    g_tm_out[g_tm_out_n++] = (uint64_t)t;
-}
-
-static inline void tm_inout(uint16_t tid, Tensor t) {
-  add_inout(tid, t);
-  if (g_tm_in_n < TM_DEPS_MAX_IO)
-    g_tm_in[g_tm_in_n++] = (uint64_t)t;
-  if (g_tm_out_n < TM_DEPS_MAX_IO)
-    g_tm_out[g_tm_out_n++] = (uint64_t)t;
-}
-
-typedef struct {
-  uint16_t *preds;
-  int *n;
-  uint16_t self;
-} TmDepsCollect;
-
-static inline bool tm_deps_collect(TmEntry *e, TmOverlap st, void *ctx) {
-  TmDepsCollect *c = (TmDepsCollect *)ctx;
-  uint16_t p = (uint16_t)tm_local_of(e->producer_id);
-  (void)st;
-  if (p == c->self)
-    return true;
-  for (int i = 0; i < *c->n; i++) {
-    if (c->preds[i] == p)
-      return true;
-  }
-  if (*c->n < TM_DEPS_MAX_PRED)
-    c->preds[(*c->n)++] = p;
-  return true;
-}
-
-static inline void tm_submit(uint16_t tid) {
-  uint16_t preds[TM_DEPS_MAX_PRED];
-  int pn = 0;
-  TmDepsCollect ctx;
-  int i;
-
-  tm_sync(&g_tm_deps, 0, (int32_t)g_min_uncomplete_task);
-
-  ctx.preds = preds;
-  ctx.n = &pn;
-  ctx.self = tid;
-  for (i = 0; i < g_tm_in_n; i++) {
-    TmRegion r = tm_deps_region(g_tm_in[i]);
-    tm_lookup(&g_tm_deps, &r, tm_deps_collect, &ctx);
-  }
-  for (i = 0; i < pn; i++)
-    succeed(tid, preds[i]);
-  for (i = 0; i < g_tm_out_n; i++) {
-    TmRegion r = tm_deps_region(g_tm_out[i]);
-    tm_insert(&g_tm_deps, &r, tm_make_id(0, tid));
-  }
-  submit(tid);
-  g_tm_in_n = 0;
-  g_tm_out_n = 0;
-}
-
-#else /* struct Tensor — geometric dependency layer */
 
 #ifndef TMD_POOL_SIZE
 #define TMD_POOL_SIZE 8192u /* >= peak live producer regions */
@@ -577,7 +460,8 @@ static _Alignas(TM_REGION_ALIGN) uint8_t g_tm_buf[TMD_BUF_BYTES];
 #define TM_PENDING_MAX_IO 16u
 #endif
 #ifndef TM_PENDING_MAX_PRED
-#define TM_PENDING_MAX_PRED 32u
+/* tier=0 out_proj fans in 64 online_softmax preds per tile (16 rows × 4 os). */
+#define TM_PENDING_MAX_PRED 64u
 #endif
 
 enum {
@@ -749,8 +633,6 @@ static inline void tm_submit(uint16_t tid) {
   tm_sync_tensormap(&g_tm_map, 0, (int32_t)g_min_uncomplete_task);
 #endif
 }
-
-#endif /* TENSORMAP_WHOLE_BUFFER */
 
 #endif /* DAG_RING_BUF_H */
 
