@@ -113,28 +113,19 @@ int main(void) {
 #endif
 
     dep_dump_maybe();
-#if NO_DEPS
-    MAIN_LOGF("[deps] NO_DEPS=1 edges=0");
-#endif
 #if DEP_DUMP
     MAIN_LOGF("[deps] edge_cnt=%u", dep_dump_count_edges());
 #endif
 
-#if NO_DEPS
+#if ORCH_SKIP_SCHED
 #if ORCHESTRATION_TIME
     {
         uint64_t total_end_ns = get_time_ns();
-        MAIN_LOGF("[total] elapsed_time=%llu ns (orch-only)",
+        MAIN_LOGF("[total] elapsed_time=%llu ns (orch+deps, sched skipped)",
                   (unsigned long long)(total_end_ns - total_start_ns));
     }
 #endif
     return 0;
-#endif
-
-#if defined(ORCH_TM_DEPS) && defined(USE_TENSORMAP)
-    MAIN_LOGF("[tensormap] pool_high_water=%d valid_now=%d freed=%d (pool_size=%u)",
-            tm_hdr(&g_tm_map)->next_entry_idx, tm_valid_count(&g_tm_map),
-            tm_hdr(&g_tm_map)->free_num, tm_hdr(&g_tm_map)->cfg.pool_size);
 #endif
 
     // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {

@@ -80,7 +80,6 @@ make test-dep-dump                            # 依赖边 dump 单元测试
 
 # 运行时选项
 make CASE=qwen3_dynamic_tensormap.h DEP_DUMP=1 run   # 编排后导出依赖边
-make CASE=qwen3_dynamic_tensormap.h NO_DEPS=1 run    # 无依赖编排基准
 make CASE=paged_attention_unroll.h WORKER_LOG=1 run  # 开启 worker 日志
 make CASE=qwen3_dynamic_tensormap.h MAIN_LOG=0 run # 关闭主线程编排统计输出
 ```

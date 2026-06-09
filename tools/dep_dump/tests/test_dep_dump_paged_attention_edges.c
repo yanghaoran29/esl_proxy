@@ -116,7 +116,8 @@ static inline Tensor alloc_tensors(uint32_t shape[], int dim, int bytes)
     if (sz < 64u)
         sz = 64u;
     g_alloc_bump += (sz + 63u) & ~(uint64_t)63u;
-    return tensor_make_2d(a, shape[0], shape[1], (dtype_t)bytes);
+    const uint32_t shapes[2] = {shape[0], shape[1]};
+    return tensor_from_base_layout(a, shapes, 2, (dtype_t)bytes);
 }
 
 static inline void spin_wait(void) {}

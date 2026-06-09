@@ -36,9 +36,10 @@
 #define DEP_DUMP 0
 #endif
 
-/* 1: skip tensormap lookup/insert and succeed(); all tasks submit with no edges */
-#ifndef NO_DEPS
-#define NO_DEPS 0
+/* 1: exit after orchestration stats; skip pthread_join on dispatch/cutter
+ * (temporary workaround: sched simulation may not reach g_completed_cnt==g_task_id) */
+#ifndef ORCH_SKIP_SCHED
+#define ORCH_SKIP_SCHED 1
 #endif
 
 #endif /* CONF_H */

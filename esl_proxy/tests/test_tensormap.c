@@ -25,9 +25,9 @@ static TmConfig make_config(void) {
   return cfg;
 }
 
-static TmRegion region_1d(uint64_t base, uint64_t off, uint64_t len,
+static TmRegion_onlytest region_1d(uint64_t base, uint64_t off, uint64_t len,
                           uint64_t storage) {
-  TmRegion r = {0};
+  TmRegion_onlytest r = {0};
   r.base_addr = base;
   r.storage_numel = storage;
   r.elem_size = 4;
@@ -38,8 +38,8 @@ static TmRegion region_1d(uint64_t base, uint64_t off, uint64_t len,
   return r;
 }
 
-static TmRegion whole_buffer_region(uint64_t base) {
-  TmRegion r = {0};
+static TmRegion_onlytest whole_buffer_region(uint64_t base) {
+  TmRegion_onlytest r = {0};
   r.base_addr = base;
   r.storage_numel = 1;
   r.elem_size = 1;
@@ -52,10 +52,10 @@ static TmRegion whole_buffer_region(uint64_t base) {
   return r;
 }
 
-static TmRegion region_2d(uint64_t base, uint32_t stor_d0, uint32_t stor_d1,
+static TmRegion_onlytest region_2d(uint64_t base, uint32_t stor_d0, uint32_t stor_d1,
                           uint32_t row0, uint32_t nrows, uint32_t d1,
                           uint32_t elem_size) {
-  TmRegion r;
+  TmRegion_onlytest r;
   memset(&r, 0, sizeof r);
   r.base_addr = base;
   r.storage_numel = (uint64_t)stor_d0 * stor_d1;
@@ -67,6 +67,37 @@ static TmRegion region_2d(uint64_t base, uint32_t stor_d0, uint32_t stor_d1,
   r.strides[0] = d1;
   r.strides[1] = 1;
   return r;
+}
+
+static Tensor tensor_from_region(const TmRegion_onlytest *r) {
+  Tensor t;
+
+  t.buffer_addr = r->base_addr;
+  t.buffer_size = r->storage_numel * (uint64_t)r->elem_size;
+  t.owner_task_id = 0;
+  t.start_offset = r->start_offset;
+  t.version = r->version;
+  t.ndims = r->ndims;
+  t.dtype = (uint8_t)r->elem_size;
+  t.manual_dep = 0;
+  t.is_contiguous = 1;
+  t._pad_cl1 = 0;
+  t.extent_elem_cache = 0;
+  for (uint32_t i = 0; i < ESL_PROXY_TENSOR_MAX_DIMS; i++) {
+    t.shapes[i] = 0;
+    t.strides[i] = 0;
+  }
+  for (uint32_t i = 0; i < 36; i++) {
+    t._pad_cl2[i] = 0;
+  }
+  uint64_t extent = 1;
+  for (uint32_t i = 0; i < r->ndims; i++) {
+    t.shapes[i] = r->shapes[i];
+    t.strides[i] = r->strides[i];
+    extent *= r->shapes[i];
+  }
+  t.extent_elem_cache = extent;
+  return t;
 }
 
 typedef struct {
@@ -83,9 +114,10 @@ static bool collect_cb(TmEntry *e, TmOverlap st, void *ctx) {
   return true;
 }
 
-static HitSink collect(TmTensorMap *map, TmRegion probe) {
+static HitSink collect(TmTensorMap *map, TmRegion_onlytest probe) {
   HitSink s = {0};
-  tm_lookup(map, &probe, collect_cb, &s);
+  Tensor t = tensor_from_region(&probe);
+  tm_lookup_onlytest(map, &t, collect_cb, &s);
   return s;
 }
 
@@ -111,29 +143,29 @@ static void test_overlap_semantics(void) {
   TmTensorMap map;
   tm_init(&map, g_buf, &cfg);
 
-  TmRegion a = region_1d(0x1000, 0, 128, 128);
-  tm_insert(&map, &a, tm_make_id(0, 1));
+  TmRegion_onlytest a = region_1d(0x1000, 0, 128, 128);
+  tm_insert_onlytest(&map, &a, tm_make_id(0, 1));
   HitSink s = collect(&map, region_1d(0x1000, 0, 128, 128));
   assert(s.count == 1);
   assert(tm_local_of(s.producers[0]) == 1);
   assert(s.statuses[0] == TM_OVERLAP_COVERED);
 
   tm_init(&map, g_buf, &cfg);
-  TmRegion b = region_1d(0x2000, 0, 128, 256);
-  tm_insert(&map, &b, tm_make_id(0, 2));
+  TmRegion_onlytest b = region_1d(0x2000, 0, 128, 256);
+  tm_insert_onlytest(&map, &b, tm_make_id(0, 2));
   s = collect(&map, region_1d(0x2000, 128, 128, 256));
   assert(s.count == 0);
 
   tm_init(&map, g_buf, &cfg);
-  TmRegion c = region_1d(0x3000, 0, 128, 256);
-  tm_insert(&map, &c, tm_make_id(0, 3));
+  TmRegion_onlytest c = region_1d(0x3000, 0, 128, 256);
+  tm_insert_onlytest(&map, &c, tm_make_id(0, 3));
   s = collect(&map, region_1d(0x3000, 64, 128, 256));
   assert(s.count == 1);
   assert(s.statuses[0] == TM_OVERLAP_OTHER);
 
   tm_init(&map, g_buf, &cfg);
-  TmRegion d = region_1d(0x4000, 0, 128, 128);
-  tm_insert(&map, &d, tm_make_id(0, 4));
+  TmRegion_onlytest d = region_1d(0x4000, 0, 128, 128);
+  tm_insert_onlytest(&map, &d, tm_make_id(0, 4));
   s = collect(&map, region_1d(0x5000, 0, 128, 128));
   assert(s.count == 0);
 
@@ -146,8 +178,8 @@ static void test_l1_fast_reject(void) {
   TmTensorMap map;
   tm_init(&map, g_buf, &cfg);
 
-  TmRegion prod = region_1d(0xB000, 0, 64, 256);
-  tm_insert(&map, &prod, tm_make_id(0, 1));
+  TmRegion_onlytest prod = region_1d(0xB000, 0, 64, 256);
+  tm_insert_onlytest(&map, &prod, tm_make_id(0, 1));
   HitSink s = collect(&map, region_1d(0xB000, 200, 32, 256));
   assert(s.count == 0);
 
@@ -160,11 +192,11 @@ static void test_version_guard(void) {
   TmTensorMap map;
   tm_init(&map, g_buf, &cfg);
 
-  TmRegion prod = region_1d(0xB100, 0, 64, 64);
+  TmRegion_onlytest prod = region_1d(0xB100, 0, 64, 64);
   prod.version = 0;
-  tm_insert(&map, &prod, tm_make_id(0, 1));
+  tm_insert_onlytest(&map, &prod, tm_make_id(0, 1));
 
-  TmRegion probe = region_1d(0xB100, 0, 64, 64);
+  TmRegion_onlytest probe = region_1d(0xB100, 0, 64, 64);
   probe.version = 1;
   HitSink s = collect(&map, probe);
   assert(s.count == 1);
@@ -179,8 +211,8 @@ static void test_lazy_invalidation_and_reuse(void) {
   TmTensorMap map;
   tm_init(&map, g_buf, &cfg);
 
-  TmRegion r = region_1d(0x6000, 0, 128, 128);
-  tm_insert(&map, &r, tm_make_id(0, 5));
+  TmRegion_onlytest r = region_1d(0x6000, 0, 128, 128);
+  tm_insert_onlytest(&map, &r, tm_make_id(0, 5));
   assert(tm_valid_count(&map) == 1);
 
   tm_sync(&map, 0, 6);
@@ -189,14 +221,14 @@ static void test_lazy_invalidation_and_reuse(void) {
 
   tm_init(&map, g_buf, &cfg);
   for (uint32_t local = 0; local < 8; local++) {
-    TmRegion rr = region_1d(0x7000, 0, 16, 128);
-    tm_insert(&map, &rr, tm_make_id(0, local));
+    TmRegion_onlytest rr = region_1d(0x7000, 0, 16, 128);
+    tm_insert_onlytest(&map, &rr, tm_make_id(0, local));
   }
   tm_sync_tensormap(&map, 0, (int32_t)TM_CLEANUP_INTERVAL, TM_CLEANUP_INTERVAL);
   assert(tm_valid_count(&map) == 0);
 
-  TmRegion fresh = region_1d(0x7000, 0, 16, 128);
-  tm_insert(&map, &fresh, tm_make_id(0, 100));
+  TmRegion_onlytest fresh = region_1d(0x7000, 0, 16, 128);
+  tm_insert_onlytest(&map, &fresh, tm_make_id(0, 100));
   HitSink s = collect(&map, region_1d(0x7000, 0, 16, 128));
   assert(s.count == 1 && tm_local_of(s.producers[0]) == 100);
 
@@ -210,8 +242,8 @@ static void test_sync_interval_gating(void) {
   tm_init(&map, g_buf, &cfg);
 
   for (uint32_t i = 0; i < 8; i++) {
-    TmRegion r = region_1d(0xE000, 0, 16, 128);
-    tm_insert(&map, &r, tm_make_id(0, i));
+    TmRegion_onlytest r = region_1d(0xE000, 0, 16, 128);
+    tm_insert_onlytest(&map, &r, tm_make_id(0, i));
   }
   assert(tm_hdr(&map)->next_entry_idx == 8);
   assert(tm_hdr(&map)->free_num == 0);
@@ -233,10 +265,11 @@ static void test_remove_in_callback(void) {
   TmTensorMap map;
   tm_init(&map, g_buf, &cfg);
 
-  TmRegion r = region_1d(0x8000, 0, 64, 64);
-  tm_insert(&map, &r, tm_make_id(0, 0));
-  TmRegion probe = region_1d(0x8000, 0, 64, 64);
-  tm_lookup(&map, &probe, remove_cb, &map);
+  TmRegion_onlytest r = region_1d(0x8000, 0, 64, 64);
+  tm_insert_onlytest(&map, &r, tm_make_id(0, 0));
+  TmRegion_onlytest probe = region_1d(0x8000, 0, 64, 64);
+  Tensor probe_t = tensor_from_region(&probe);
+  tm_lookup_onlytest(&map, &probe_t, remove_cb, &map);
   assert(collect(&map, region_1d(0x8000, 0, 64, 64)).count == 0);
 
   printf("  PASSED\n");
@@ -248,8 +281,8 @@ static void test_attach_relocated_image(void) {
   TmTensorMap map;
   tm_init(&map, g_buf, &cfg);
 
-  TmRegion r = region_1d(0x9000, 0, 128, 128);
-  tm_insert(&map, &r, tm_make_id(1 % cfg.num_rings, 7));
+  TmRegion_onlytest r = region_1d(0x9000, 0, 128, 128);
+  tm_insert_onlytest(&map, &r, tm_make_id(1 % cfg.num_rings, 7));
 
   uint64_t bytes = tm_bytes_required(&cfg);
   assert(bytes <= sizeof(g_buf2));
@@ -270,10 +303,10 @@ static void test_multi_producer_same_base(void) {
   TmTensorMap map;
   tm_init(&map, g_buf, &cfg);
 
-  TmRegion p0 = region_1d(0xA000, 0, 64, 256);
-  TmRegion p1 = region_1d(0xA000, 0, 64, 256);
-  tm_insert(&map, &p0, tm_make_id(0, 0));
-  tm_insert(&map, &p1, tm_make_id(0, 1));
+  TmRegion_onlytest p0 = region_1d(0xA000, 0, 64, 256);
+  TmRegion_onlytest p1 = region_1d(0xA000, 0, 64, 256);
+  tm_insert_onlytest(&map, &p0, tm_make_id(0, 0));
+  tm_insert_onlytest(&map, &p1, tm_make_id(0, 1));
   HitSink s = collect(&map, region_1d(0xA000, 0, 64, 256));
   assert(s.count == 2);
 
@@ -293,25 +326,12 @@ static void entry_from_tensor_view(const Tensor *t, TmEntry *e) {
   memcpy(e->strides, t->strides, sizeof e->strides);
 }
 
-static void probe_from_tensor_view(const Tensor *t, TmProbe *p) {
-  memset(p, 0, sizeof *p);
-  p->base_addr = t->buffer_addr;
-  p->start_offset = t->start_offset;
-  p->version = t->version;
-  p->ndims = t->ndims;
-  p->elem_size = (uint16_t)t->dtype;
-  p->is_contiguous = t->is_contiguous;
-  p->storage_numel = t->dtype != 0 ? t->buffer_size / (uint64_t)t->dtype : 0u;
-  memcpy(p->shapes, t->shapes, sizeof p->shapes);
-  memcpy(p->strides, t->strides, sizeof p->strides);
-  p->extent_elem = t->is_contiguous ? tensor_numel(t) : t->extent_elem_cache;
-}
-
 static void test_qwen3_dim1_column_slice(void) {
   printf("Test: qwen3_dim1_column_slice (gate_tile dim=1 piece overlap)\n");
-  Tensor tile = tensor_make_2d(0xE0000, 16, 17408, FLOAT32);
-  Tensor prod0 = tensor_view(tile, 1, 0, 512);
-  Tensor cons1 = tensor_view(tile, 1, 512, 512);
+  const uint32_t tile_shapes[2] = {16, 17408};
+  Tensor tile = tensor_from_base_layout(0xE0000, tile_shapes, 2, FLOAT32);
+  Tensor prod0 = view(tile, 0, 0, 16, 512);
+  Tensor cons1 = view(tile, 0, 512, 16, 512);
 
   assert(prod0.is_contiguous == 0);
   assert(prod0.strides[0] == 17408u && prod0.strides[1] == 1u);
@@ -319,13 +339,10 @@ static void test_qwen3_dim1_column_slice(void) {
   TmEntry entry;
   entry_from_tensor_view(&prod0, &entry);
 
-  TmProbe probe;
-  probe_from_tensor_view(&cons1, &probe);
-  assert(tm_check_overlap(&probe, &entry) == TM_OVERLAP_NONE);
+  assert(tm_check_overlap(&cons1, &entry) == TM_OVERLAP_NONE);
 
-  Tensor cons0 = tensor_view(tile, 1, 0, 512);
-  probe_from_tensor_view(&cons0, &probe);
-  assert(tm_check_overlap(&probe, &entry) == TM_OVERLAP_COVERED);
+  Tensor cons0 = view(tile, 0, 0, 16, 512);
+  assert(tm_check_overlap(&cons0, &entry) == TM_OVERLAP_COVERED);
 
   printf("  PASSED\n");
 }
@@ -339,8 +356,8 @@ static void test_2d_row_tile_overlap(void) {
   const uint64_t base = 0xD0000;
   const uint32_t batch = 96, hidden = 5120, tile = 16;
 
-  TmRegion prod = region_2d(base, batch, hidden, 16, tile, hidden, 4);
-  tm_insert(&map, &prod, tm_make_id(0, 3));
+  TmRegion_onlytest prod = region_2d(base, batch, hidden, 16, tile, hidden, 4);
+  tm_insert_onlytest(&map, &prod, tm_make_id(0, 3));
 
   HitSink hit = collect(&map, region_2d(base, batch, hidden, 16, tile, hidden, 4));
   assert(hit.count == 1 && tm_local_of(hit.producers[0]) == 3);
@@ -363,11 +380,11 @@ static void test_coexistence_demo(void) {
   const uint64_t X = 0xBEEF000;
   const uint64_t Y = 0xCAFE000;
 
-  TmRegion rx = whole_buffer_region(X);
-  TmRegion ry = whole_buffer_region(Y);
-  tm_insert(&map, &rx, tm_make_id(0, 10));
-  tm_insert(&map, &rx, tm_make_id(0, 11));
-  tm_insert(&map, &ry, tm_make_id(0, 12));
+  TmRegion_onlytest rx = whole_buffer_region(X);
+  TmRegion_onlytest ry = whole_buffer_region(Y);
+  tm_insert_onlytest(&map, &rx, tm_make_id(0, 10));
+  tm_insert_onlytest(&map, &rx, tm_make_id(0, 11));
+  tm_insert_onlytest(&map, &ry, tm_make_id(0, 12));
 
   HitSink cx = collect(&map, whole_buffer_region(X));
   assert(cx.count == 2);
@@ -440,8 +457,8 @@ static void bench_insert(uint32_t n) {
 
   const double t0 = now_sec();
   for (uint32_t i = 0; i < n; i++) {
-    TmRegion r = region_1d(0x100000u + (uint64_t)i * 256u, 0, 64, 64);
-    tm_insert(&map, &r, tm_make_id(0, i & (cfg.task_window[0] - 1)));
+    TmRegion_onlytest r = region_1d(0x100000u + (uint64_t)i * 256u, 0, 64, 64);
+    tm_insert_onlytest(&map, &r, tm_make_id(0, i & (cfg.task_window[0] - 1)));
   }
   report("insert", (double)n, now_sec() - t0);
   free(img);
@@ -458,8 +475,8 @@ static void bench_lookup(uint32_t m, uint32_t queries) {
   tm_init(&map, img, &cfg);
 
   for (uint32_t i = 0; i < m; i++) {
-    TmRegion r = region_1d(0x100000u + (uint64_t)i * 256u, 0, 64, 64);
-    tm_insert(&map, &r, tm_make_id(0, i));
+    TmRegion_onlytest r = region_1d(0x100000u + (uint64_t)i * 256u, 0, 64, 64);
+    tm_insert_onlytest(&map, &r, tm_make_id(0, i));
   }
 
   uint64_t rng = 0x9E3779B97F4A7C15ULL;
@@ -467,8 +484,9 @@ static void bench_lookup(uint32_t m, uint32_t queries) {
   const double t0 = now_sec();
   for (uint32_t q = 0; q < queries; q++) {
     const uint32_t i = (uint32_t)(perf_rng(&rng) % m);
-    TmRegion probe = region_1d(0x100000u + (uint64_t)i * 256u, 0, 64, 64);
-    tm_lookup(&map, &probe, perf_count_cb, &acc);
+    TmRegion_onlytest probe = region_1d(0x100000u + (uint64_t)i * 256u, 0, 64, 64);
+    Tensor probe_t = tensor_from_region(&probe);
+    tm_lookup_onlytest(&map, &probe_t, perf_count_cb, &acc);
   }
   g_perf_sink = acc;
   report("lookup (covered hit)", (double)queries, now_sec() - t0);
@@ -488,20 +506,20 @@ static void bench_submit(uint32_t window, uint32_t per_task, uint32_t iters) {
   uint32_t cur = 0;
   for (uint32_t w = 0; w < window; w++, cur++) {
     for (uint32_t k = 0; k < per_task; k++) {
-      TmRegion r =
+      TmRegion_onlytest r =
           region_1d(0x200000u + (((uint64_t)cur * per_task + k) & 4095u) * 256u,
                     0, 64, 64);
-      tm_insert(&map, &r, tm_make_id(0, cur));
+      tm_insert_onlytest(&map, &r, tm_make_id(0, cur));
     }
   }
 
   const double t0 = now_sec();
   for (uint32_t i = 0; i < iters; i++, cur++) {
     for (uint32_t k = 0; k < per_task; k++) {
-      TmRegion r =
+      TmRegion_onlytest r =
           region_1d(0x200000u + (((uint64_t)cur * per_task + k) & 4095u) * 256u,
                     0, 64, 64);
-      tm_insert(&map, &r, tm_make_id(0, cur));
+      tm_insert_onlytest(&map, &r, tm_make_id(0, cur));
     }
     tm_sync_tensormap(&map, 0, (int32_t)(cur - window + 1), cur);
   }
@@ -509,11 +527,76 @@ static void bench_submit(uint32_t window, uint32_t per_task, uint32_t iters) {
   free(img);
 }
 
+static void test_kv_cache_view_offset_matches_bind(void) {
+  printf("Test: kv_cache_view_offset_matches_bind\n");
+  const uint64_t base = 0x8800000u;
+  const uint32_t user_batch = 90u;
+  const uint32_t kv_shapes[2] = {2949120u, 128u};
+  Tensor ext_k = tensor_from_base_layout(base, kv_shapes, 2, BFLOAT16);
+
+  for (uint32_t b = 0; b < user_batch; b++) {
+    const uint32_t bind_shapes[2] = {8u, 128u};
+    const uint64_t bind_base =
+        base + (uint64_t)b * 1024u * (uint64_t)BFLOAT16;
+    Tensor bound = tensor_from_base_layout(bind_base, bind_shapes, 2, BFLOAT16);
+    Tensor viewed = view(ext_k, b * 8u, 0u, 8u, 128u);
+
+    assert(tensor_data_addr(&bound) == tensor_data_addr(&viewed));
+    assert(viewed.shapes[0] == 8u && viewed.shapes[1] == 128u);
+    assert(viewed.start_offset == (uint64_t)b * 1024u);
+  }
+  printf("  PASSED\n");
+}
+
+static Tensor bench_kv_bind_slice(uint64_t base, uint32_t b) {
+  const uint32_t shapes[2] = {8u, 128u};
+  const uint64_t slice_base = base + (uint64_t)b * 1024u * (uint64_t)BFLOAT16;
+  return tensor_from_base_layout(slice_base, shapes, 2, BFLOAT16);
+}
+
+static void bench_kv_cache_bind_vs_view(uint32_t rounds) {
+  const uint64_t base = 0x9000000u;
+  const uint32_t user_batch = 90u;
+  const uint32_t kv_shapes[2] = {2949120u, 128u};
+  Tensor ext_k = tensor_from_base_layout(base, kv_shapes, 2, BFLOAT16);
+  volatile uint64_t sink = 0;
+
+  const double t_bind = now_sec();
+  for (uint32_t r = 0; r < rounds; r++) {
+    for (uint32_t b = 0; b < user_batch; b++) {
+      Tensor local = bench_kv_bind_slice(base, b);
+      sink += tensor_data_addr(&local);
+      sink += local.shapes[0] + local.shapes[1];
+    }
+  }
+  const double bind_secs = now_sec() - t_bind;
+
+  const double t_view = now_sec();
+  for (uint32_t r = 0; r < rounds; r++) {
+    for (uint32_t b = 0; b < user_batch; b++) {
+      Tensor local = view(ext_k, b * 8u, 0u, 8u, 128u);
+      sink += tensor_data_addr(&local);
+      sink += local.shapes[0] + local.shapes[1];
+    }
+  }
+  const double view_secs = now_sec() - t_view;
+  g_perf_sink = sink;
+
+  const double ops = (double)rounds * (double)user_batch;
+  report("kv_cache bind (make_2d style)", ops, bind_secs);
+  report("kv_cache view (batch slice)", ops, view_secs);
+  if (view_secs > 0.0) {
+    const double ratio = bind_secs / view_secs;
+    printf("  view vs bind speedup: %.3fx (bind/view)\n", ratio);
+  }
+}
+
 static void run_benchmarks(uint32_t scale) {
   printf("=== Performance (scale=%u) ===\n", scale);
   bench_insert(200000u * scale);
   bench_lookup(100000u, 1000000u * scale);
   bench_submit(1024u, 4u, 200000u * scale);
+  bench_kv_cache_bind_vs_view(200000u * scale);
   printf("\n");
 }
 
@@ -530,6 +613,7 @@ int main(int argc, char **argv) {
   test_multi_producer_same_base();
   test_2d_row_tile_overlap();
   test_qwen3_dim1_column_slice();
+  test_kv_cache_view_offset_matches_bind();
   test_coexistence_demo();
 
   printf("\n=== All Tests Passed ===\n\n");

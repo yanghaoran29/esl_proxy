@@ -16,7 +16,7 @@
 #
 # Other compile / run flags:
 #   make DEP_DUMP=1 CASE=qwen3_dynamic_tensormap.h run
-#   make NO_DEPS=1 CASE=qwen3_dynamic_tensormap.h run
+#   make ORCH_SKIP_SCHED=0 CASE=qwen3_dynamic_tensormap.h run  # wait for sched join
 #   make MAIN_LOG=0 CASE=paged_attention_unroll.h run
 #   DEP_DUMP=1 DEP_DUMP_FILE=build/dep_ ./bin/esl_proxy
 #   make test-dep-dump   # builds tools/dep_dump tests
@@ -66,8 +66,8 @@ ifneq ($(DEP_DUMP),)
 CFLAGS   += -DDEP_DUMP=$(DEP_DUMP)
 endif
 
-ifneq ($(NO_DEPS),)
-CFLAGS   += -DNO_DEPS=$(NO_DEPS)
+ifneq ($(ORCH_SKIP_SCHED),)
+CFLAGS   += -DORCH_SKIP_SCHED=$(ORCH_SKIP_SCHED)
 endif
 
 ifneq ($(MAIN_LOG),)
@@ -98,11 +98,11 @@ DEPS := $(OBJS:.o=.d)
 
 # Rebuild orchestration when case or orch-related flags change.
 ORCH_STAMP := $(OBJ_DIR)/.orch-stamp
-ORCH_CONFIG := case=$(CASE) tier=$(QWEN3_SPMD_TIER) dep=$(DEP_DUMP) nodeps=$(NO_DEPS) log=$(MAIN_LOG)
+ORCH_CONFIG := case=$(CASE) tier=$(QWEN3_SPMD_TIER) dep=$(DEP_DUMP) log=$(MAIN_LOG)
 
 TEST_CFLAGS := -std=c11 -Wall -Wextra -pedantic -O0 -D_POSIX_C_SOURCE=199309L -I include -I cases -I$(DEP_DUMP_DIR) -DUSE_TENSORMAP -DDEP_DUMP=1
 
-.PHONY: all run clean force test-dep-dump test-dep-dump-paged-attention test-tensormap
+.PHONY: all run clean force test-dep-dump test-dep-dump-paged-attention test-tensormap test-qwen3-tier2-kv-bench
 
 all: $(TARGET)
 
@@ -136,9 +136,29 @@ test-dep-dump-paged-attention: $(BIN_DIR)/test_dep_dump_paged_attention_edges
 	$(BIN_DIR)/test_dep_dump_paged_attention_edges
 
 test-tensormap: $(BIN_DIR)/test_tensormap
-	$(BIN_DIR)/test_tensormap
+	TIMEOUT_SEC=30 tests/run_with_orch_timeout.sh $(BIN_DIR)/test_tensormap 1
 
 TEST_TENSORMAP_CFLAGS := -std=c11 -Wall -Wextra -Werror -pedantic -O3 -D_POSIX_C_SOURCE=200809L -I include -DUSE_TENSORMAP
+QWEN3_TIER2_KV_BENCH_CFLAGS := $(TEST_CFLAGS) -DQWEN3_SPMD_TIER=2 -O3
+
+BENCH_LOOKUP_CFLAGS := -std=c11 -Wall -Wextra -O3 -D_POSIX_C_SOURCE=200809L -I include -DUSE_TENSORMAP
+
+$(BIN_DIR)/bench_lookup_tensor: tests/bench_lookup_tensor.c | $(BIN_DIR)
+	$(CC) $(BENCH_LOOKUP_CFLAGS) tests/bench_lookup_tensor.c -o $@ $(LDFLAGS)
+
+test-bench-lookup-compare: $(BIN_DIR)/bench_lookup_tensor
+	TIMEOUT_SEC=30 bash tests/bench_compare_lookup_tensor.sh 1
+
+test-qwen3-tier2-kv-bench: $(BIN_DIR)/test_qwen3_tier2_kv_bench
+	TIMEOUT_SEC=30 LABEL="qwen3 tier=2 KV orchestration bench" \
+		tests/run_with_orch_timeout.sh $(BIN_DIR)/test_qwen3_tier2_kv_bench
+
+test-orch-timeout: $(TARGET)
+	TIMEOUT_SEC=30 LABEL="esl_proxy orch+deps (sched skipped)" \
+		tests/run_with_orch_timeout.sh $(TARGET)
+
+$(BIN_DIR)/test_qwen3_tier2_kv_bench: tests/test_qwen3_tier2_kv_bench.c | $(BIN_DIR)
+	$(CC) $(QWEN3_TIER2_KV_BENCH_CFLAGS) tests/test_qwen3_tier2_kv_bench.c -o $@ $(LDFLAGS)
 
 $(BIN_DIR)/test_tensormap: tests/test_tensormap.c | $(BIN_DIR)
 	$(CC) $(TEST_TENSORMAP_CFLAGS) tests/test_tensormap.c -o $@ $(LDFLAGS)

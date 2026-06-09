@@ -52,7 +52,7 @@ static inline void add_input_ptr(uint16_t task_id, const Tensor *t)
 {
     int idx = g_basic_buf[task_id & RING_MASK].tensor_cnt++;
 #ifdef USE_TENSORMAP
-    g_basic_buf[task_id & RING_MASK].data[idx] = t->buffer_addr;
+    g_basic_buf[task_id & RING_MASK].data[idx] = tensor_data_addr(t);
 #else
     g_basic_buf[task_id & RING_MASK].data[idx] = *t;
 #endif
@@ -62,7 +62,7 @@ static inline void add_output_ptr(uint16_t task_id, const Tensor *t)
 {
     int idx = g_basic_buf[task_id & RING_MASK].tensor_cnt++;
 #ifdef USE_TENSORMAP
-    g_basic_buf[task_id & RING_MASK].data[idx] = t->buffer_addr;
+    g_basic_buf[task_id & RING_MASK].data[idx] = tensor_data_addr(t);
 #else
     g_basic_buf[task_id & RING_MASK].data[idx] = *t;
 #endif
@@ -72,7 +72,7 @@ static inline void add_inout_ptr(uint16_t task_id, const Tensor *t)
 {
     int idx = g_basic_buf[task_id & RING_MASK].tensor_cnt++;
 #ifdef USE_TENSORMAP
-    g_basic_buf[task_id & RING_MASK].data[idx] = t->buffer_addr;
+    g_basic_buf[task_id & RING_MASK].data[idx] = tensor_data_addr(t);
 #else
     g_basic_buf[task_id & RING_MASK].data[idx] = *t;
 #endif
@@ -223,11 +223,6 @@ static inline void batch_submit(uint16_t cnt, uint16_t task_id[])
 
 static inline void submit(uint16_t task_id)
 {
-#if NO_DEPS
-    /* Orchestration-only: clear submit sentinel; sched skipped in main. */
-    atomic_fetch_sub_explicit(&g_predecessor_buf[task_id & RING_MASK], 1,
-                              memory_order_seq_cst);
-#else
     uint16_t tmp = (uint16_t)atomic_fetch_sub_explicit(
         &g_predecessor_buf[task_id & RING_MASK], 1, memory_order_seq_cst);
     if (tmp == 1) {
@@ -238,7 +233,6 @@ static inline void submit(uint16_t task_id)
                     type, ctrl_id, queue->cnt);
         enqueue(queue, task_id);
     }
-#endif
 }
 
 static inline bool succeed(uint16_t task_id, uint16_t target)
