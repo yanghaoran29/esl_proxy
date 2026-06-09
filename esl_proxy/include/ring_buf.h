@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stdatomic.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "conf.h"
 #include "log.h"
@@ -21,82 +22,8 @@
 #include "dispatch.h"
 #include "spin.h"
 
-typedef enum {
-    BFLOAT16 = 2,
-    FLOAT32  = 4,
-} dtype_t;
-
-#if defined(USE_TENSORMAP) && !defined(TENSORMAP_WHOLE_BUFFER)
-typedef struct {
-    uint64_t base;
-    uint32_t storage[2];
-    uint32_t shapes[2];
-    uint32_t offsets[2];
-    uint32_t strides[2];
-    dtype_t  dtype;
-} Tensor;
-
-static inline uint64_t tensor_base(Tensor t)
-{
-    return t.base;
-}
-
-static inline Tensor tensor_from_base(uint64_t base)
-{
-    Tensor t;
-    t.base = base;
-    t.storage[0] = t.storage[1] = 0;
-    t.shapes[0] = t.shapes[1] = 0;
-    t.offsets[0] = t.offsets[1] = 0;
-    t.strides[0] = t.strides[1] = 0;
-    t.dtype = (dtype_t)0;
-    return t;
-}
-
-static inline Tensor tensor_make_2d(uint64_t base, uint32_t d0, uint32_t d1, dtype_t dtype)
-{
-    Tensor t;
-    t.base = base;
-    t.storage[0] = t.shapes[0] = d0;
-    t.storage[1] = t.shapes[1] = d1;
-    t.offsets[0] = 0;
-    t.offsets[1] = 0;
-    t.strides[0] = d1;
-    t.strides[1] = 1;
-    t.dtype = dtype;
-    return t;
-}
-
-static inline Tensor tensor_view(Tensor t, uint32_t dim, uint32_t off, uint32_t n)
-{
-    t.offsets[dim] += off;
-    t.shapes[dim] = n;
-    return t;
-}
-
-static inline Tensor tensor_row_view(Tensor t, uint32_t row0, uint32_t nrows)
-{
-    return tensor_view(t, 0u, row0, nrows);
-}
-
-static inline Tensor tensor_chunk_2d(Tensor buf, uint32_t row0, uint32_t nrows,
-                                     uint32_t col0, uint32_t ncols, dtype_t dtype)
-{
-    const uint64_t es = (uint64_t)dtype;
-    const uint64_t off =
-        (uint64_t)row0 * buf.strides[0] + (uint64_t)col0 * buf.strides[1];
-    return tensor_make_2d(tensor_base(buf) + off * es, nrows, ncols, dtype);
-}
-
-static inline Tensor tensor_row_chunk(Tensor buf, uint32_t row0, uint32_t nrows)
-{
-    return tensor_chunk_2d(buf, row0, nrows, 0, buf.storage[1], buf.dtype);
-}
-
-static inline Tensor tensor_col_chunk(Tensor buf, uint32_t col0, uint32_t ncols)
-{
-    return tensor_chunk_2d(buf, 0, buf.storage[0], col0, ncols, buf.dtype);
-}
+#ifdef USE_TENSORMAP
+#include "tensor.h"
 #else
 #define Tensor uint64_t
 #endif
@@ -124,8 +51,8 @@ static inline void ring_buf_init(void)
 static inline void add_input_ptr(uint16_t task_id, const Tensor *t)
 {
     int idx = g_basic_buf[task_id & RING_MASK].tensor_cnt++;
-#if defined(USE_TENSORMAP) && !defined(TENSORMAP_WHOLE_BUFFER)
-    g_basic_buf[task_id & RING_MASK].data[idx] = t->base;
+#ifdef USE_TENSORMAP
+    g_basic_buf[task_id & RING_MASK].data[idx] = t->buffer_addr;
 #else
     g_basic_buf[task_id & RING_MASK].data[idx] = *t;
 #endif
@@ -134,8 +61,8 @@ static inline void add_input_ptr(uint16_t task_id, const Tensor *t)
 static inline void add_output_ptr(uint16_t task_id, const Tensor *t)
 {
     int idx = g_basic_buf[task_id & RING_MASK].tensor_cnt++;
-#if defined(USE_TENSORMAP) && !defined(TENSORMAP_WHOLE_BUFFER)
-    g_basic_buf[task_id & RING_MASK].data[idx] = t->base;
+#ifdef USE_TENSORMAP
+    g_basic_buf[task_id & RING_MASK].data[idx] = t->buffer_addr;
 #else
     g_basic_buf[task_id & RING_MASK].data[idx] = *t;
 #endif
@@ -144,8 +71,8 @@ static inline void add_output_ptr(uint16_t task_id, const Tensor *t)
 static inline void add_inout_ptr(uint16_t task_id, const Tensor *t)
 {
     int idx = g_basic_buf[task_id & RING_MASK].tensor_cnt++;
-#if defined(USE_TENSORMAP) && !defined(TENSORMAP_WHOLE_BUFFER)
-    g_basic_buf[task_id & RING_MASK].data[idx] = t->base;
+#ifdef USE_TENSORMAP
+    g_basic_buf[task_id & RING_MASK].data[idx] = t->buffer_addr;
 #else
     g_basic_buf[task_id & RING_MASK].data[idx] = *t;
 #endif
@@ -356,13 +283,15 @@ static inline bool try_new_task(uint32_t task_id)
     // Initialize predecessor count to 0 before marking task as PENDING
     // This ensures tasks with no predecessors can be submitted immediately
     atomic_store_explicit(&g_predecessor_buf[task_id & RING_MASK], 1, memory_order_relaxed);
-    
-    task_state expected = {0};
+
+    task_state expected;
+    memset(&expected, 0, sizeof expected);
     expected.state = TASK_STATUS_EMPTY;
     expected.successor_cnt = 0;
     expected.task_id = 0;
 
-    task_state desired = {0};
+    task_state desired;
+    memset(&desired, 0, sizeof desired);
     desired.state = TASK_STATUS_CREATING;
     desired.successor_cnt = 0;
     desired.task_id = (uint16_t)task_id;
@@ -377,8 +306,10 @@ static inline bool set_task_completed(uint32_t task_id, uint32_t state)
     int slotIdx = task_id & RING_MASK;
     task_state expected =
         atomic_load_explicit(&g_state_buf[slotIdx], memory_order_relaxed);
-    task_state desired = expected;
+    task_state desired;
+    memset(&desired, 0, sizeof desired);
     desired.state = TASK_STATUS_COMPLETED;
+    desired.task_id = expected.task_id;
     desired.successor_cnt = 0;
     return atomic_compare_exchange_strong(&g_state_buf[slotIdx], &expected, desired);
 }

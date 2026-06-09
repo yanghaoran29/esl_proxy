@@ -1,84 +1,24 @@
 /*
- * test_dep_dump_qwen3_edges.c
+ * test_dep_dump_paged_attention_edges.c
  *
- * Runs qwen3_dynamic_tensormap orchestration with real succeed() edge storage
+ * Runs paged_attention_unroll orchestration with real succeed() edge storage
  * and cross-checks dep_dump_count_edges() against an independent edge recorder.
+ *
+ * Optional: DEP_DUMP_EDGE_FILE=/path/to/edges.csv writes sorted edges for diff.
  */
 
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define DAG_RING_BUF_H
 #define DAG_MEM_POOL_H
 #define DAG_MPMC_QUEUE_H
 
-typedef enum { BFLOAT16 = 2, FLOAT32 = 4 } dtype_t;
-
-typedef struct {
-    uint64_t base;
-    uint32_t storage[2];
-    uint32_t shapes[2];
-    uint32_t offsets[2];
-    uint32_t strides[2];
-    dtype_t dtype;
-} Tensor;
-
-static inline uint64_t tensor_base(Tensor t) { return t.base; }
-
-static inline Tensor tensor_from_base(uint64_t base)
-{
-    Tensor t;
-    t.base = base;
-    t.storage[0] = t.storage[1] = 0;
-    t.shapes[0] = t.shapes[1] = 0;
-    t.offsets[0] = t.offsets[1] = 0;
-    t.strides[0] = t.strides[1] = 0;
-    t.dtype = (dtype_t)0;
-    return t;
-}
-
-static inline Tensor tensor_make_2d(uint64_t base, uint32_t d0, uint32_t d1,
-                                    dtype_t dtype)
-{
-    Tensor t;
-    t.base = base;
-    t.storage[0] = t.shapes[0] = d0;
-    t.storage[1] = t.shapes[1] = d1;
-    t.offsets[0] = 0;
-    t.offsets[1] = 0;
-    t.strides[0] = d1;
-    t.strides[1] = 1;
-    t.dtype = dtype;
-    return t;
-}
-
-static inline Tensor tensor_view(Tensor t, uint32_t dim, uint32_t off, uint32_t n)
-{
-    t.offsets[dim] += off;
-    t.shapes[dim] = n;
-    return t;
-}
-
-static inline Tensor tensor_chunk_2d(Tensor buf, uint32_t row0, uint32_t nrows,
-                                     uint32_t col0, uint32_t ncols, dtype_t dtype)
-{
-    const uint64_t es = (uint64_t)dtype;
-    const uint64_t off =
-        (uint64_t)row0 * buf.strides[0] + (uint64_t)col0 * buf.strides[1];
-    return tensor_make_2d(tensor_base(buf) + off * es, nrows, ncols, dtype);
-}
-
-static inline Tensor tensor_row_chunk(Tensor buf, uint32_t row0, uint32_t nrows)
-{
-    return tensor_chunk_2d(buf, row0, nrows, 0, buf.storage[1], buf.dtype);
-}
-
-static inline Tensor tensor_col_chunk(Tensor buf, uint32_t col0, uint32_t ncols)
-{
-    return tensor_chunk_2d(buf, 0, buf.storage[0], col0, ncols, buf.dtype);
-}
+#include "tensor.h"
 
 static inline void add_input_ptr(uint16_t tid, const Tensor *t) { (void)tid; (void)t; }
 static inline void add_output_ptr(uint16_t tid, const Tensor *t) { (void)tid; (void)t; }
@@ -98,7 +38,7 @@ struct task_desc g_basic_buf[RING_SIZE];
 struct succ_list g_successor_buf[RING_SIZE];
 struct succ_list g_successor_exp_buf[HALF_RING_SIZE];
 
-#define MAX_EDGES 2000000
+#define MAX_EDGES 500000
 static uint16_t g_edge_c[MAX_EDGES];
 static uint16_t g_edge_p[MAX_EDGES];
 static int g_edge_n = 0;
@@ -142,7 +82,6 @@ static inline bool try_new_task(uint32_t task_id)
                      .task_id = (uint16_t)task_id};
     atomic_store_explicit(&g_state_buf[task_id & RING_MASK], st,
                           memory_order_relaxed);
-    /* Single-thread test: claim succeeds immediately (see test_qwen3_decode_tensormap.c). */
     return true;
 }
 
@@ -182,20 +121,67 @@ static inline Tensor alloc_tensors(uint32_t shape[], int dim, int bytes)
 
 static inline void spin_wait(void) {}
 
-#include "qwen3_dynamic_tensormap.h"
+#include "paged_attention_unroll.h"
+
+/* Keep external tensor handles (orch_args+0..5) away from scratch pool bump
+ * (g_alloc_bump). orch_args=0 makes qi(b) span 0..~0x1df000, which collides
+ * with pool@0x100000 and yields 2 spurious cross-batch edges (1442 vs 1440). */
+#define PA_TEST_ORCH_ARGS 0x10000000ULL
+#define PA_EXPECTED_EDGES 1440u
+
+static int edge_cmp(const void *a, const void *b)
+{
+    const int ia = *(const int *)a;
+    const int ib = *(const int *)b;
+    if (g_edge_p[ia] != g_edge_p[ib])
+        return (int)g_edge_p[ia] - (int)g_edge_p[ib];
+    return (int)g_edge_c[ia] - (int)g_edge_c[ib];
+}
+
+static void maybe_write_sorted_edges(void)
+{
+    const char *path = getenv("DEP_DUMP_EDGE_FILE");
+    if (path == NULL || path[0] == '\0')
+        return;
+
+    FILE *f = fopen(path, "w");
+    if (f == NULL) {
+        perror("fopen DEP_DUMP_EDGE_FILE");
+        exit(1);
+    }
+
+    int *idx = (int *)malloc((size_t)g_edge_n * sizeof(int));
+    if (idx == NULL) {
+        fclose(f);
+        exit(1);
+    }
+    for (int i = 0; i < g_edge_n; i++)
+        idx[i] = i;
+    qsort(idx, (size_t)g_edge_n, sizeof(int), edge_cmp);
+
+    fprintf(f, "producer,consumer\n");
+    for (int i = 0; i < g_edge_n; i++) {
+        const int k = idx[i];
+        fprintf(f, "%u,%u\n", (unsigned)g_edge_p[k], (unsigned)g_edge_c[k]);
+    }
+    free(idx);
+    fclose(f);
+}
 
 int main(void)
 {
     ring_buf_init_local();
-    aicpu_orchestration_entry(0);
+    aicpu_orchestration_entry(PA_TEST_ORCH_ARGS);
 
     const uint32_t dump_edges = dep_dump_count_edges();
-    printf("tasks=%d recorder_edges=%d dump_edges=%u\n", (int)g_task_id,
-           g_edge_n, dump_edges);
+    printf("tasks=%d recorder_edges=%d dump_edges=%u (expected %u)\n",
+           (int)g_task_id, g_edge_n, dump_edges, PA_EXPECTED_EDGES);
     assert(g_edge_n < MAX_EDGES);
     assert(dump_edges == (uint32_t)g_edge_n);
+    assert(dump_edges == PA_EXPECTED_EDGES);
 
+    maybe_write_sorted_edges();
     dep_dump_summary(stdout);
-    printf("test_dep_dump_qwen3_edges: OK\n");
+    printf("test_dep_dump_paged_attention_edges: OK\n");
     return 0;
 }
