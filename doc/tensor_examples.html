@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tensor 连续性示例与 VIEW 操作详解</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --accent-color: #06b6d4;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --background-color: #f8fafc;
+            --card-background: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #475569;
+            --border-color: #e2e8f0;
+            --code-background: #f1f5f9;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.7;
+            color: var(--text-primary);
+            background-color: var(--background-color);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 40px rgba(37, 99, 235, 0.3);
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .section {
+            background: var(--card-background);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border-color);
+        }
+
+        .section h2 {
+            color: var(--primary-color);
+            font-size: 1.75rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 3px solid var(--accent-color);
+        }
+
+        .section h3 {
+            color: var(--secondary-color);
+            font-size: 1.25rem;
+            margin: 1.5rem 0 1rem 0;
+        }
+
+        code {
+            font-family: 'Fira Code', 'Source Code Pro', 'Consolas', monospace;
+            background: var(--code-background);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.9em;
+        }
+
+        pre {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 1.25rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            font-size: 0.875rem;
+            line-height: 1.7;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+
+        .diagram {
+            background: #f8fafc;
+            border: 2px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            border-left: 4px solid var(--primary-color);
+            padding: 1.25rem;
+            margin: 1rem 0;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+
+        .success-box {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            border-left: 4px solid var(--success-color);
+            padding: 1.25rem;
+            margin: 1rem 0;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+
+        .warning-box {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-left: 4px solid var(--warning-color);
+            padding: 1.25rem;
+            margin: 1rem 0;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+
+        .error-box {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+            border-left: 4px solid var(--error-color);
+            padding: 1.25rem;
+            margin: 1rem 0;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+
+        .two-columns {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1rem;
+        }
+
+        .card h4 {
+            color: var(--secondary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.95rem;
+        }
+
+        th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem 1rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .inline-diagram {
+            font-family: monospace;
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+            white-space: pre;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-success {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .badge-warning {
+            background: var(--warning-color);
+            color: white;
+        }
+
+        .badge-error {
+            background: var(--error-color);
+            color: white;
+        }
+
+        .nav-toc {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .nav-toc h3 {
+            margin-top: 0;
+        }
+
+        .nav-toc ol {
+            margin: 0;
+            padding-left: 1.25rem;
+        }
+
+        .nav-toc li {
+            margin: 0.5rem 0;
+        }
+
+        .nav-toc a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .step {
+            background: #f8fafc;
+            border-left: 4px solid var(--accent-color);
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+
+        .step-number {
+            display: inline-block;
+            width: 2rem;
+            height: 2rem;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 2rem;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Tensor 连续性示例与 VIEW 操作详解</h1>
+            <p>连续 vs 非连续 Tensor 的对比分析 | 零拷贝视图操作实战</p>
+        </header>
+
+        <nav class="nav-toc">
+            <h3>📑 目录</h3>
+            <ol>
+                <li><a href="#contiguous-definition">连续 Tensor 的定义与示例</a></li>
+                <li><a href="#non-contiguous-definition">非连续 Tensor 的定义与示例</a></li>
+                <li><a href="#view-operation">VIEW 操作详解</a></li>
+                <li><a href="#transpose-operation">TRANSPOSE 操作详解</a></li>
+                <li><a href="#slice-operation">SLICE 操作详解</a></li>
+                <li><a href="#comparison">综合对比与最佳实践</a></li>
+            </ol>
+        </nav>
+
+        <section id="contiguous-definition" class="section">
+            <h2>1. 连续 Tensor 的定义与示例</h2>
+
+            <h3>1.1 什么是连续 Tensor？</h3>
+            <div class="highlight-box">
+                <strong>✅ 连续 Tensor 的判断条件</strong><br><br>
+                当满足以下条件时，<code>is_contiguous = true</code>：
+                <ul>
+                    <li><code>strides[i] = shapes[i+1] × shapes[i+2] × ... × shapes[ndims-1]</code></li>
+                    <li>即：每个维度的步长等于后续所有维度大小的乘积</li>
+                </ul>
+                <br>
+                <strong>⚡ 性能优势</strong>：数据在内存中连续排列，访问效率最高
+            </div>
+
+            <h3>1.2 1D 连续 Tensor 示例</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>📝 代码</h4>
+                    <pre><code>// 创建 1D 连续张量：[256] 个元素
+uint32_t shapes[] = {256};
+Tensor t = make_tensor_external(
+    addr,                    // 内存地址
+    shapes,                  // 形状
+    1,                       // 维度数
+    DataType::FLOAT32,       // 数据类型
+    false,                   // manual_dep
+    0                        // version
+);</code></pre>
+                </div>
+                <div class="card">
+                    <h4>📊 内存布局</h4>
+                    <div class="inline-diagram">
+地址:   [0  ][1  ][2  ][3  ]...[255]
+        ├───┼───┼───┼───┼───┼───┼───┤
+索引:   0   1   2   3  ...  255
+
+shapes = [256]
+strides = [1]  ← 每个元素相邻
+
+is_contiguous = true
+numel = 256
+extent_elem = 256</div>
+                </div>
+            </div>
+
+            <h3>1.3 2D 连续 Tensor 示例（Row-Major）</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>📝 代码</h4>
+                    <pre><code>// 创建 2D 连续张量：[4, 8]
+uint32_t shapes[] = {4, 8};
+Tensor t = make_tensor_external(
+    addr,
+    shapes,
+    2,                       // 2 维
+    DataType::FLOAT32,
+    false,
+    0
+);
+// strides 自动计算为 [8, 1]
+// row-major: 先行后列</code></pre>
+                </div>
+                <div class="card">
+                    <h4>📊 内存布局</h4>
+                    <div class="inline-diagram">
+shapes = [4, 8]
+strides = [8, 1]
+
+逻辑坐标 → flat_index:
+[0,0] → 0    [0,1] → 1    ... [0,7] → 7
+[1,0] → 8    [1,1] → 9    ... [1,7] → 15
+[2,0] → 16   [2,1] → 17   ... [2,7] → 23
+[3,0] → 24   [3,1] → 25   ... [3,7] → 31
+
+内存中顺序: [0][1][2][3][4][5][6][7][8][9]...
+           └─── 第0行 ───┘└─── 第1行 ───┘
+
+is_contiguous = true ✅</div>
+                </div>
+            </div>
+
+            <h3>1.4 3D 连续 Tensor 示例</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>📝 代码</h4>
+                    <pre><code>// 创建 3D 连续张量：[2, 3, 4]
+uint32_t shapes[] = {2, 3, 4};
+Tensor t = make_tensor_external(
+    addr, shapes, 3,
+    DataType::FLOAT32, false, 0
+);
+
+// strides = [12, 4, 1]
+// 计算: strides[2] = 1
+//       strides[1] = 4 × 1 = 4
+//       strides[0] = 3 × 4 = 12</code></pre>
+                </div>
+                <div class="card">
+                    <h4>📊 内存布局可视化</h4>
+                    <div class="inline-diagram">
+shapes = [2, 3, 4]
+strides = [12, 4, 1]
+
+┌─────────────────────────────────────┐
+│  Batch 0 (前12个元素)                │
+│  [0,0,0]..[0,0,3] [0,1,0]..[0,1,3] │
+│  [0,2,0]..[0,2,3]                   │
+│  indices: 0-11                      │
+├─────────────────────────────────────┤
+│  Batch 1 (后12个元素)                │
+│  [1,0,0]..[1,0,3] [1,1,0]..[1,1,3] │
+│  [1,2,0]..[1,2,3]                   │
+│  indices: 12-23                     │
+└─────────────────────────────────────┘
+
+is_contiguous = true ✅
+extent_elem = 24</div>
+                </div>
+            </div>
+
+            <h3>1.5 连续性判断的核心公式</h3>
+            <div class="success-box">
+                <strong>📐 连续性验证代码</strong>
+                <pre><code>bool is_contiguous_tensor(uint32_t shapes[], uint32_t strides[], uint32_t ndims) {
+    uint32_t expected_stride = 1;
+    for (int32_t i = ndims - 1; i >= 0; --i) {
+        if (strides[i] != expected_stride) {
+            return false;  // 不连续！
+        }
+        expected_stride *= shapes[i];
+    }
+    return true;  // 连续！
+}</code></pre>
+            </div>
+        </section>
+
+        <section id="non-contiguous-definition" class="section">
+            <h2>2. 非连续 Tensor 的定义与示例</h2>
+
+            <h3>2.1 什么是非连续 Tensor？</h3>
+            <div class="warning-box">
+                <strong>⚠️ 非连续 Tensor 的特征</strong><br><br>
+                当以下任一条件成立时，<code>is_contiguous = false</code>：
+                <ul>
+                    <li><code>strides[i] ≠ shapes[i+1] × shapes[i+2] × ... × shapes[ndims-1]</code></li>
+                    <li>通过 transpose、slice、permute 等视图操作产生</li>
+                </ul>
+                <br>
+                <strong>⚡ 性能影响</strong>：内存访问不连续，可能导致缓存效率降低
+            </div>
+
+            <h3>2.2 转置导致的非连续</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>📝 代码</h4>
+                    <pre><code>// 原张量 [2, 3, 4]
+uint32_t shapes[] = {2, 3, 4};
+Tensor original = make_tensor_external(
+    addr, shapes, 3,
+    DataType::FLOAT32, false, 0
+);
+// strides = [12, 4, 1]
+// is_contiguous = true
+
+// 转置维度 0 和 2
+Tensor transposed = original.transpose(0, 2);
+// shapes = [4, 3, 2]
+// strides = [1, 4, 12]  ← 交换！
+// is_contiguous = false ❌</code></pre>
+                </div>
+                <div class="card">
+                    <h4>📊 内存布局</h4>
+                    <div class="inline-diagram">
+原始布局 [2,3,4]:
+[0,0,0][0,0,1][0,0,2][0,0,3][0,1,0]...
+           └──第0块12个元素─┘└第1块─┘
+
+转置后 [4,3,2] strides=[1,4,12]:
+逻辑坐标 → flat_index:
+[0,0,0] → 0    [0,0,1] → 12
+[0,1,0] → 4    [0,1,1] → 16
+[0,2,0] → 8    [0,2,1] → 20
+
+跳着访问！数据不连续 ❌</div>
+                </div>
+            </div>
+
+            <h3>2.3 Permute 导致的非连续</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>📝 代码</h4>
+                    <pre><code>// 原张量 [2, 3, 4]
+uint32_t shapes[] = {2, 3, 4};
+Tensor original = make_tensor_external(
+    addr, shapes, 3,
+    DataType::FLOAT32, false, 0
+);
+// strides = [12, 4, 1]
+
+// Permute: [2, 3, 4] → [3, 4, 2]
+// order = [1, 2, 0]
+uint32_t order[] = {1, 2, 0};
+Tensor permuted = original.permute(order);
+// shapes = [3, 4, 2]
+// strides = [4, 1, 12]  ← 完全重排
+// is_contiguous = false ❌</code></pre>
+                </div>
+                <div class="card">
+                    <h4>📊 维度重排示意</h4>
+                    <div class="inline-diagram">
+原始: shapes = [2, 3, 4]
+              dims = [0, 1, 2]
+              strides = [12, 4, 1]
+
+Permute order = [1, 2, 0]:
+              dims = [1, 2, 0]
+              shapes = [3, 4, 2]
+              strides = [4, 1, 12]
+
+逻辑: 原[0,1,2] → 新[?,?,?]
+     新[0,1,2] = 原[2,0,1]
+     
+数据访问完全打乱 ❌</div>
+                </div>
+            </div>
+
+            <h3>2.4 切片导致的非连续</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>📝 代码</h4>
+                    <pre><code>// 原张量 [4, 8] strides=[8,1]
+Tensor original = make_tensor_external(...);
+// is_contiguous = true
+
+// 切片: 取第2列（每2列取1列）
+Tensor sliced = original.slice(
+    dim = 1,           // 列维度
+    start = 0,         // 从第0列开始
+    end = 8,           // 到第8列结束
+    step = 2           // 每隔2列取1列
+);
+// shapes = [4, 4]  ← 8/2=4
+// strides = [8, 2] ← 步长变为2
+// is_contiguous = false ❌</code></pre>
+                </div>
+                <div class="card">
+                    <h4>📊 切片示意图</h4>
+                    <div class="inline-diagram">
+原始 [4, 8]:
+[0,0][0,1][0,2][0,3][0,4][0,5][0,6][0,7]
+[1,0][1,1][1,2][1,3][1,4][1,5][1,6][1,7]
+[2,0][2,1][2,2][2,3][2,4][2,5][2,6][2,7]
+[3,0][3,1][3,2][3,3][3,4][3,5][3,6][3,7]
+
+切片后 [4, 4] step=2:
+[0,0][0,2][0,4][0,6]  ← 跳过1列
+[1,0][1,2][1,4][1,6]
+[2,0][2,2][2,4][2,6]
+[3,0][3,2][3,4][3,6]
+
+内存不连续: strides=[8,2] ❌</div>
+                </div>
+            </div>
+
+            <h3>2.5 非连续性的性能影响</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>操作</th>
+                        <th>连续</th>
+                        <th>非连续</th>
+                        <th>性能差异</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>顺序访问</td>
+                        <td><span class="badge badge-success">✅ 高效</span></td>
+                        <td><span class="badge badge-warning">⚠️ 可能低效</span></td>
+                        <td>取决于 stride 模式</td>
+                    </tr>
+                    <tr>
+                        <td>随机访问</td>
+                        <td><span class="badge badge-success">✅ 可预测</span></td>
+                        <td><span class="badge badge-warning">⚠️ 计算开销</span></td>
+                        <td>需要计算 flat_index</td>
+                    </tr>
+                    <tr>
+                        <td>内存带宽</td>
+                        <td><span class="badge badge-success">✅ 最佳</span></td>
+                        <td><span class="badge badge-error">❌ 下降</span></td>
+                        <td>可能出现缓存未命中</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section id="view-operation" class="section">
+            <h2>3. VIEW 操作详解</h2>
+
+            <h3>3.1 什么是 VIEW？</h3>
+            <div class="success-box">
+                <strong>🎯 VIEW 的核心特性</strong><br><br>
+                <ul>
+                    <li><strong>零拷贝</strong>：不复制底层数据，只修改元数据</li>
+                    <li><strong>元数据重写</strong>：修改 shapes、start_offset、strides</li>
+                    <li><strong>安全约束</strong>：视图不能超出父张量的边界</li>
+                </ul>
+            </div>
+
+            <h3>3.2 VIEW 基本语法</h3>
+            <pre><code>Tensor view(
+    const uint32_t view_shapes[],    // 新形状
+    const uint32_t view_offsets[],   // 各维度的偏移
+    bool in_manual_dep = false       // 手动依赖标记
+) const;</code></pre>
+
+            <h3>3.3 提取子张量（Sub-Tensor）</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>📝 代码</h4>
+                    <pre><code>// 原张量 [4, 8] strides=[8,1]
+Tensor original = make_tensor_external(...);
+
+// 提取子张量: 取前2行
+uint32_t view_shapes[] = {2, 8};
+uint32_t view_offsets[] = {0, 0};
+
+Tensor sub = original.view(view_shapes, view_offsets);
+
+// 结果:
+// shapes = [2, 8]
+// strides = [8, 1]  ← 继承自父张量
+// start_offset = 0   ← 起点不变
+// is_contiguous = true</code></pre>
+                </div>
+                <div class="card">
+                    <h4>📊 示意图</h4>
+                    <div class="inline-diagram">
+原始 [4, 8]:
+[■][■][■][■][■][■][■][■]  ← 行0
+[■][■][■][■][■][■][■][■]  ← 行1
+[□][□][□][□][□][□][□][□]  ← 行2
+[□][□][□][□][□][□][□][□]  ← 行3
+
+VIEW 后 [2, 8]:
+[■][■][■][■][■][■][■][■]  ← 行0
+[■][■][■][■][■][■][■][■]  ← 行1
+
+数据不复制！只是引用 ✅</div>
+                </div>
+            </div>
+
+            <h3>3.4 提取中间区域</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>📝 代码</h4>
+                    <pre><code>// 原张量 [4, 8]
+Tensor original = make_tensor_external(...);
+
+// 提取中间区域: 取第1-2行，第3-6列
+uint32_t view_shapes[] = {2, 4};
+uint32_t view_offsets[] = {1, 3};  // 从[1,3]开始
+
+Tensor region = original.view(view_shapes, view_offsets);
+
+// 计算:
+// start_offset = 1×8 + 3×1 = 11
+// shapes = [2, 4]
+// strides = [8, 1]</code></pre>
+                </div>
+                <div class="card">
+                    <h4>📊 示意图</h4>
+                    <div class="inline-diagram">
+原始 [4, 8]:
+[□][□][□][■][■][■][■][□]
+[□][□][□][■][■][■][■][□]
+[□][□][□][□][□][□][□][□]
+[□][□][□][□][□][□][□][□]
+
+VIEW 区域 [1,3] → [3,7]:
+[■][■][■][■]  ← 从[1,3]开始
+[■][■][■][■]  ← 2×4 的子区域
+
+start_offset = 1×8 + 3×1 = 11
+数据不复制 ✅</div>
+                </div>
+            </div>
+
+            <h3>3.5 VIEW 操作的内部实现</h3>
+            <pre><code>Tensor view(const uint32_t view_shapes[], const uint32_t view_offsets[], 
+            bool in_manual_dep = false) const {
+    Tensor result;
+    
+    // 步骤1: 复制 Cache Line 1（元数据）
+    result.init_from_line1(*this);
+    
+    // 步骤2: 更新 start_offset
+    for (uint32_t i = 0; i < ndims; i++) {
+        debug_assert(view_offsets[i] + view_shapes[i] <= shapes[i]);
+        result.start_offset += static_cast<uint64_t>(view_offsets[i]) * 
+                               static_cast<uint64_t>(strides[i]);
+        result.shapes[i] = view_shapes[i];
+        result.strides[i] = strides[i];  // stride 保持不变
+    }
+    
+    // 步骤3: 更新 derived 字段
+    result.manual_dep = in_manual_dep;
+    result.refresh_derived();
+    result.assert_in_buffer_bounds();
+    
+    return result;
+}</code></pre>
+
+            <h3>3.6 VIEW vs 复制：性能对比</h3>
+            <div class="comparison-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>操作</th>
+                            <th>时间复杂度</th>
+                            <th>内存拷贝</th>
+                            <th>适用场景</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>VIEW</td>
+                            <td>O(ndims)</td>
+                            <td>0 字节</td>
+                            <td>只需要描述访问模式</td>
+                        </tr>
+                        <tr>
+                            <td>COPY</td>
+                            <td>O(numel)</td>
+                            <td>numel × elem_size 字节</td>
+                            <td>需要独立的数据副本</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="transpose-operation" class="section">
+            <h2>4. TRANSPOSE 操作详解</h2>
+
+            <h3>4.1 TRANSPOSE 基本语法</h3>
+            <pre><code>Tensor transpose(
+    uint32_t x,              // 要交换的第一个维度索引
+    uint32_t y,              // 要交换的第二个维度索引
+    bool in_manual_dep = false
+) const;</code></pre>
+
+            <h3>4.2 2D 转置示例</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>📝 代码</h4>
+                    <pre><code>// 原张量 [3, 4]
+uint32_t shapes[] = {3, 4};
+Tensor original = make_tensor_external(...);
+// strides = [4, 1]
+// is_contiguous = true
+
+// 转置: 交换维度0和1
+Tensor t = original.transpose(0, 1);
+// shapes = [4, 3]  ← 交换
+// strides = [1, 4] ← 交换
+// is_contiguous = false ❌</code></pre>
+                </div>
+                <div class="card">
+                    <h4>📊 矩阵转置示意</h4>
+                    <div class="inline-diagram">
+原始 [3, 4]:
+[0,0][0,1][0,2][0,3]
+[1,0][1,1][1,2][1,3]
+[2,0][2,1][2,2][2,3]
+
+转置后 [4, 3]:
+[0,0][1,0][2,0]
+[0,1][1,1][2,1]
+[0,2][1,2][2,2]
+[0,3][1,3][2,3]
+
+内存中数据不变！
+只是解释方式改变 ✅</div>
+                </div>
+            </div>
+
+            <h3>4.3 3D 转置示例</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>📝 代码</h4>
+                    <pre><code>// 原张量 [2, 3, 4]
+uint32_t shapes[] = {2, 3, 4};
+Tensor original = make_tensor_external(...);
+// strides = [12, 4, 1]
+
+// 转置维度0和2
+Tensor t = original.transpose(0, 2);
+// shapes = [4, 3, 2]  ← 交换
+// strides = [1, 4, 12] ← 交换</code></pre>
+                </div>
+                <div class="card">
+                    <h4>📊 维度交换示意</h4>
+                    <div class="inline-diagram">
+原始 [2, 3, 4]:
+dims:   [0]   [1]   [2]
+shapes:  2     3     4
+strides:12    4     1
+
+transpose(0,2):
+dims:   [2]   [1]   [0]
+shapes:  4     3     2
+strides: 1     4    12
+
+逻辑坐标变换:
+新[0,1,2] = 原[2,1,0]</div>
+                </div>
+            </div>
+
+            <h3>4.4 TRANSPOSE 的内部实现</h3>
+            <pre><code>Tensor transpose(uint32_t x, uint32_t y, bool in_manual_dep = false) const {
+    debug_assert(valid_transpose(x, y));
+    Tensor result;
+    
+    // 复制 Cache Line 1
+    result.init_from_line1(*this);
+    
+    // 复制 strides（line 2 未被 memcpy）
+    for (uint32_t i = 0; i < ndims; i++)
+        result.strides[i] = strides[i];
+    
+    // 交换 shapes 和 strides
+    std::swap(result.shapes[x], result.shapes[y]);
+    std::swap(result.strides[x], result.strides[y]);
+    
+    result.manual_dep = in_manual_dep;
+    result.refresh_derived();
+    
+    return result;
+}</code></pre>
+
+            <h3>4.5 转置的实际应用场景</h3>
+            <div class="highlight-box">
+                <strong>🎯 常见转置场景</strong>
+                <ul>
+                    <li><strong>图像处理</strong>：HWC → CHW 或 CHW → HWC</li>
+                    <li><strong>矩阵乘法</strong>：转置权重矩阵以匹配计算顺序</li>
+                    <li><strong>注意力机制</strong>：Q, K, V 的维度重排</li>
+                    <li><strong>批处理</strong>：调整 Batch 和 Sequence 维度</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="slice-operation" class="section">
+            <h2>5. SLICE 操作详解</h2>
+
+            <h3>5.1 SLICE 基本语法</h3>
+            <pre><code>Tensor slice(
+    uint32_t dim,           // 要切片的维度
+    uint32_t start,         // 起始位置（包含）
+    uint32_t end,           // 结束位置（不包含）
+    uint32_t step = 1,      // 步长（默认1）
+    bool in_manual_dep = false
+) const;</code></pre>
+
+            <h3>5.2 基本切片示例</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>📝 代码</h4>
+                    <pre><code>// 原张量 [4, 8]
+Tensor original = make_tensor_external(...);
+
+// 切片第1行：取[1:3)范围
+Tensor row = original.slice(
+    dim = 0,    // 行维度
+    start = 1,  // 从第1行开始
+    end = 3     // 到第3行（不包含）
+);
+// shapes = [2, 8]
+// start_offset = 1×8 = 8</code></pre>
+                </div>
+                <div class="card">
+                    <h4>📊 切片示意</h4>
+                    <div class="inline-diagram">
+原始 [4, 8]:
+[□][□][□][□][□][□][□][□]  ← 行0
+[■][■][■][■][■][■][■][■]  ← 行1 ← 起点
+[■][■][■][■][■][■][■][■]  ← 行2
+[□][□][□][□][□][□][□][□]  ← 行3
+
+切片后 [2, 8]:
+[■][■][■][■][■][■][■][■]
+[■][■][■][■][■][■][■][■]
+
+start_offset = 1×8 = 8
+数据不复制 ✅</div>
+                </div>
+            </div>
+
+            <h3>5.3 带步长的切片</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>📝 代码</h4>
+                    <pre><code>// 原张量 [4, 8] strides=[8,1]
+Tensor original = make_tensor_external(...);
+
+// 切片: 每隔2行取1行
+Tensor every_other = original.slice(
+    dim = 0,    // 行维度
+    start = 0,  // 从第0行开始
+    end = 4,    // 到第4行
+    step = 2   // 每隔2行取1行
+);
+// shapes = [2, 8]  ← 4/2=2
+// strides = [16, 1] ← 步长×2
+// is_contiguous = false ❌</code></pre>
+                </div>
+                <div class="card">
+                    <h4>📊 步长切片示意</h4>
+                    <div class="inline-diagram">
+原始 [4, 8]:
+[■][■][■][■][■][■][■][■]  ← 取
+[□][□][□][□][□][□][□][□]  ← 跳过
+[■][■][■][■][■][■][■][■]  ← 取
+[□][□][□][□][□][□][□][□]  ← 跳过
+
+切片后 [2, 8]:
+[■][■][■][■][■][■][■][■]
+[■][■][■][■][■][■][■][■]
+
+strides = [16, 1] ← 步长加倍！
+内存不连续 ❌</div>
+                </div>
+            </div>
+
+            <h3>5.4 切片列维度</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>📝 代码</h4>
+                    <pre><code>// 原张量 [4, 8] strides=[8,1]
+Tensor original = make_tensor_external(...);
+
+// 切片列: 取第2-5列
+Tensor cols = original.slice(
+    dim = 1,    // 列维度
+    start = 2,  // 从第2列开始
+    end = 5     // 到第5列（不包含）
+);
+// shapes = [4, 3]
+// start_offset 不变（行维度未变）
+// strides[1] = 1 ← 保持</code></pre>
+                </div>
+                <div class="card">
+                    <h4>📊 列切片示意</h4>
+                    <div class="inline-diagram">
+原始 [4, 8]:
+[□][■][■][■][□][□][□][□]
+[□][■][■][■][□][□][□][□]
+[□][■][■][■][□][□][□][□]
+[□][■][■][■][□][□][□][□]
+
+切片后 [4, 3]:
+[■][■][■]
+[■][■][■]
+[■][■][■]
+[■][■][■]
+
+is_contiguous = true ✅</div>
+                </div>
+            </div>
+
+            <h3>5.5 SLICE 的内部实现</h3>
+            <pre><code>Tensor slice(uint32_t dim, uint32_t start, uint32_t end, 
+            uint32_t step = 1, bool in_manual_dep = false) const {
+    debug_assert(dim < ndims);
+    debug_assert(step >= 1);
+    debug_assert(end > start);
+    debug_assert(end <= shapes[dim]);
+    
+    Tensor result;
+    result.init_from_line1(*this);
+    
+    // 复制原始 strides
+    for (uint32_t i = 0; i < ndims; i++)
+        result.strides[i] = strides[i];
+    
+    // 更新被切片维度
+    const uint32_t old_stride_d = strides[dim];
+    result.start_offset += static_cast<uint64_t>(start) * 
+                          static_cast<uint64_t>(old_stride_d);
+    
+    // 计算新形状和新步长
+    const uint32_t new_len = (end - start + step - 1) / step;
+    result.shapes[dim] = new_len;
+    result.strides[dim] = static_cast<uint32_t>(
+        static_cast<uint64_t>(old_stride_d) * step
+    );
+    
+    result.manual_dep = in_manual_dep;
+    result.refresh_derived();
+    result.assert_in_buffer_bounds();
+    
+    return result;
+}</code></pre>
+
+            <h3>5.6 切片的边界约束</h3>
+            <div class="error-box">
+                <strong>⚠️ 切片约束</strong><br><br>
+                切片操作必须满足以下条件：
+                <ul>
+                    <li><code>start < end</code></li>
+                    <li><code>end <= shapes[dim]</code></li>
+                    <li><code>step >= 1</code></li>
+                    <li>切片结果必须在 Buffer 边界内</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="comparison" class="section">
+            <h2>6. 综合对比与最佳实践</h2>
+
+            <h3>6.1 视图操作对比表</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>操作</th>
+                        <th>shapes 变化</th>
+                        <th>strides 变化</th>
+                        <th>start_offset 变化</th>
+                        <th>数据复制</th>
+                        <th>is_contiguous</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>view</strong></td>
+                        <td>变小或不变</td>
+                        <td>不变</td>
+                        <td>增加</td>
+                        <td><span class="badge badge-success">❌ 否</span></td>
+                        <td>可能不变</td>
+                    </tr>
+                    <tr>
+                        <td><strong>transpose</strong></td>
+                        <td>交换</td>
+                        <td>交换</td>
+                        <td>不变</td>
+                        <td><span class="badge badge-success">❌ 否</span></td>
+                        <td><span class="badge badge-error">❌ 通常 false</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>permute</strong></td>
+                        <td>重排</td>
+                        <td>重排</td>
+                        <td>不变</td>
+                        <td><span class="badge badge-success">❌ 否</span></td>
+                        <td><span class="badge badge-error">❌ 通常 false</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>slice</strong></td>
+                        <td>变小</td>
+                        <td>可能变大</td>
+                        <td>增加</td>
+                        <td><span class="badge badge-success">❌ 否</span></td>
+                        <td>可能变为 false</td>
+                    </tr>
+                    <tr>
+                        <td><strong>reshape</strong></td>
+                        <td>可能变</td>
+                        <td>重新计算</td>
+                        <td>不变</td>
+                        <td><span class="badge badge-warning">⚠️ 仅当连续</span></td>
+                        <td>总是 true</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>6.2 选择合适的操作</h3>
+            <div class="two-columns">
+                <div class="card">
+                    <h4>🎯 使用 VIEW 的场景</h4>
+                    <ul>
+                        <li>只需要读取数据的子区域</li>
+                        <li>不想复制大量数据</li>
+                        <li>临时访问某个区域</li>
+                    </ul>
+                    <div class="success-box">
+                        <strong>✅ 推荐</strong>
+                        <pre><code>// 提取子张量用于计算
+Tensor region = big_tensor.view(shapes, offsets);
+process(region);  // 无数据复制</code></pre>
+                    </div>
+                </div>
+                <div class="card">
+                    <h4>🎯 使用 SLICE 的场景</h4>
+                    <ul>
+                        <li>需要提取连续的行或列</li>
+                        <li>每隔 N 个元素取一个</li>
+                        <li>处理时间序列的滑动窗口</li>
+                    </ul>
+                    <div class="warning-box">
+                        <strong>⚠️ 注意</strong>
+                        <pre><code>// 带步长的切片
+Tensor sampled = tensor.slice(dim, start, end, step);
+// step > 1 时会产生非连续张量</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <h3>6.3 性能优化建议</h3>
+            <div class="highlight-box">
+                <strong>⚡ 优化策略</strong>
+                <ol>
+                    <li><strong>避免不必要的非连续化</strong>：如果只需要连续数据，优先使用连续的视图操作</li>
+                    <li><strong>批量操作合并</strong>：多次小切片可以合并为一次大切片</li>
+                    <li><strong>考虑 to_contiguous()</strong>：如果非连续张量被频繁访问，复制后可能更快</li>
+                    <li><strong>使用 is_contiguous 标志</strong>：在热点路径中检查此标志以选择最优算法</li>
+                </ol>
+            </div>
+
+            <h3>6.4 实战代码示例</h3>
+            <pre><code>// 完整示例：从大张量中提取和处理数据
+
+// 1. 创建原始连续张量 [1024, 1024]
+uint32_t shapes[] = {1024, 1024};
+Tensor big = make_tensor_external(buffer_addr, shapes, 2, 
+                                  DataType::FLOAT32, false, 0);
+// is_contiguous = true ✅
+
+// 2. 提取 256×256 的子区域，从 [100, 200] 开始
+uint32_t view_shapes[] = {256, 256};
+uint32_t view_offsets[] = {100, 200};
+Tensor region = big.view(view_shapes, view_offsets);
+// shapes = [256, 256], strides = [1024, 1]
+// is_contiguous = true ✅
+
+// 3. 转置子区域
+Tensor transposed = region.transpose(0, 1);
+// shapes = [256, 256], strides = [1, 1024]
+// is_contiguous = false ❌
+
+// 4. 如果需要连续数据，执行拷贝
+if (!transposed.is_contiguous) {
+    Tensor contiguous = transposed.to_contiguous();
+    // 拷贝数据，is_contiguous = true
+}</code></pre>
+
+            <h3>6.5 常见错误与解决方案</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>错误</th>
+                        <th>原因</th>
+                        <th>解决方案</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>reshape 失败</td>
+                        <td>源张量非连续</td>
+                        <td>先调用 to_contiguous() 或使用 reshape 后再 transpose</td>
+                    </tr>
+                    <tr>
+                        <td>边界越界</td>
+                        <td>view/slice 超出范围</td>
+                        <td>检查 offsets + shapes <= original_shapes</td>
+                    </tr>
+                    <tr>
+                        <td>性能下降</td>
+                        <td>频繁访问非连续张量</td>
+                        <td>考虑 to_contiguous() 或重构算法</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <footer>
+            <p>Tensor 连续性示例与 VIEW 操作详解 | PyPTO Runtime</p>
+        </footer>
+    </div>
+</body>
+</html>

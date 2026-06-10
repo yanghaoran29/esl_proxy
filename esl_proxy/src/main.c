@@ -65,18 +65,17 @@ int main(void) {
     ring_buf_init();
     init_ctrl_t();
     executor_init();
-    // MAIN_LOGF("[orchestration] init done");
     // pthread_create(&manager_thread, NULL, manager_worker, &g_mem_pool);
 
-    for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
-        pthread_create(&dispatch_threads[i], NULL, dispatch_worker,
-                       (void *)(intptr_t)i);
-    }
+    // for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
+    //     pthread_create(&dispatch_threads[i], NULL, dispatch_worker,
+    //                    (void *)(intptr_t)i);
+    // }
 
-    for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
-        pthread_create(&cutter_threads[i], NULL, cutter_worker,
-                       (void *)(intptr_t)i);
-    }
+    // for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
+    //     pthread_create(&cutter_threads[i], NULL, cutter_worker,
+    //                    (void *)(intptr_t)i);
+    // }
 
 #if ORCHESTRATION_TIME
     uint64_t start_ns = get_time_ns();
@@ -87,9 +86,8 @@ int main(void) {
     uint32_t task_cnt = 0;
     uint64_t subtask_cnt = 0;
     for (uint32_t i = 1; i <= (uint32_t)g_task_id; i++) {
-        const task_state st = atomic_load_explicit(&g_state_buf[i & RING_MASK],
-                                                   memory_order_relaxed);
-        if (st.state == TASK_STATUS_EMPTY || st.task_id != (uint16_t)i)
+        const task_state st = atomic_load_explicit(&g_state_buf[i & RING_MASK], memory_order_relaxed);
+        if (st.state == TASK_STATUS_EMPTY)
             continue;
         task_cnt++;
         const struct task_desc *t = &g_basic_buf[i & RING_MASK];
@@ -100,43 +98,24 @@ int main(void) {
     }
 
     MAIN_LOGF("[orchestration] task_cnt = %u", task_cnt);
-    MAIN_LOGF("[orchestration] subtask_cnt = %llu",
-            (unsigned long long)subtask_cnt);
-    MAIN_LOGF("[orchestration] elapsed_time = %llu ns",
-            (unsigned long long)elapsed_ns);
-    MAIN_LOGF("[orchestration] task_tp = %f MTasks/s",
-            (float)(task_cnt * 1000.0 / elapsed_ns));
-    MAIN_LOGF("[orchestration] subtask_tp = %f MTasks/s",
-            (float)(subtask_cnt * 1000.0 / elapsed_ns));
+    MAIN_LOGF("[orchestration] subtask_cnt = %llu", (unsigned long long)subtask_cnt);
+    MAIN_LOGF("[orchestration] elapsed_time = %llu ns", (unsigned long long)elapsed_ns);
+    MAIN_LOGF("[orchestration] task_tp = %f MTasks/s", (float)(task_cnt * 1000.0 / elapsed_ns));
+    MAIN_LOGF("[orchestration] subtask_tp = %f MTasks/s", (float)(subtask_cnt * 1000.0 / elapsed_ns));
 #else
     aicpu_orchestration_entry(0);
 #endif
 
-    dep_dump_maybe();
-#if DEP_DUMP
-    MAIN_LOGF("[deps] edge_cnt=%u", dep_dump_count_edges());
-#endif
-
-#if ORCH_SKIP_SCHED
-#if ORCHESTRATION_TIME
-    {
-        uint64_t total_end_ns = get_time_ns();
-        MAIN_LOGF("[total] elapsed_time=%llu ns (orch+deps, sched skipped)",
-                  (unsigned long long)(total_end_ns - total_start_ns));
-    }
-#endif
-    return 0;
-#endif
 
     // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
     //     pthread_join(executor_threads[i], NULL);
     // }
-    for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
-        pthread_join(cutter_threads[i], NULL);
-    }
-    for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
-        pthread_join(dispatch_threads[i], NULL);
-    }
+    // for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
+    //     pthread_join(cutter_threads[i], NULL);
+    // }
+    // for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
+    //     pthread_join(dispatch_threads[i], NULL);
+    // }
     // pthread_join(manager_thread, NULL);
 
 #if WORKER_LOG

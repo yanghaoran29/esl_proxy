@@ -43,7 +43,7 @@ CC       := cc
 # change to any include/*.h (e.g. tensormap.h) rebuilds the dependent objects.
 DEP_DUMP_DIR := ../tools/dep_dump
 
-CFLAGS   := -std=c11 -Wall -Wextra -pedantic -O3 -D_POSIX_C_SOURCE=199309L -I include -I cases -I$(DEP_DUMP_DIR) -DORCH_CASE=$(CASE) -MMD -MP
+CFLAGS   := -std=c11 -Wall -Wextra -pedantic -O3 -D_POSIX_C_SOURCE=199309L -I include -I cases -I$(DEP_DUMP_DIR) -DORCH_CASE=$(CASE) -MMD -MP -Wno-error=implicit-function-declaration
 
 # -latomic is needed on Linux but not on macOS (clang)
 UNAME_S  := $(shell uname -s)
