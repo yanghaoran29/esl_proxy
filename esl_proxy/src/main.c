@@ -49,13 +49,6 @@ int main(void) {
     const char *log_env = getenv("WORKER_LOG");
     if (log_env != NULL && log_env[0] == '1') {
         g_worker_log = 1;
-        
-        // Check LOG_OUTPUT_MODE env var (0=file, 1=stdout, 2=both)
-        const char *output_env = getenv("LOG_OUTPUT_MODE");
-        if (output_env != NULL) {
-            g_log_output_mode = atoi(output_env);
-        }
-        
         log_init("pto.");
     }
 #endif

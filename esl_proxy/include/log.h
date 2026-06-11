@@ -20,7 +20,7 @@
 #define _POSIX_C_SOURCE 199309L
 #endif
 
-#define LOG_MAX_THREADS 64
+#define LOG_MAX_THREADS 16
 
 #include <stdio.h>
 #include <stdint.h>

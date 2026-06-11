@@ -226,10 +226,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         Tensor k0_in = tensor_view(k_proj, 0u, (uint32_t)b0, 16);
         add_input(g_task_id, k0_in);
         add_duration(g_task_id, DUR_QK_NORM);
-        qwen3_succeed_all(g_task_id, q_ids,
-            qwen3_n_tasks(20, qwen3_blocks_per_task(20)));
-        qwen3_succeed_all(g_task_id, k_ids,
-            qwen3_n_tasks(8, qwen3_blocks_per_task(8)));
+        qwen3_succeed_all(g_task_id, q_ids, qwen3_n_tasks(20, qwen3_blocks_per_task(20)));
+        qwen3_succeed_all(g_task_id, k_ids, qwen3_n_tasks(8, qwen3_blocks_per_task(8)));
         submit(g_task_id);
         qk_norm_per_tile[tix] = g_task_id;
     }
@@ -512,8 +510,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             add_inout(g_task_id, down_piece);
             add_scalar(g_task_id, base);
             add_duration(g_task_id, DUR_DOWN_PROJ);
-            qwen3_succeed_all(g_task_id, silu_ids,
-                qwen3_n_tasks(34, qwen3_blocks_per_task(34)));
+            qwen3_succeed_all(g_task_id, silu_ids, qwen3_n_tasks(34, qwen3_blocks_per_task(34)));
             submit(g_task_id);
             down_ids[di++] = g_task_id;
 

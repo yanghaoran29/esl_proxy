@@ -1,4 +1,4 @@
-# Qwen3_14b_tensormap
+# Qwen3_14b
 
 ## Conf
 spmd = 4
@@ -14,7 +14,7 @@ make CASE=qwen3_dynamic_tensormap.h run
 |tasks| 864 | 
 |subtasks| 3096|
 |spmd| 3.58 |
-|platform| m5 |
+|platform| M5 |
 |duration/us| 90| 187 |407 | 
 |task throughput MTasks/s| 9.60 | 4.62 |2.12 | 
 |subtask throughput MTasks/s| 34.40 | 16.5 |7.6 | 
@@ -24,8 +24,9 @@ make CASE=qwen3_dynamic_tensormap.h run
 ### Cost
 
 ## Debug
-```
-make run WORKER_LOG=1
+```shell
+make run CASE=qwen3_dynamic_manual_scope.h WORKER_LOG=1
+python3 tools/gen_dag.py
 ```
 
 ## Apple M5

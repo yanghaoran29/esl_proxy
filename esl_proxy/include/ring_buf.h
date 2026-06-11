@@ -191,9 +191,9 @@ static inline bool batch_succeed(uint16_t cnt, uint16_t task_id[], uint16_t targ
                 atomic_fetch_add_explicit(
                     &g_predecessor_buf[unique[i] & RING_MASK], 1,
                     memory_order_seq_cst);
-                WORKER_LOGF("succeed task_id,%u,predecessor,%d,target,%u,idx,%d,successor,%d",
+                WORKER_LOGF("succeed, task_id,%u,predecessor_cnt,%d,predecessor_id,%u,idx,%d",
                             unique[i], g_predecessor_buf[unique[i] & RING_MASK],
-                            target, idx, ptr->successor[idx]);
+                            target, idx);
                 idx++;
             }
             return true;
@@ -216,29 +216,24 @@ static inline void batch_submit(uint16_t cnt, uint16_t task_id[])
             int ctrl_id = 0;
             queue_t* queue = &g_ctrl_t[ctrl_id].ready_queue[type];
             enqueue(queue, task_id[i]);
-            WORKER_LOGF("enqueue task_id,%u, type,%u, ctrl_id,%d, cnt,%d", task_id[i], type, ctrl_id, queue->cnt);
+            WORKER_LOGF("enqueue,task_id,%u, type,%u, ctrl_id,%d, cnt,%d", task_id[i], type, ctrl_id, queue->cnt);
         }
     }
 }
 
 static inline void submit(uint16_t task_id)
 {
-#if NO_DEPS
-    /* Orchestration-only: clear submit sentinel; sched skipped in main. */
-    atomic_fetch_sub_explicit(&g_predecessor_buf[task_id & RING_MASK], 1,
-                              memory_order_seq_cst);
-#else
+    uint16_t type = g_basic_buf[task_id & RING_MASK].type;
+    WORKER_LOGF("submit,task_id,%u, type,%u", task_id, type);
     uint16_t tmp = (uint16_t)atomic_fetch_sub_explicit(
         &g_predecessor_buf[task_id & RING_MASK], 1, memory_order_seq_cst);
     if (tmp == 1) {
-        uint16_t type = g_basic_buf[task_id & RING_MASK].type;
         int ctrl_id = 0;
         queue_t *queue = &g_ctrl_t[ctrl_id].ready_queue[type];
-        WORKER_LOGF("enqueue task_id,%u, type,%u, ctrl_id,%d, cnt,%d", task_id,
+        WORKER_LOGF("enqueue,task_id,%u, type,%u, ctrl_id,%d, cnt,%d", task_id,
                     type, ctrl_id, queue->cnt);
         enqueue(queue, task_id);
     }
-#endif
 }
 
 static inline bool succeed(uint16_t task_id, uint16_t target)
@@ -271,8 +266,8 @@ static inline bool succeed(uint16_t task_id, uint16_t target)
             ptr->successor[idx] = task_id;
             atomic_fetch_add_explicit(&g_predecessor_buf[task_id & RING_MASK], 1,
                                       memory_order_seq_cst);
-            WORKER_LOGF("succeed task_id,%u,predecessor,%d,target,%u", task_id,
-                        g_predecessor_buf[task_id & RING_MASK], target);
+            WORKER_LOGF("succeed,task_id,%u,predecessor_cnt,%d,predecessor_id,%u,idx,%d", task_id,
+                        g_predecessor_buf[task_id & RING_MASK], target,idx);
             return true;
         }
     }

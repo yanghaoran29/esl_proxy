@@ -1,6 +1,7 @@
 #include "log.h"
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
 
@@ -28,6 +29,14 @@ void log_init(const char *base_filename)
     // Store base filename
     strncpy(g_base_filename, base_filename, sizeof(g_base_filename) - 1);
     g_base_filename[sizeof(g_base_filename) - 1] = '\0';
+    
+    // Initialize output mode from environment or default
+    const char *output_env = getenv("LOG_OUTPUT_MODE");
+    if (output_env != NULL) {
+        g_log_output_mode = atoi(output_env);
+    } else {
+        g_log_output_mode = LOG_OUTPUT_MODE;
+    }
     
     // Reset state
     g_next_slot = 0;

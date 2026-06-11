@@ -5,7 +5,7 @@
 #define RING_MASK (RING_SIZE - 1)
 #define HALF_RING_SIZE 2048
 
-#define SUCC_NODE_CNT 64
+#define SUCC_NODE_CNT 16
 
 #define AIC_OSTD 2
 #define AIC_CNT 60
