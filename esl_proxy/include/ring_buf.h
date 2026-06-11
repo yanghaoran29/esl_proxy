@@ -224,7 +224,7 @@ static inline void batch_submit(uint16_t cnt, uint16_t task_id[])
 static inline void submit(uint16_t task_id)
 {
     uint16_t type = g_basic_buf[task_id & RING_MASK].type;
-    WORKER_LOGF("submit,task_id,%u, type,%u", task_id, type);
+    WORKER_LOGF("new,task_id,%u, type,%u", task_id, type);
     uint16_t tmp = (uint16_t)atomic_fetch_sub_explicit(
         &g_predecessor_buf[task_id & RING_MASK], 1, memory_order_seq_cst);
     if (tmp == 1) {

@@ -41,6 +41,7 @@ static when2free_entry_t g_when2free_entries[WHEN2FREE_CAP];
 int main(void) {
     pthread_t dispatch_threads[DISPATCH_THREAD_CNT];
     pthread_t cutter_threads[CUTTER_THREAD_CNT];
+    pthread_t executor_threads[EXECUTOR_THREAD_CNT];
 #if ORCHESTRATION_TIME
     uint64_t total_start_ns = get_time_ns();
 #endif
@@ -58,17 +59,6 @@ int main(void) {
     ring_buf_init();
     init_ctrl_t();
     executor_init();
-    // pthread_create(&manager_thread, NULL, manager_worker, &g_mem_pool);
-
-    // for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
-    //     pthread_create(&dispatch_threads[i], NULL, dispatch_worker,
-    //                    (void *)(intptr_t)i);
-    // }
-
-    // for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
-    //     pthread_create(&cutter_threads[i], NULL, cutter_worker,
-    //                    (void *)(intptr_t)i);
-    // }
 
 #if ORCHESTRATION_TIME
     uint64_t start_ns = get_time_ns();
@@ -99,16 +89,31 @@ int main(void) {
     aicpu_orchestration_entry(0);
 #endif
 
+    // pthread_create(&manager_thread, NULL, manager_worker, &g_mem_pool);
+
+    for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
+        pthread_create(&dispatch_threads[i], NULL, dispatch_worker,
+                       (void *)(intptr_t)i);
+    }
+
+    for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
+        pthread_create(&cutter_threads[i], NULL, cutter_worker,
+                       (void *)(intptr_t)i);
+    }
+    // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
+    //     pthread_create(&executor_threads[i], NULL, executor_worker, (void *)(intptr_t)i);
+    // }
+
 
     // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
     //     pthread_join(executor_threads[i], NULL);
     // }
-    // for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
-    //     pthread_join(cutter_threads[i], NULL);
-    // }
-    // for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
-    //     pthread_join(dispatch_threads[i], NULL);
-    // }
+    for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
+        pthread_join(cutter_threads[i], NULL);
+    }
+    for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
+        pthread_join(dispatch_threads[i], NULL);
+    }
     // pthread_join(manager_thread, NULL);
 
 #if WORKER_LOG

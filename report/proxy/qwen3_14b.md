@@ -1,5 +1,6 @@
 # Qwen3_14b
 
+
 ## Conf
 spmd = 4
 
@@ -8,26 +9,25 @@ spmd = 4
 make CASE=qwen3_dynamic_manual_scope.h run
 make CASE=qwen3_dynamic_tensormap.h run
 ```
-### Orchestrator单核性能
-| Item |Base|Assign|Tensor|
-|:----:|:----:|:----:|:----:|
+
+| Item |O1_Base|O1_Assign|O1_Tensor|Scheduler|
+|:----:|:----:|:----:|:----:|:----:|
 |tasks| 864 | 
 |subtasks| 3096|
 |spmd| 3.58 |
 |platform| M5 |
-|duration/us| 90| 187 |407 | 
-|task throughput MTasks/s| 9.60 | 4.62 |2.12 | 
-|subtask throughput MTasks/s| 34.40 | 16.5 |7.6 | 
-### Scheduler单Cluster性能
-
-
-### Cost
+|duration/us| 90| 187 |407 | 60 |
+|task throughput MTasks/s| 9.60 | 4.62 |2.12 | 14.9 |
+|subtask throughput MTasks/s| 34.40 | 16.5 |7.6 | / |
 
 ## Debug
 ```shell
 make run CASE=qwen3_dynamic_manual_scope.h WORKER_LOG=1
 python3 tools/gen_dag.py
 ```
+## 关键问题
+1. 如何解决多线程实时交互的问题
+
 
 ## Apple M5
 10 (4 Super and 6 Efficiency)，无SMT，采用多级动态频率调节（DVFS）机制

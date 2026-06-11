@@ -32,7 +32,8 @@ static inline void dispatch_init(int tid)
     g_ctrl_t[tid].tid = (uint16_t)tid;
     for (int i = 0; i < EXE_TYPE_CNT; i++) {
         for (int j = 0; j < AIC_OSTD; j++) {
-            g_ctrl_t[tid].free_bitmap[i][j] = 0xFFFFFFFFFFFFFFFULL;
+            // Set all 60 bits (AIC_CNT = 60)
+            g_ctrl_t[tid].free_bitmap[i][j] = (uint64_t)((1ULL << AIC_CNT) - 1);
             g_ctrl_t[tid].msg_bitmap[i][j] = 0x0;
         }
     }
@@ -88,6 +89,7 @@ static inline void set_completed(int tid)
 static inline int send_task(ctrl_t *ctrl, int type)
 {
     int exe_type = type;  // TASK_TYPE_* maps to EXE_TYPE_*
+    // Check both slots - slot is free if neither slot 0 nor slot 1 has been sent a task
     uint64_t free_bitmap = ctrl->free_bitmap[type][0] & ctrl->free_bitmap[type][1];
     int free_cnt = __builtin_popcountll(free_bitmap);
     int cnt = free_cnt > (int)ctrl->ready_queue[type].cnt ? (int)ctrl->ready_queue[type].cnt : free_cnt;
@@ -103,11 +105,14 @@ static inline int send_task(ctrl_t *ctrl, int type)
         uint64_t idx = (uint64_t)__builtin_ctzll(free_bitmap);
 
         uint64_t mask = (uint64_t)0x1 << idx;
-        int slot = ctrl->free_bitmap[type][0] & mask == 1 ? 0 : 1;
+        // Determine which slot to use - prefer slot 0 if it's not busy
+        int slot = (ctrl->free_bitmap[type][0] & mask) != 0 ? 0 : 1;
         // Set executor's tasks and duration
         int core = (int)idx;
         g_executors[exe_type][core].tasks[slot] = task_id;
-        g_executors[exe_type][core].duration[slot] = g_basic_buf[task_id & RING_MASK].duration;
+        // Scale down duration for faster simulation (divide by 10000 to handle large durations)
+        uint32_t raw_duration = g_basic_buf[task_id & RING_MASK].duration;
+        g_executors[exe_type][core].duration[slot] = (raw_duration > 10000) ? (raw_duration / 10000) : 1;
         g_executors[exe_type][core].idx = slot;  // Point to the slot with the new task
         
         if (slot == 1) {
@@ -116,7 +121,9 @@ static inline int send_task(ctrl_t *ctrl, int type)
             ctrl->task_id_map1[type][idx] = task_id;
         }
         
+        // Clear the free bit for this core/slot combination (mark as busy)
         ctrl->free_bitmap[type][slot] &= ~mask;
+
         // Fake Return
         ctrl->msg_bitmap[type][slot] |= mask;
         WORKER_LOGF("send,task_id,%u,core,%d,slot,%d,type,%d", task_id, core, slot, type);
@@ -146,14 +153,15 @@ void *dispatch_worker(void *arg)
     int tid = (int)(intptr_t)arg;
     dispatch_init(tid);
 
-    int loop_cnt = 0;
     int total_sent = 0;
     uint64_t start_ns = get_time_ns();
+    
     while (atomic_load(&g_completed_cnt) < atomic_load(&g_task_id)) {
         total_sent += dispatch(tid);
         // WORKER_LOGF("worker %d,total_sent,%d total,%d", tid, total_sent, g_task_id);
     }
-    g_is_done = true;
+    
+    atomic_store(&g_is_done, true);
     uint64_t end_ns = get_time_ns();
     uint64_t elapsed_ns = end_ns - start_ns;
 

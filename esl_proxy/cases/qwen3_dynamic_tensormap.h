@@ -98,7 +98,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
 
     tm_deps_init();
 
-    const int64_t user_batch = 90;
+    // const int64_t user_batch = 90;
+    const int64_t user_batch = 16;
     const int64_t batch_padded = (((user_batch + 15) / 16) * 16);
     ext_out = tensor_make_2d(tensor_base(ext_out), (uint32_t)batch_padded, 5120, BFLOAT16);
     (void)alloc_tensors((uint32_t[2]){11520, 128}, 2, BFLOAT16);

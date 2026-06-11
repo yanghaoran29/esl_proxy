@@ -107,7 +107,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
     (void)ext_seq_lens;
     (void)ext_slot_mapping;
 
-    const int64_t user_batch = 90;
+    const int64_t user_batch = 96;
     const int64_t batch_padded = 96;
     ext_out = tensor_make_2d(tensor_base(ext_out), (uint32_t)batch_padded, 5120,
         BFLOAT16);

@@ -10,7 +10,7 @@ extern _Atomic bool g_is_done;
 void *cutter_worker(void *arg)
 {
     int tid = (int)(intptr_t)arg;
-    while (!g_is_done) {
+    while (!atomic_load(&g_is_done)) {
         // 从所有 ctrl 的 completed_queue 取任务处理依赖
         for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
             uint16_t cq_buf[CUTTER_BATCH_SIZE];
@@ -35,11 +35,12 @@ void *cutter_worker(void *arg)
                 idx = task_id & RING_MASK;
                 task_state st = atomic_load_explicit(&g_state_buf[idx], memory_order_acquire);
                 succ_cnt = (uint16_t)st.successor_cnt;
+                WORKER_LOGF("new,task_id,%u,type,%u, successor_cnt,%u", task_id, g_basic_buf[idx].type, succ_cnt);
                 for (uint16_t k = 0; k < succ_cnt; k++) {
                     succ_id = g_successor_buf[idx].successor[k];
                     
                     uint16_t left = (uint16_t)atomic_fetch_sub_explicit(&g_predecessor_buf[succ_id & RING_MASK], 1, memory_order_seq_cst);
-                    WORKER_LOGF("task_id,%u, successor,%u, predecessor,%u", task_id, succ_id, left);
+                    WORKER_LOGF("cutter, task_id,%u, successor_id,%u, predecessor_cnt,%u", task_id, succ_id, left);
                     if (left == 1) {
                         rq_buf[ready_cnt++] = succ_id;
                     }
@@ -54,7 +55,7 @@ void *cutter_worker(void *arg)
                 int target_ctrl = 0;
                 queue_t *rq = &g_ctrl_t[target_ctrl].ready_queue[type];
                 enqueue(rq, task_id);
-                WORKER_LOGF("rq tid,%d,cnt,%d,task_id,%u,task_type,%d", tid, rq->cnt, task_id, type);
+                WORKER_LOGF("ready_queue,q_cnt,%d,task_id,%u,type,%d", rq->cnt, task_id, type);
             }
             
         }
