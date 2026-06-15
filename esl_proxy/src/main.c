@@ -69,6 +69,18 @@ int main(void) {
     //     pthread_create(&executor_threads[i], NULL, executor_worker, (void *)(intptr_t)i);
     // }
 
+
+
+    for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
+        pthread_create(&cutter_threads[i], NULL, cutter_worker,
+                       (void *)(intptr_t)i);
+    }
+
+    for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
+        pthread_create(&dispatch_threads[i], NULL, dispatch_worker,
+                       (void *)(intptr_t)i);
+    }
+
 #if ORCHESTRATION_TIME
     uint64_t start_ns = get_time_ns();
     aicpu_orchestration_entry(0);
@@ -84,18 +96,6 @@ int main(void) {
     aicpu_orchestration_entry(0);
 #endif
     atomic_store(&g_orch_is_done, true);
-
-    for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
-        pthread_create(&cutter_threads[i], NULL, cutter_worker,
-                       (void *)(intptr_t)i);
-    }
-
-    for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
-        pthread_create(&dispatch_threads[i], NULL, dispatch_worker,
-                       (void *)(intptr_t)i);
-    }
-
-
 
     // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
     //     pthread_join(executor_threads[i], NULL);

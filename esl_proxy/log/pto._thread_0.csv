@@ -7,17 +7,11 @@ ring_buf.h,143,succeed,task_id,2,predecessor_id,0,idx,0
 ring_buf.h,162,new,task_id,3,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,3,predecessor_id,0,idx,0
 ring_buf.h,162,new,task_id,4,type,0,subtask_cnt,4
-ring_buf.h,143,succeed,task_id,4,predecessor_id,0,idx,0
 ring_buf.h,162,new,task_id,5,type,0,subtask_cnt,4
-ring_buf.h,143,succeed,task_id,5,predecessor_id,0,idx,0
 ring_buf.h,162,new,task_id,6,type,0,subtask_cnt,4
-ring_buf.h,143,succeed,task_id,6,predecessor_id,0,idx,0
 ring_buf.h,162,new,task_id,7,type,0,subtask_cnt,4
-ring_buf.h,143,succeed,task_id,7,predecessor_id,0,idx,0
 ring_buf.h,162,new,task_id,8,type,0,subtask_cnt,4
-ring_buf.h,143,succeed,task_id,8,predecessor_id,0,idx,0
 ring_buf.h,162,new,task_id,9,type,0,subtask_cnt,4
-ring_buf.h,143,succeed,task_id,9,predecessor_id,0,idx,0
 ring_buf.h,162,new,task_id,10,type,1,subtask_cnt,1
 ring_buf.h,143,succeed,task_id,10,predecessor_id,1,idx,0
 ring_buf.h,143,succeed,task_id,10,predecessor_id,2,idx,1
@@ -162,7 +156,6 @@ ring_buf.h,143,succeed,task_id,65,predecessor_id,60,idx,4
 ring_buf.h,143,succeed,task_id,65,predecessor_id,61,idx,5
 ring_buf.h,143,succeed,task_id,65,predecessor_id,63,idx,6
 ring_buf.h,162,new,task_id,66,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,66,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,67,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,67,predecessor_id,66,idx,0
 ring_buf.h,162,new,task_id,68,type,1,subtask_cnt,4
@@ -174,7 +167,6 @@ ring_buf.h,162,new,task_id,70,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,70,predecessor_id,69,idx,0
 ring_buf.h,143,succeed,task_id,70,predecessor_id,68,idx,1
 ring_buf.h,162,new,task_id,71,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,71,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,72,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,72,predecessor_id,71,idx,0
 ring_buf.h,162,new,task_id,73,type,1,subtask_cnt,4
@@ -186,7 +178,6 @@ ring_buf.h,162,new,task_id,75,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,75,predecessor_id,74,idx,0
 ring_buf.h,143,succeed,task_id,75,predecessor_id,73,idx,1
 ring_buf.h,162,new,task_id,76,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,76,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,77,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,77,predecessor_id,76,idx,0
 ring_buf.h,162,new,task_id,78,type,1,subtask_cnt,4
@@ -198,7 +189,6 @@ ring_buf.h,162,new,task_id,80,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,80,predecessor_id,79,idx,0
 ring_buf.h,143,succeed,task_id,80,predecessor_id,78,idx,1
 ring_buf.h,162,new,task_id,81,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,81,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,82,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,82,predecessor_id,81,idx,0
 ring_buf.h,162,new,task_id,83,type,1,subtask_cnt,4
@@ -210,7 +200,6 @@ ring_buf.h,162,new,task_id,85,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,85,predecessor_id,84,idx,0
 ring_buf.h,143,succeed,task_id,85,predecessor_id,83,idx,1
 ring_buf.h,162,new,task_id,86,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,86,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,87,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,87,predecessor_id,86,idx,0
 ring_buf.h,162,new,task_id,88,type,1,subtask_cnt,4
@@ -222,7 +211,6 @@ ring_buf.h,162,new,task_id,90,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,90,predecessor_id,89,idx,0
 ring_buf.h,143,succeed,task_id,90,predecessor_id,88,idx,1
 ring_buf.h,162,new,task_id,91,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,91,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,92,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,92,predecessor_id,91,idx,0
 ring_buf.h,162,new,task_id,93,type,1,subtask_cnt,4
@@ -234,7 +222,6 @@ ring_buf.h,162,new,task_id,95,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,95,predecessor_id,94,idx,0
 ring_buf.h,143,succeed,task_id,95,predecessor_id,93,idx,1
 ring_buf.h,162,new,task_id,96,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,96,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,97,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,97,predecessor_id,96,idx,0
 ring_buf.h,162,new,task_id,98,type,1,subtask_cnt,4
@@ -246,7 +233,6 @@ ring_buf.h,162,new,task_id,100,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,100,predecessor_id,99,idx,0
 ring_buf.h,143,succeed,task_id,100,predecessor_id,98,idx,1
 ring_buf.h,162,new,task_id,101,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,101,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,102,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,102,predecessor_id,101,idx,0
 ring_buf.h,162,new,task_id,103,type,1,subtask_cnt,4
@@ -258,7 +244,6 @@ ring_buf.h,162,new,task_id,105,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,105,predecessor_id,104,idx,0
 ring_buf.h,143,succeed,task_id,105,predecessor_id,103,idx,1
 ring_buf.h,162,new,task_id,106,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,106,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,107,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,107,predecessor_id,106,idx,0
 ring_buf.h,162,new,task_id,108,type,1,subtask_cnt,4
@@ -270,7 +255,6 @@ ring_buf.h,162,new,task_id,110,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,110,predecessor_id,109,idx,0
 ring_buf.h,143,succeed,task_id,110,predecessor_id,108,idx,1
 ring_buf.h,162,new,task_id,111,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,111,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,112,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,112,predecessor_id,111,idx,0
 ring_buf.h,162,new,task_id,113,type,1,subtask_cnt,4
@@ -282,7 +266,6 @@ ring_buf.h,162,new,task_id,115,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,115,predecessor_id,114,idx,0
 ring_buf.h,143,succeed,task_id,115,predecessor_id,113,idx,1
 ring_buf.h,162,new,task_id,116,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,116,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,117,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,117,predecessor_id,116,idx,0
 ring_buf.h,162,new,task_id,118,type,1,subtask_cnt,4
@@ -294,7 +277,6 @@ ring_buf.h,162,new,task_id,120,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,120,predecessor_id,119,idx,0
 ring_buf.h,143,succeed,task_id,120,predecessor_id,118,idx,1
 ring_buf.h,162,new,task_id,121,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,121,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,122,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,122,predecessor_id,121,idx,0
 ring_buf.h,162,new,task_id,123,type,1,subtask_cnt,4
@@ -306,7 +288,6 @@ ring_buf.h,162,new,task_id,125,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,125,predecessor_id,124,idx,0
 ring_buf.h,143,succeed,task_id,125,predecessor_id,123,idx,1
 ring_buf.h,162,new,task_id,126,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,126,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,127,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,127,predecessor_id,126,idx,0
 ring_buf.h,162,new,task_id,128,type,1,subtask_cnt,4
@@ -318,7 +299,6 @@ ring_buf.h,162,new,task_id,130,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,130,predecessor_id,129,idx,0
 ring_buf.h,143,succeed,task_id,130,predecessor_id,128,idx,1
 ring_buf.h,162,new,task_id,131,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,131,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,132,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,132,predecessor_id,131,idx,0
 ring_buf.h,162,new,task_id,133,type,1,subtask_cnt,4
@@ -330,7 +310,6 @@ ring_buf.h,162,new,task_id,135,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,135,predecessor_id,134,idx,0
 ring_buf.h,143,succeed,task_id,135,predecessor_id,133,idx,1
 ring_buf.h,162,new,task_id,136,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,136,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,137,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,137,predecessor_id,136,idx,0
 ring_buf.h,162,new,task_id,138,type,1,subtask_cnt,4
@@ -342,7 +321,6 @@ ring_buf.h,162,new,task_id,140,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,140,predecessor_id,139,idx,0
 ring_buf.h,143,succeed,task_id,140,predecessor_id,138,idx,1
 ring_buf.h,162,new,task_id,141,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,141,predecessor_id,10,idx,0
 ring_buf.h,162,new,task_id,142,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,142,predecessor_id,141,idx,0
 ring_buf.h,162,new,task_id,143,type,1,subtask_cnt,4
@@ -354,7 +332,6 @@ ring_buf.h,162,new,task_id,145,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,145,predecessor_id,144,idx,0
 ring_buf.h,143,succeed,task_id,145,predecessor_id,143,idx,1
 ring_buf.h,162,new,task_id,146,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,146,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,147,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,147,predecessor_id,146,idx,0
 ring_buf.h,162,new,task_id,148,type,1,subtask_cnt,4
@@ -366,7 +343,6 @@ ring_buf.h,162,new,task_id,150,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,150,predecessor_id,149,idx,0
 ring_buf.h,143,succeed,task_id,150,predecessor_id,148,idx,1
 ring_buf.h,162,new,task_id,151,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,151,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,152,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,152,predecessor_id,151,idx,0
 ring_buf.h,162,new,task_id,153,type,1,subtask_cnt,4
@@ -378,7 +354,6 @@ ring_buf.h,162,new,task_id,155,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,155,predecessor_id,154,idx,0
 ring_buf.h,143,succeed,task_id,155,predecessor_id,153,idx,1
 ring_buf.h,162,new,task_id,156,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,156,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,157,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,157,predecessor_id,156,idx,0
 ring_buf.h,162,new,task_id,158,type,1,subtask_cnt,4
@@ -390,7 +365,6 @@ ring_buf.h,162,new,task_id,160,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,160,predecessor_id,159,idx,0
 ring_buf.h,143,succeed,task_id,160,predecessor_id,158,idx,1
 ring_buf.h,162,new,task_id,161,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,161,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,162,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,162,predecessor_id,161,idx,0
 ring_buf.h,162,new,task_id,163,type,1,subtask_cnt,4
@@ -402,7 +376,6 @@ ring_buf.h,162,new,task_id,165,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,165,predecessor_id,164,idx,0
 ring_buf.h,143,succeed,task_id,165,predecessor_id,163,idx,1
 ring_buf.h,162,new,task_id,166,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,166,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,167,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,167,predecessor_id,166,idx,0
 ring_buf.h,162,new,task_id,168,type,1,subtask_cnt,4
@@ -414,7 +387,6 @@ ring_buf.h,162,new,task_id,170,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,170,predecessor_id,169,idx,0
 ring_buf.h,143,succeed,task_id,170,predecessor_id,168,idx,1
 ring_buf.h,162,new,task_id,171,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,171,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,172,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,172,predecessor_id,171,idx,0
 ring_buf.h,162,new,task_id,173,type,1,subtask_cnt,4
@@ -426,7 +398,6 @@ ring_buf.h,162,new,task_id,175,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,175,predecessor_id,174,idx,0
 ring_buf.h,143,succeed,task_id,175,predecessor_id,173,idx,1
 ring_buf.h,162,new,task_id,176,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,176,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,177,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,177,predecessor_id,176,idx,0
 ring_buf.h,162,new,task_id,178,type,1,subtask_cnt,4
@@ -438,7 +409,6 @@ ring_buf.h,162,new,task_id,180,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,180,predecessor_id,179,idx,0
 ring_buf.h,143,succeed,task_id,180,predecessor_id,178,idx,1
 ring_buf.h,162,new,task_id,181,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,181,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,182,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,182,predecessor_id,181,idx,0
 ring_buf.h,162,new,task_id,183,type,1,subtask_cnt,4
@@ -450,7 +420,6 @@ ring_buf.h,162,new,task_id,185,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,185,predecessor_id,184,idx,0
 ring_buf.h,143,succeed,task_id,185,predecessor_id,183,idx,1
 ring_buf.h,162,new,task_id,186,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,186,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,187,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,187,predecessor_id,186,idx,0
 ring_buf.h,162,new,task_id,188,type,1,subtask_cnt,4
@@ -462,7 +431,6 @@ ring_buf.h,162,new,task_id,190,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,190,predecessor_id,189,idx,0
 ring_buf.h,143,succeed,task_id,190,predecessor_id,188,idx,1
 ring_buf.h,162,new,task_id,191,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,191,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,192,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,192,predecessor_id,191,idx,0
 ring_buf.h,162,new,task_id,193,type,1,subtask_cnt,4
@@ -474,7 +442,6 @@ ring_buf.h,162,new,task_id,195,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,195,predecessor_id,194,idx,0
 ring_buf.h,143,succeed,task_id,195,predecessor_id,193,idx,1
 ring_buf.h,162,new,task_id,196,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,196,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,197,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,197,predecessor_id,196,idx,0
 ring_buf.h,162,new,task_id,198,type,1,subtask_cnt,4
@@ -486,7 +453,6 @@ ring_buf.h,162,new,task_id,200,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,200,predecessor_id,199,idx,0
 ring_buf.h,143,succeed,task_id,200,predecessor_id,198,idx,1
 ring_buf.h,162,new,task_id,201,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,201,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,202,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,202,predecessor_id,201,idx,0
 ring_buf.h,162,new,task_id,203,type,1,subtask_cnt,4
@@ -498,7 +464,6 @@ ring_buf.h,162,new,task_id,205,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,205,predecessor_id,204,idx,0
 ring_buf.h,143,succeed,task_id,205,predecessor_id,203,idx,1
 ring_buf.h,162,new,task_id,206,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,206,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,207,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,207,predecessor_id,206,idx,0
 ring_buf.h,162,new,task_id,208,type,1,subtask_cnt,4
@@ -510,7 +475,6 @@ ring_buf.h,162,new,task_id,210,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,210,predecessor_id,209,idx,0
 ring_buf.h,143,succeed,task_id,210,predecessor_id,208,idx,1
 ring_buf.h,162,new,task_id,211,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,211,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,212,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,212,predecessor_id,211,idx,0
 ring_buf.h,162,new,task_id,213,type,1,subtask_cnt,4
@@ -522,7 +486,6 @@ ring_buf.h,162,new,task_id,215,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,215,predecessor_id,214,idx,0
 ring_buf.h,143,succeed,task_id,215,predecessor_id,213,idx,1
 ring_buf.h,162,new,task_id,216,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,216,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,217,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,217,predecessor_id,216,idx,0
 ring_buf.h,162,new,task_id,218,type,1,subtask_cnt,4
@@ -534,7 +497,6 @@ ring_buf.h,162,new,task_id,220,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,220,predecessor_id,219,idx,0
 ring_buf.h,143,succeed,task_id,220,predecessor_id,218,idx,1
 ring_buf.h,162,new,task_id,221,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,221,predecessor_id,21,idx,0
 ring_buf.h,162,new,task_id,222,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,222,predecessor_id,221,idx,0
 ring_buf.h,162,new,task_id,223,type,1,subtask_cnt,4
@@ -546,7 +508,6 @@ ring_buf.h,162,new,task_id,225,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,225,predecessor_id,224,idx,0
 ring_buf.h,143,succeed,task_id,225,predecessor_id,223,idx,1
 ring_buf.h,162,new,task_id,226,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,226,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,227,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,227,predecessor_id,226,idx,0
 ring_buf.h,162,new,task_id,228,type,1,subtask_cnt,4
@@ -558,7 +519,6 @@ ring_buf.h,162,new,task_id,230,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,230,predecessor_id,229,idx,0
 ring_buf.h,143,succeed,task_id,230,predecessor_id,228,idx,1
 ring_buf.h,162,new,task_id,231,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,231,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,232,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,232,predecessor_id,231,idx,0
 ring_buf.h,162,new,task_id,233,type,1,subtask_cnt,4
@@ -570,7 +530,6 @@ ring_buf.h,162,new,task_id,235,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,235,predecessor_id,234,idx,0
 ring_buf.h,143,succeed,task_id,235,predecessor_id,233,idx,1
 ring_buf.h,162,new,task_id,236,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,236,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,237,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,237,predecessor_id,236,idx,0
 ring_buf.h,162,new,task_id,238,type,1,subtask_cnt,4
@@ -582,7 +541,6 @@ ring_buf.h,162,new,task_id,240,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,240,predecessor_id,239,idx,0
 ring_buf.h,143,succeed,task_id,240,predecessor_id,238,idx,1
 ring_buf.h,162,new,task_id,241,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,241,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,242,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,242,predecessor_id,241,idx,0
 ring_buf.h,162,new,task_id,243,type,1,subtask_cnt,4
@@ -594,7 +552,6 @@ ring_buf.h,162,new,task_id,245,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,245,predecessor_id,244,idx,0
 ring_buf.h,143,succeed,task_id,245,predecessor_id,243,idx,1
 ring_buf.h,162,new,task_id,246,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,246,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,247,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,247,predecessor_id,246,idx,0
 ring_buf.h,162,new,task_id,248,type,1,subtask_cnt,4
@@ -606,7 +563,6 @@ ring_buf.h,162,new,task_id,250,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,250,predecessor_id,249,idx,0
 ring_buf.h,143,succeed,task_id,250,predecessor_id,248,idx,1
 ring_buf.h,162,new,task_id,251,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,251,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,252,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,252,predecessor_id,251,idx,0
 ring_buf.h,162,new,task_id,253,type,1,subtask_cnt,4
@@ -618,7 +574,6 @@ ring_buf.h,162,new,task_id,255,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,255,predecessor_id,254,idx,0
 ring_buf.h,143,succeed,task_id,255,predecessor_id,253,idx,1
 ring_buf.h,162,new,task_id,256,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,256,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,257,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,257,predecessor_id,256,idx,0
 ring_buf.h,162,new,task_id,258,type,1,subtask_cnt,4
@@ -630,7 +585,6 @@ ring_buf.h,162,new,task_id,260,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,260,predecessor_id,259,idx,0
 ring_buf.h,143,succeed,task_id,260,predecessor_id,258,idx,1
 ring_buf.h,162,new,task_id,261,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,261,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,262,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,262,predecessor_id,261,idx,0
 ring_buf.h,162,new,task_id,263,type,1,subtask_cnt,4
@@ -642,7 +596,6 @@ ring_buf.h,162,new,task_id,265,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,265,predecessor_id,264,idx,0
 ring_buf.h,143,succeed,task_id,265,predecessor_id,263,idx,1
 ring_buf.h,162,new,task_id,266,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,266,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,267,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,267,predecessor_id,266,idx,0
 ring_buf.h,162,new,task_id,268,type,1,subtask_cnt,4
@@ -654,7 +607,6 @@ ring_buf.h,162,new,task_id,270,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,270,predecessor_id,269,idx,0
 ring_buf.h,143,succeed,task_id,270,predecessor_id,268,idx,1
 ring_buf.h,162,new,task_id,271,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,271,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,272,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,272,predecessor_id,271,idx,0
 ring_buf.h,162,new,task_id,273,type,1,subtask_cnt,4
@@ -666,7 +618,6 @@ ring_buf.h,162,new,task_id,275,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,275,predecessor_id,274,idx,0
 ring_buf.h,143,succeed,task_id,275,predecessor_id,273,idx,1
 ring_buf.h,162,new,task_id,276,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,276,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,277,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,277,predecessor_id,276,idx,0
 ring_buf.h,162,new,task_id,278,type,1,subtask_cnt,4
@@ -678,7 +629,6 @@ ring_buf.h,162,new,task_id,280,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,280,predecessor_id,279,idx,0
 ring_buf.h,143,succeed,task_id,280,predecessor_id,278,idx,1
 ring_buf.h,162,new,task_id,281,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,281,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,282,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,282,predecessor_id,281,idx,0
 ring_buf.h,162,new,task_id,283,type,1,subtask_cnt,4
@@ -690,7 +640,6 @@ ring_buf.h,162,new,task_id,285,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,285,predecessor_id,284,idx,0
 ring_buf.h,143,succeed,task_id,285,predecessor_id,283,idx,1
 ring_buf.h,162,new,task_id,286,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,286,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,287,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,287,predecessor_id,286,idx,0
 ring_buf.h,162,new,task_id,288,type,1,subtask_cnt,4
@@ -702,7 +651,6 @@ ring_buf.h,162,new,task_id,290,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,290,predecessor_id,289,idx,0
 ring_buf.h,143,succeed,task_id,290,predecessor_id,288,idx,1
 ring_buf.h,162,new,task_id,291,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,291,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,292,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,292,predecessor_id,291,idx,0
 ring_buf.h,162,new,task_id,293,type,1,subtask_cnt,4
@@ -714,7 +662,6 @@ ring_buf.h,162,new,task_id,295,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,295,predecessor_id,294,idx,0
 ring_buf.h,143,succeed,task_id,295,predecessor_id,293,idx,1
 ring_buf.h,162,new,task_id,296,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,296,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,297,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,297,predecessor_id,296,idx,0
 ring_buf.h,162,new,task_id,298,type,1,subtask_cnt,4
@@ -726,7 +673,6 @@ ring_buf.h,162,new,task_id,300,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,300,predecessor_id,299,idx,0
 ring_buf.h,143,succeed,task_id,300,predecessor_id,298,idx,1
 ring_buf.h,162,new,task_id,301,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,301,predecessor_id,32,idx,0
 ring_buf.h,162,new,task_id,302,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,302,predecessor_id,301,idx,0
 ring_buf.h,162,new,task_id,303,type,1,subtask_cnt,4
@@ -738,7 +684,6 @@ ring_buf.h,162,new,task_id,305,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,305,predecessor_id,304,idx,0
 ring_buf.h,143,succeed,task_id,305,predecessor_id,303,idx,1
 ring_buf.h,162,new,task_id,306,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,306,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,307,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,307,predecessor_id,306,idx,0
 ring_buf.h,162,new,task_id,308,type,1,subtask_cnt,4
@@ -750,7 +695,6 @@ ring_buf.h,162,new,task_id,310,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,310,predecessor_id,309,idx,0
 ring_buf.h,143,succeed,task_id,310,predecessor_id,308,idx,1
 ring_buf.h,162,new,task_id,311,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,311,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,312,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,312,predecessor_id,311,idx,0
 ring_buf.h,162,new,task_id,313,type,1,subtask_cnt,4
@@ -762,7 +706,6 @@ ring_buf.h,162,new,task_id,315,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,315,predecessor_id,314,idx,0
 ring_buf.h,143,succeed,task_id,315,predecessor_id,313,idx,1
 ring_buf.h,162,new,task_id,316,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,316,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,317,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,317,predecessor_id,316,idx,0
 ring_buf.h,162,new,task_id,318,type,1,subtask_cnt,4
@@ -774,7 +717,6 @@ ring_buf.h,162,new,task_id,320,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,320,predecessor_id,319,idx,0
 ring_buf.h,143,succeed,task_id,320,predecessor_id,318,idx,1
 ring_buf.h,162,new,task_id,321,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,321,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,322,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,322,predecessor_id,321,idx,0
 ring_buf.h,162,new,task_id,323,type,1,subtask_cnt,4
@@ -786,7 +728,6 @@ ring_buf.h,162,new,task_id,325,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,325,predecessor_id,324,idx,0
 ring_buf.h,143,succeed,task_id,325,predecessor_id,323,idx,1
 ring_buf.h,162,new,task_id,326,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,326,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,327,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,327,predecessor_id,326,idx,0
 ring_buf.h,162,new,task_id,328,type,1,subtask_cnt,4
@@ -798,7 +739,6 @@ ring_buf.h,162,new,task_id,330,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,330,predecessor_id,329,idx,0
 ring_buf.h,143,succeed,task_id,330,predecessor_id,328,idx,1
 ring_buf.h,162,new,task_id,331,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,331,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,332,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,332,predecessor_id,331,idx,0
 ring_buf.h,162,new,task_id,333,type,1,subtask_cnt,4
@@ -810,7 +750,6 @@ ring_buf.h,162,new,task_id,335,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,335,predecessor_id,334,idx,0
 ring_buf.h,143,succeed,task_id,335,predecessor_id,333,idx,1
 ring_buf.h,162,new,task_id,336,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,336,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,337,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,337,predecessor_id,336,idx,0
 ring_buf.h,162,new,task_id,338,type,1,subtask_cnt,4
@@ -822,7 +761,6 @@ ring_buf.h,162,new,task_id,340,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,340,predecessor_id,339,idx,0
 ring_buf.h,143,succeed,task_id,340,predecessor_id,338,idx,1
 ring_buf.h,162,new,task_id,341,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,341,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,342,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,342,predecessor_id,341,idx,0
 ring_buf.h,162,new,task_id,343,type,1,subtask_cnt,4
@@ -834,7 +772,6 @@ ring_buf.h,162,new,task_id,345,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,345,predecessor_id,344,idx,0
 ring_buf.h,143,succeed,task_id,345,predecessor_id,343,idx,1
 ring_buf.h,162,new,task_id,346,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,346,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,347,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,347,predecessor_id,346,idx,0
 ring_buf.h,162,new,task_id,348,type,1,subtask_cnt,4
@@ -846,7 +783,6 @@ ring_buf.h,162,new,task_id,350,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,350,predecessor_id,349,idx,0
 ring_buf.h,143,succeed,task_id,350,predecessor_id,348,idx,1
 ring_buf.h,162,new,task_id,351,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,351,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,352,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,352,predecessor_id,351,idx,0
 ring_buf.h,162,new,task_id,353,type,1,subtask_cnt,4
@@ -858,7 +794,6 @@ ring_buf.h,162,new,task_id,355,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,355,predecessor_id,354,idx,0
 ring_buf.h,143,succeed,task_id,355,predecessor_id,353,idx,1
 ring_buf.h,162,new,task_id,356,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,356,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,357,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,357,predecessor_id,356,idx,0
 ring_buf.h,162,new,task_id,358,type,1,subtask_cnt,4
@@ -870,7 +805,6 @@ ring_buf.h,162,new,task_id,360,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,360,predecessor_id,359,idx,0
 ring_buf.h,143,succeed,task_id,360,predecessor_id,358,idx,1
 ring_buf.h,162,new,task_id,361,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,361,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,362,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,362,predecessor_id,361,idx,0
 ring_buf.h,162,new,task_id,363,type,1,subtask_cnt,4
@@ -882,7 +816,6 @@ ring_buf.h,162,new,task_id,365,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,365,predecessor_id,364,idx,0
 ring_buf.h,143,succeed,task_id,365,predecessor_id,363,idx,1
 ring_buf.h,162,new,task_id,366,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,366,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,367,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,367,predecessor_id,366,idx,0
 ring_buf.h,162,new,task_id,368,type,1,subtask_cnt,4
@@ -894,7 +827,6 @@ ring_buf.h,162,new,task_id,370,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,370,predecessor_id,369,idx,0
 ring_buf.h,143,succeed,task_id,370,predecessor_id,368,idx,1
 ring_buf.h,162,new,task_id,371,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,371,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,372,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,372,predecessor_id,371,idx,0
 ring_buf.h,162,new,task_id,373,type,1,subtask_cnt,4
@@ -906,7 +838,6 @@ ring_buf.h,162,new,task_id,375,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,375,predecessor_id,374,idx,0
 ring_buf.h,143,succeed,task_id,375,predecessor_id,373,idx,1
 ring_buf.h,162,new,task_id,376,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,376,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,377,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,377,predecessor_id,376,idx,0
 ring_buf.h,162,new,task_id,378,type,1,subtask_cnt,4
@@ -918,7 +849,6 @@ ring_buf.h,162,new,task_id,380,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,380,predecessor_id,379,idx,0
 ring_buf.h,143,succeed,task_id,380,predecessor_id,378,idx,1
 ring_buf.h,162,new,task_id,381,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,381,predecessor_id,43,idx,0
 ring_buf.h,162,new,task_id,382,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,382,predecessor_id,381,idx,0
 ring_buf.h,162,new,task_id,383,type,1,subtask_cnt,4
@@ -930,7 +860,6 @@ ring_buf.h,162,new,task_id,385,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,385,predecessor_id,384,idx,0
 ring_buf.h,143,succeed,task_id,385,predecessor_id,383,idx,1
 ring_buf.h,162,new,task_id,386,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,386,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,387,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,387,predecessor_id,386,idx,0
 ring_buf.h,162,new,task_id,388,type,1,subtask_cnt,4
@@ -942,7 +871,6 @@ ring_buf.h,162,new,task_id,390,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,390,predecessor_id,389,idx,0
 ring_buf.h,143,succeed,task_id,390,predecessor_id,388,idx,1
 ring_buf.h,162,new,task_id,391,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,391,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,392,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,392,predecessor_id,391,idx,0
 ring_buf.h,162,new,task_id,393,type,1,subtask_cnt,4
@@ -954,7 +882,6 @@ ring_buf.h,162,new,task_id,395,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,395,predecessor_id,394,idx,0
 ring_buf.h,143,succeed,task_id,395,predecessor_id,393,idx,1
 ring_buf.h,162,new,task_id,396,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,396,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,397,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,397,predecessor_id,396,idx,0
 ring_buf.h,162,new,task_id,398,type,1,subtask_cnt,4
@@ -966,7 +893,6 @@ ring_buf.h,162,new,task_id,400,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,400,predecessor_id,399,idx,0
 ring_buf.h,143,succeed,task_id,400,predecessor_id,398,idx,1
 ring_buf.h,162,new,task_id,401,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,401,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,402,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,402,predecessor_id,401,idx,0
 ring_buf.h,162,new,task_id,403,type,1,subtask_cnt,4
@@ -978,7 +904,6 @@ ring_buf.h,162,new,task_id,405,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,405,predecessor_id,404,idx,0
 ring_buf.h,143,succeed,task_id,405,predecessor_id,403,idx,1
 ring_buf.h,162,new,task_id,406,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,406,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,407,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,407,predecessor_id,406,idx,0
 ring_buf.h,162,new,task_id,408,type,1,subtask_cnt,4
@@ -990,7 +915,6 @@ ring_buf.h,162,new,task_id,410,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,410,predecessor_id,409,idx,0
 ring_buf.h,143,succeed,task_id,410,predecessor_id,408,idx,1
 ring_buf.h,162,new,task_id,411,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,411,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,412,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,412,predecessor_id,411,idx,0
 ring_buf.h,162,new,task_id,413,type,1,subtask_cnt,4
@@ -1002,7 +926,6 @@ ring_buf.h,162,new,task_id,415,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,415,predecessor_id,414,idx,0
 ring_buf.h,143,succeed,task_id,415,predecessor_id,413,idx,1
 ring_buf.h,162,new,task_id,416,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,416,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,417,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,417,predecessor_id,416,idx,0
 ring_buf.h,162,new,task_id,418,type,1,subtask_cnt,4
@@ -1014,7 +937,6 @@ ring_buf.h,162,new,task_id,420,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,420,predecessor_id,419,idx,0
 ring_buf.h,143,succeed,task_id,420,predecessor_id,418,idx,1
 ring_buf.h,162,new,task_id,421,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,421,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,422,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,422,predecessor_id,421,idx,0
 ring_buf.h,162,new,task_id,423,type,1,subtask_cnt,4
@@ -1026,7 +948,6 @@ ring_buf.h,162,new,task_id,425,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,425,predecessor_id,424,idx,0
 ring_buf.h,143,succeed,task_id,425,predecessor_id,423,idx,1
 ring_buf.h,162,new,task_id,426,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,426,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,427,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,427,predecessor_id,426,idx,0
 ring_buf.h,162,new,task_id,428,type,1,subtask_cnt,4
@@ -1038,7 +959,6 @@ ring_buf.h,162,new,task_id,430,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,430,predecessor_id,429,idx,0
 ring_buf.h,143,succeed,task_id,430,predecessor_id,428,idx,1
 ring_buf.h,162,new,task_id,431,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,431,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,432,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,432,predecessor_id,431,idx,0
 ring_buf.h,162,new,task_id,433,type,1,subtask_cnt,4
@@ -1050,7 +970,6 @@ ring_buf.h,162,new,task_id,435,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,435,predecessor_id,434,idx,0
 ring_buf.h,143,succeed,task_id,435,predecessor_id,433,idx,1
 ring_buf.h,162,new,task_id,436,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,436,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,437,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,437,predecessor_id,436,idx,0
 ring_buf.h,162,new,task_id,438,type,1,subtask_cnt,4
@@ -1062,7 +981,6 @@ ring_buf.h,162,new,task_id,440,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,440,predecessor_id,439,idx,0
 ring_buf.h,143,succeed,task_id,440,predecessor_id,438,idx,1
 ring_buf.h,162,new,task_id,441,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,441,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,442,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,442,predecessor_id,441,idx,0
 ring_buf.h,162,new,task_id,443,type,1,subtask_cnt,4
@@ -1074,7 +992,6 @@ ring_buf.h,162,new,task_id,445,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,445,predecessor_id,444,idx,0
 ring_buf.h,143,succeed,task_id,445,predecessor_id,443,idx,1
 ring_buf.h,162,new,task_id,446,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,446,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,447,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,447,predecessor_id,446,idx,0
 ring_buf.h,162,new,task_id,448,type,1,subtask_cnt,4
@@ -1086,7 +1003,6 @@ ring_buf.h,162,new,task_id,450,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,450,predecessor_id,449,idx,0
 ring_buf.h,143,succeed,task_id,450,predecessor_id,448,idx,1
 ring_buf.h,162,new,task_id,451,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,451,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,452,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,452,predecessor_id,451,idx,0
 ring_buf.h,162,new,task_id,453,type,1,subtask_cnt,4
@@ -1098,7 +1014,6 @@ ring_buf.h,162,new,task_id,455,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,455,predecessor_id,454,idx,0
 ring_buf.h,143,succeed,task_id,455,predecessor_id,453,idx,1
 ring_buf.h,162,new,task_id,456,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,456,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,457,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,457,predecessor_id,456,idx,0
 ring_buf.h,162,new,task_id,458,type,1,subtask_cnt,4
@@ -1110,7 +1025,6 @@ ring_buf.h,162,new,task_id,460,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,460,predecessor_id,459,idx,0
 ring_buf.h,143,succeed,task_id,460,predecessor_id,458,idx,1
 ring_buf.h,162,new,task_id,461,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,461,predecessor_id,54,idx,0
 ring_buf.h,162,new,task_id,462,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,462,predecessor_id,461,idx,0
 ring_buf.h,162,new,task_id,463,type,1,subtask_cnt,4
@@ -1122,7 +1036,6 @@ ring_buf.h,162,new,task_id,465,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,465,predecessor_id,464,idx,0
 ring_buf.h,143,succeed,task_id,465,predecessor_id,463,idx,1
 ring_buf.h,162,new,task_id,466,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,466,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,467,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,467,predecessor_id,466,idx,0
 ring_buf.h,162,new,task_id,468,type,1,subtask_cnt,4
@@ -1134,7 +1047,6 @@ ring_buf.h,162,new,task_id,470,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,470,predecessor_id,469,idx,0
 ring_buf.h,143,succeed,task_id,470,predecessor_id,468,idx,1
 ring_buf.h,162,new,task_id,471,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,471,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,472,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,472,predecessor_id,471,idx,0
 ring_buf.h,162,new,task_id,473,type,1,subtask_cnt,4
@@ -1146,7 +1058,6 @@ ring_buf.h,162,new,task_id,475,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,475,predecessor_id,474,idx,0
 ring_buf.h,143,succeed,task_id,475,predecessor_id,473,idx,1
 ring_buf.h,162,new,task_id,476,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,476,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,477,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,477,predecessor_id,476,idx,0
 ring_buf.h,162,new,task_id,478,type,1,subtask_cnt,4
@@ -1158,7 +1069,6 @@ ring_buf.h,162,new,task_id,480,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,480,predecessor_id,479,idx,0
 ring_buf.h,143,succeed,task_id,480,predecessor_id,478,idx,1
 ring_buf.h,162,new,task_id,481,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,481,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,482,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,482,predecessor_id,481,idx,0
 ring_buf.h,162,new,task_id,483,type,1,subtask_cnt,4
@@ -1170,7 +1080,6 @@ ring_buf.h,162,new,task_id,485,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,485,predecessor_id,484,idx,0
 ring_buf.h,143,succeed,task_id,485,predecessor_id,483,idx,1
 ring_buf.h,162,new,task_id,486,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,486,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,487,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,487,predecessor_id,486,idx,0
 ring_buf.h,162,new,task_id,488,type,1,subtask_cnt,4
@@ -1182,7 +1091,6 @@ ring_buf.h,162,new,task_id,490,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,490,predecessor_id,489,idx,0
 ring_buf.h,143,succeed,task_id,490,predecessor_id,488,idx,1
 ring_buf.h,162,new,task_id,491,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,491,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,492,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,492,predecessor_id,491,idx,0
 ring_buf.h,162,new,task_id,493,type,1,subtask_cnt,4
@@ -1194,7 +1102,6 @@ ring_buf.h,162,new,task_id,495,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,495,predecessor_id,494,idx,0
 ring_buf.h,143,succeed,task_id,495,predecessor_id,493,idx,1
 ring_buf.h,162,new,task_id,496,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,496,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,497,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,497,predecessor_id,496,idx,0
 ring_buf.h,162,new,task_id,498,type,1,subtask_cnt,4
@@ -1206,7 +1113,6 @@ ring_buf.h,162,new,task_id,500,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,500,predecessor_id,499,idx,0
 ring_buf.h,143,succeed,task_id,500,predecessor_id,498,idx,1
 ring_buf.h,162,new,task_id,501,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,501,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,502,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,502,predecessor_id,501,idx,0
 ring_buf.h,162,new,task_id,503,type,1,subtask_cnt,4
@@ -1218,7 +1124,6 @@ ring_buf.h,162,new,task_id,505,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,505,predecessor_id,504,idx,0
 ring_buf.h,143,succeed,task_id,505,predecessor_id,503,idx,1
 ring_buf.h,162,new,task_id,506,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,506,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,507,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,507,predecessor_id,506,idx,0
 ring_buf.h,162,new,task_id,508,type,1,subtask_cnt,4
@@ -1230,7 +1135,6 @@ ring_buf.h,162,new,task_id,510,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,510,predecessor_id,509,idx,0
 ring_buf.h,143,succeed,task_id,510,predecessor_id,508,idx,1
 ring_buf.h,162,new,task_id,511,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,511,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,512,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,512,predecessor_id,511,idx,0
 ring_buf.h,162,new,task_id,513,type,1,subtask_cnt,4
@@ -1242,7 +1146,6 @@ ring_buf.h,162,new,task_id,515,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,515,predecessor_id,514,idx,0
 ring_buf.h,143,succeed,task_id,515,predecessor_id,513,idx,1
 ring_buf.h,162,new,task_id,516,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,516,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,517,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,517,predecessor_id,516,idx,0
 ring_buf.h,162,new,task_id,518,type,1,subtask_cnt,4
@@ -1254,7 +1157,6 @@ ring_buf.h,162,new,task_id,520,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,520,predecessor_id,519,idx,0
 ring_buf.h,143,succeed,task_id,520,predecessor_id,518,idx,1
 ring_buf.h,162,new,task_id,521,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,521,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,522,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,522,predecessor_id,521,idx,0
 ring_buf.h,162,new,task_id,523,type,1,subtask_cnt,4
@@ -1266,7 +1168,6 @@ ring_buf.h,162,new,task_id,525,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,525,predecessor_id,524,idx,0
 ring_buf.h,143,succeed,task_id,525,predecessor_id,523,idx,1
 ring_buf.h,162,new,task_id,526,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,526,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,527,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,527,predecessor_id,526,idx,0
 ring_buf.h,162,new,task_id,528,type,1,subtask_cnt,4
@@ -1278,7 +1179,6 @@ ring_buf.h,162,new,task_id,530,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,530,predecessor_id,529,idx,0
 ring_buf.h,143,succeed,task_id,530,predecessor_id,528,idx,1
 ring_buf.h,162,new,task_id,531,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,531,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,532,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,532,predecessor_id,531,idx,0
 ring_buf.h,162,new,task_id,533,type,1,subtask_cnt,4
@@ -1290,7 +1190,6 @@ ring_buf.h,162,new,task_id,535,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,535,predecessor_id,534,idx,0
 ring_buf.h,143,succeed,task_id,535,predecessor_id,533,idx,1
 ring_buf.h,162,new,task_id,536,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,536,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,537,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,537,predecessor_id,536,idx,0
 ring_buf.h,162,new,task_id,538,type,1,subtask_cnt,4
@@ -1302,7 +1201,6 @@ ring_buf.h,162,new,task_id,540,type,1,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,540,predecessor_id,539,idx,0
 ring_buf.h,143,succeed,task_id,540,predecessor_id,538,idx,1
 ring_buf.h,162,new,task_id,541,type,1,subtask_cnt,1
-ring_buf.h,143,succeed,task_id,541,predecessor_id,65,idx,0
 ring_buf.h,162,new,task_id,542,type,0,subtask_cnt,4
 ring_buf.h,143,succeed,task_id,542,predecessor_id,541,idx,0
 ring_buf.h,162,new,task_id,543,type,1,subtask_cnt,4

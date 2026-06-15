@@ -43,7 +43,6 @@ static inline bool batch_dequeue(queue_t *queue, uint16_t *item, uint16_t *n)
     return true;
 }
 
-// TODO: RING LOOP
 static inline bool batch_enqueue(queue_t *queue, uint16_t *item, uint16_t n)
 {
     lock_q(queue);
@@ -52,16 +51,8 @@ static inline bool batch_enqueue(queue_t *queue, uint16_t *item, uint16_t n)
         return false;
     }
     uint64_t tail = queue->tail;
-    uint64_t first_part = RING_SIZE - tail;
-    if (first_part >= n) {
-        // No wrap needed
-        memcpy(&queue->tasks[tail], item, n * sizeof(uint16_t));
-    } else {
-        // Wrap around
-        memcpy(&queue->tasks[tail], item, first_part * sizeof(uint16_t));
-        memcpy(queue->tasks, &item[first_part], (n - first_part) * sizeof(uint16_t));
-    }
-    queue->tail = (tail + n) & (RING_SIZE - 1);
+    memcpy(&queue->tasks[tail], item, n * sizeof(uint16_t));
+    queue->tail = tail + n;
     queue->cnt += n;
     unlock_q(queue);
     return true;
@@ -88,7 +79,6 @@ static inline bool enqueue(queue_t *queue, uint16_t item)
         unlock_q(queue);
         return false;
     }
-
     queue->tasks[queue->tail] = item;
     queue->tail = (queue->tail + 1) & (RING_SIZE - 1);
     queue->cnt++;

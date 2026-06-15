@@ -33,7 +33,7 @@ static inline bool update_task_state(uint16_t cnt, uint16_t* cq_buf)
     uint16_t idx;
     for (uint32_t j = 0; j < cnt; j++) {
         task_id = cq_buf[j];
-        int idx = task_id & RING_MASK;
+        int idx = task_id;
         g_state_buf[idx].state = TASK_STATUS_COMPLETED;
     }
     uint16_t i = atomic_load_explicit(&g_min_uncomplete_task, memory_order_acquire);
@@ -45,14 +45,14 @@ static inline bool update_task_state(uint16_t cnt, uint16_t* cq_buf)
     }
     atomic_store(&g_min_uncomplete_task, i);
     WORKER_LOGF("min_uncomplete_task,%u, completed_cnt,%u, cube_ready_cnt,%d,vector_ready_cnt,%d", \
-        g_min_uncomplete_task, i, g_ctrl_t[0].ready_queue[2].cnt, g_ctrl_t[0].ready_queue[1].cnt);
+        g_min_uncomplete_task, end, g_ctrl_t[0].ready_queue[2].cnt, g_ctrl_t[0].ready_queue[1].cnt);
 }
 
 void add_successors(uint16_t* ready_cnt, uint16_t* rq_buf) {
     uint16_t end = atomic_load(&g_task_id);
     while ( g_commit_task_id <= end)
     {
-        uint16_t task_idx = g_commit_task_id & RING_MASK;
+        uint16_t task_idx = g_commit_task_id;
         struct predecessor_list *ptr = &g_predecessors[task_idx];
         if (ptr->cnt <= 0) {
             // WORKER_LOGF("ready, task_id,%u, task_idx,%u, ready_cnt,%u", g_commit_task_id, task_idx, *ready_cnt);
@@ -65,8 +65,7 @@ void add_successors(uint16_t* ready_cnt, uint16_t* rq_buf) {
         while (ptr->cnt > 0)
         {
             precessor_id = *(ptr->exp);
-            uint16_t precessor_idx = precessor_id & RING_MASK;
-            // WORKER_LOGF("add, task_id,%u, precessor_id, %u", g_commit_task_id, precessor_id);
+            uint16_t precessor_idx = precessor_id;
             if(g_state_buf[precessor_idx].state != TASK_STATUS_COMPLETED) {
                 uint16_t successor_idx = g_successor_buf[precessor_idx].cnt++;
                 g_successor_buf[precessor_idx].node[successor_idx] = g_commit_task_id;
@@ -78,6 +77,11 @@ void add_successors(uint16_t* ready_cnt, uint16_t* rq_buf) {
             ptr->exp++;
         }
         g_predecessor_cnt[task_idx] = predecessor_cnt;
+        if (predecessor_cnt <= 0)
+        {
+            rq_buf[*ready_cnt] = g_commit_task_id;
+            (*ready_cnt)++;
+        }
         g_commit_task_id++;
     }
 }
@@ -91,9 +95,8 @@ void send_2_ready_queue(int ready_cnt, uint16_t* rq_buf) {
         int target_ctrl = 0;
         queue_t *rq = &g_ctrl_t[target_ctrl].ready_queue[type];
         if(enqueue(rq, task_id)) {
-            WORKER_LOGF("push2rq,tid,%d,type,%d, cnt,%d, cnt_pa,%u,task_id,%u", \
-                target_ctrl, type, g_ctrl_t[target_ctrl].ready_queue[type].cnt, \
-                &g_ctrl_t[target_ctrl].ready_queue[type].cnt, task_id);
+            WORKER_LOGF("push2rq,tid,%d,type,%d, cnt,%d,task_id,%u", \
+                target_ctrl, type, g_ctrl_t[target_ctrl].ready_queue[type].cnt, task_id);
         } else {
             WORKER_LOGF("push2rq,failed, cnt,%d,type,%d", rq->cnt, type);
         }
@@ -127,7 +130,7 @@ void resolve_dep(uint16_t cnt, uint16_t* cq_buf, uint16_t* rq_buf, uint16_t* rea
 void deal_completed_queue() {
     for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
         uint16_t cq_buf[CUTTER_BATCH_SIZE];
-        uint16_t rq_buf[AIC_CNT];
+        uint16_t rq_buf[LOCAL_BUFFER_SIZE];
         uint16_t ready_cnt = 0;
 
         queue_t *cq = &g_ctrl_t[i].completed_queue;

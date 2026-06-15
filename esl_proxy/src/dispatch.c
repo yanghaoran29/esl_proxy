@@ -45,8 +45,9 @@ static inline void get_completed(uint64_t* bitmap, uint16_t task_id[], int *comp
     while (cnt > 0) {
         // 从二进制最最右边开始向高位看，连续的 0 的个数。
         uint64_t idx = (uint64_t)__builtin_ctzll(*bitmap);
-        task_id[(*complete_cnt)++] = task_id_map[idx];
-        WORKER_LOGF("completed,task_id,%u,core,%d,bitmap,%u", task_id_map[idx], idx, *bitmap);
+        task_id[(*complete_cnt)] = task_id_map[idx];
+        WORKER_LOGF("completed,complete_cnt,%d,task_id,%u,core,%d,bitmap,%u",*complete_cnt, task_id_map[idx], idx, *bitmap);
+        (*complete_cnt)++;
         cnt--;
         *bitmap &= (*bitmap - 1);
     }
@@ -148,16 +149,16 @@ void *dispatch_worker(void *arg)
     int count = 10000;
     while (atomic_load(&g_completed_cnt) < atomic_load(&g_task_id)) {
         total_sent += dispatch(tid);
-        // if (prev == g_completed_cnt)
-        // {
-        //     count--;
-        //     if (count < 0){
-        //         break;
-        //     }
-        // } else {
-        //     count = 10000;
-        // }
-        // prev = g_completed_cnt;
+        if (prev == g_completed_cnt)
+        {
+            count--;
+            if (count < 0){
+                break;
+            }
+        } else {
+            count = 10000;
+        }
+        prev = g_completed_cnt;
     }
     
     atomic_store(&g_is_done, true);
