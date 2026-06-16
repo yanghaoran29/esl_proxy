@@ -25,7 +25,6 @@ typedef struct queue {
 static inline void lock_q(queue_t *queue);
 static inline void unlock_q(queue_t *queue);
 
-// TODO: atomic protect
 static inline bool batch_dequeue(queue_t *queue, uint16_t *item, uint16_t *n)
 {
     lock_q(queue);

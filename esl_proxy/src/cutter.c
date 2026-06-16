@@ -23,6 +23,7 @@ extern _Atomic bool g_is_done;
 uint16_t  g_predecessor_cnt[RING_SIZE];
 
 uint16_t g_commit_task_id = 0;
+uint16_t g_completed_task_cnt = 0;
 
 static inline bool update_task_state(uint16_t cnt, uint16_t* cq_buf)
 {
@@ -136,6 +137,7 @@ void deal_completed_queue() {
         queue_t *cq = &g_ctrl_t[i].completed_queue;
         uint16_t cnt = CUTTER_BATCH_SIZE;
         batch_dequeue(cq, cq_buf, &cnt);
+        g_completed_task_cnt += cnt;
         for (size_t i = 0; i < cnt; i++)
         {
             WORKER_LOGF("cutter, completed_task_id,%d ", cq_buf[i]);
@@ -161,6 +163,6 @@ void *cutter_worker(void *arg)
     while(g_commit_task_id < atomic_load(&g_task_id)){
         deal_completed_queue();
     }
-    WORKER_LOGF("cutter, commit_tasks_cnt,%d ", g_commit_task_id);
+    WORKER_LOGF("cutter, commit_tasks_cnt,%d,completed_task_cnt,%d ", g_commit_task_id, g_completed_task_cnt);
     return NULL;
 }

@@ -96,7 +96,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
     (void)ext_seq_lens;
     (void)ext_slot_mapping;
 
-    const int64_t user_batch = 96;
+    const int64_t user_batch = 90;
     const int64_t batch_padded = 96;
     ext_out = tensor_make_2d(tensor_base(ext_out), (uint32_t)batch_padded, 5120, BFLOAT16);
 
@@ -248,8 +248,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         add_scalar(g_task_id, b);
         add_duration(g_task_id, DUR_ROPE_KV_CACHE);
         batch_predecessors[0] = qk_norm_per_tile[tix];
-        add_predecessors(g_task_id, batch_predecessors, 1, 0);
-        // add_predecessors(g_task_id, v_ids_per_tile[tix], v_cnt_per_tile[tix], 1);
+        int tmp = add_predecessors(g_task_id, batch_predecessors, 1, 0);
+        add_predecessors(g_task_id, v_ids_per_tile[tix], v_cnt_per_tile[tix], tmp);
         const uint16_t rope_id = g_task_id;
         g_task_id++;
         
@@ -374,15 +374,12 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
                 // {
                 //     printf("os_by_b[%d][%d],%d\n",bb,i, os_by_b[bb][i]);
                 // }
-                
-                
-                // idx = add_predecessors(g_task_id, os_by_b[bb], os_cnt_by_b[bb], idx);
+                idx = add_predecessors(g_task_id, os_by_b[bb], os_cnt_by_b[bb], idx);
             }
             op_ids[opi++] = g_task_id;
             g_task_id++;
         }
-    }
-/*
+
         new_task(g_task_id, TASK_TYPE_VECTOR, 1);
         add_input(g_task_id, resid1_tile);
         add_output(g_task_id, post_norm_tile);
@@ -467,5 +464,4 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             g_task_id++;
         }
     }
-*/
 }
