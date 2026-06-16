@@ -34,26 +34,26 @@ static inline bool update_task_state(uint16_t cnt, uint16_t* cq_buf)
     uint16_t idx;
     for (uint32_t j = 0; j < cnt; j++) {
         task_id = cq_buf[j];
-        int idx = task_id;
+        int idx = task_id & RING_MASK;
         g_state_buf[idx].state = TASK_STATUS_COMPLETED;
     }
     uint16_t i = atomic_load_explicit(&g_min_uncomplete_task, memory_order_acquire);
     uint16_t end = atomic_load_explicit(&g_task_id, memory_order_acquire);
     for (; i < end; i++) {
-        if (g_state_buf[i].state != TASK_STATUS_COMPLETED) {
+        if (g_state_buf[i & RING_MASK].state != TASK_STATUS_COMPLETED) {
             break;
         }
     }
     atomic_store(&g_min_uncomplete_task, i);
     WORKER_LOGF("min_uncomplete_task,%u, completed_cnt,%u, cube_ready_cnt,%d,vector_ready_cnt,%d", \
-        g_min_uncomplete_task, end, g_ctrl_t[0].ready_queue[2].cnt, g_ctrl_t[0].ready_queue[1].cnt);
+        g_min_uncomplete_task, i, g_ctrl_t[0].ready_queue[2].cnt, g_ctrl_t[0].ready_queue[1].cnt);
 }
 
 void add_successors(uint16_t* ready_cnt, uint16_t* rq_buf) {
     uint16_t end = atomic_load(&g_task_id);
     while ( g_commit_task_id <= end)
     {
-        uint16_t task_idx = g_commit_task_id;
+        uint16_t task_idx = g_commit_task_id & RING_MASK;
         struct predecessor_list *ptr = &g_predecessors[task_idx];
         if (ptr->cnt <= 0) {
             // WORKER_LOGF("ready, task_id,%u, task_idx,%u, ready_cnt,%u", g_commit_task_id, task_idx, *ready_cnt);
@@ -63,19 +63,32 @@ void add_successors(uint16_t* ready_cnt, uint16_t* rq_buf) {
         }
         uint16_t precessor_id = 0;
         uint16_t predecessor_cnt = 0;
-        while (ptr->cnt > 0)
-        {
-            precessor_id = *(ptr->exp);
-            uint16_t precessor_idx = precessor_id;
-            if(g_state_buf[precessor_idx].state != TASK_STATUS_COMPLETED) {
+        uint16_t pred_cnt = ptr->cnt;
+        uint16_t preds[256];
+        if (pred_cnt > (uint16_t)(sizeof(preds) / sizeof(preds[0]))) {
+            pred_cnt = (uint16_t)(sizeof(preds) / sizeof(preds[0]));
+        }
+        const uint16_t pred_off = (uint16_t)(uintptr_t)ptr->exp;
+        for (uint16_t pi = 0; pi < pred_cnt; pi++) {
+            preds[pi] = g_predecessor_ring.head[pred_off + pi];
+        }
+        ptr->cnt = 0;
+        for (uint16_t pi = 0; pi < pred_cnt; pi++) {
+            precessor_id = preds[pi];
+            if (precessor_id >= end) {
+                WORKER_LOGF("bad pred,consumer,%u,predecessor_id,%u,end,%u",
+                            g_commit_task_id, precessor_id, end);
+                continue;
+            }
+            uint16_t precessor_idx = precessor_id & RING_MASK;
+            if (g_state_buf[precessor_idx].state != TASK_STATUS_COMPLETED) {
                 uint16_t successor_idx = g_successor_buf[precessor_idx].cnt++;
                 g_successor_buf[precessor_idx].node[successor_idx] = g_commit_task_id;
                 g_state_buf[precessor_idx].successor_cnt++;
                 predecessor_cnt++;
-                WORKER_LOGF("add, task_id,%u, successor_cnt,%u, successor_id, %u", precessor_id, g_successor_buf[precessor_idx].cnt, g_commit_task_id);
+                WORKER_LOGF("add, task_id,%u, successor_cnt,%u, successor_id, %u",
+                            precessor_id, g_successor_buf[precessor_idx].cnt, g_commit_task_id);
             }
-            ptr->cnt--;
-            ptr->exp++;
         }
         g_predecessor_cnt[task_idx] = predecessor_cnt;
         if (predecessor_cnt <= 0)

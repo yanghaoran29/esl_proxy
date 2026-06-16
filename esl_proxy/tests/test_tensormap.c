@@ -309,9 +309,9 @@ static void probe_from_tensor_view(const Tensor *t, TmProbe *p) {
 
 static void test_qwen3_dim1_column_slice(void) {
   printf("Test: qwen3_dim1_column_slice (gate_tile dim=1 piece overlap)\n");
-  Tensor tile = tensor_make_2d(0xE0000, 16, 17408, FLOAT32);
-  Tensor prod0 = tensor_view(tile, 1, 0, 512);
-  Tensor cons1 = tensor_view(tile, 1, 512, 512);
+  Tensor tile = tensor_from_base_layout(0xE0000, (uint32_t[]){16, 17408}, 2, FLOAT32);
+  Tensor prod0 = view(tile, 0, 0, 16, 512);
+  Tensor cons1 = view(tile, 0, 512, 16, 512);
 
   assert(prod0.is_contiguous == 0);
   assert(prod0.strides[0] == 17408u && prod0.strides[1] == 1u);
@@ -323,7 +323,7 @@ static void test_qwen3_dim1_column_slice(void) {
   probe_from_tensor_view(&cons1, &probe);
   assert(tm_check_overlap(&probe, &entry) == TM_OVERLAP_NONE);
 
-  Tensor cons0 = tensor_view(tile, 1, 0, 512);
+  Tensor cons0 = view(tile, 0, 0, 16, 512);
   probe_from_tensor_view(&cons0, &probe);
   assert(tm_check_overlap(&probe, &entry) == TM_OVERLAP_COVERED);
 

@@ -127,21 +127,26 @@ static inline void unlock(int slotIdx)
     atomic_flag_clear_explicit(&g_lock_buf[slotIdx], memory_order_release);
 }
 
-static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uint16_t start)
+static inline uint16_t ring_pred_offset(const uint16_t *pos)
 {
-    // int slotIdx = task_id & RING_MASK;
-    int slotIdx = task_id;
+    return (uint16_t)(pos - g_predecessor_ring.head);
+}
+
+static inline int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uint16_t start)
+{
+    int slotIdx = task_id & RING_MASK;
     struct predecessor_list *ptr = &g_predecessors[slotIdx];
     int cnt = start;
-    if (ptr->cnt <= 0)
-        ptr->exp = atomic_load(&g_predecessor_ring.tail);
-    
+    if (ptr->cnt <= 0) {
+        uint16_t *tail = atomic_load(&g_predecessor_ring.tail);
+        ptr->exp = (uint16_t *)(uintptr_t)ring_pred_offset(tail);
+    }
     uint16_t min_uncomplete_task = atomic_load_explicit(&g_min_uncomplete_task, memory_order_acquire);
     for (uint16_t i = 0; i < n; i++)
     {
         if (target[i] < min_uncomplete_task)
             continue;
-        WORKER_LOGF("succeed,task_id,%u,predecessor_id,%u,idx,%d", task_id, target[i], cnt);
+        WORKER_LOGF("succeed,task_id,%u,predecessor_id,%u,idx,%d", task_id, target[i],cnt);
         uint16_t* idx = atomic_fetch_add(&g_predecessor_ring.tail, 1);
         *idx = target[i];
         cnt++;
@@ -156,11 +161,28 @@ static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count)
         MAIN_LOGF("[orchestration] task_id = %u g_min_uncomplete_task = %u", task_id, g_min_uncomplete_task);
         spin_wait();
     }
+    g_basic_buf[task_id & RING_MASK].type = type;
     if (count > 1)
         g_basic_buf[task_id & RING_MASK].mode = ORG_MODE_SPMD_SYNC;
-    g_basic_buf[task_id & RING_MASK].count = count; 
+    g_basic_buf[task_id & RING_MASK].count = count;
     g_subtask_cnt += count;
     WORKER_LOGF("new,task_id,%u,type,%d,subtask_cnt,%d", task_id, type, count);
+    return true;
+}
+
+static inline void succeed(uint16_t consumer, uint16_t producer)
+{
+    add_predecessors(consumer, &producer, 1, 0);
+}
+
+static inline void submit(uint16_t task_id)
+{
+    (void)task_id;
+}
+
+static inline bool try_new_task(uint32_t task_id)
+{
+    return new_task(task_id, TASK_TYPE_VECTOR, 1);
 }
 
 #endif /* DAG_RING_BUF_H */
