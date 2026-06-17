@@ -8,9 +8,9 @@
 //
 // Per (batch, q-tile, bn) group — task 0..3 within the group:
 //   task 0: qk_matmul      (CUBE)   succeed chain: (none) -> sf -> pv -> online
-//   task 1: softmax_prep   (VECTOR) succeed(sf, qk)
-//   task 2: pv_matmul      (CUBE)   succeed(pv, sf)
-//   task 3: online_update  (VECTOR) succeed(online, pv); optional succeed(online, pre)
+//   task 1: softmax_prep   (VECTOR) add_predecessors(sf, qk)
+//   task 2: pv_matmul      (CUBE)   add_predecessors(pv, sf)
+//   task 3: online_update  (VECTOR) add_predecessors(online, pv); optional add_predecessors(online, pre)
 //
 // Durations are per-subtask means (README.md §2.2.3 AICore View) in ns.
 #include <stddef.h>
@@ -44,6 +44,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
     Tensor oi = alloc_tensors((uint32_t[2]){16, 128}, 2, FLOAT32); // q_tile=16, head_dim=128
     Tensor li_update = alloc_tensors((uint32_t[2]){1, 16}, 2, FLOAT32); // q_tile=16
     Tensor mi_update = alloc_tensors((uint32_t[2]){1, 16}, 2, FLOAT32); // q_tile=16
+    uint16_t task_preds[2];
     for (uint64_t b_idx = 0; b_idx < 480; b_idx++) { // batch=480
         for (uint64_t q_idx = 0; q_idx < 1; q_idx++) { // q_loop=1
             const uint64_t cur_offset = b_idx * 16 + q_idx * 16; // num_heads=16, q_tile=16
@@ -80,7 +81,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
                 add_scalar(g_task_id, (int64_t)n_blocks);
                 add_scalar(g_task_id, (int64_t)128); // block_size=128
                 add_duration(g_task_id, DUR_SOFTMAX_PREP);
-                succeed(g_task_id, qk_id);
+                task_preds[0] = qk_id;
+                add_predecessors(g_task_id, task_preds, 1, 0);
                 const uint16_t sf_id = g_task_id;
                 g_task_id++;
                 Tensor oi_new = alloc_tensors((uint32_t[2]){16, 128}, 2, FLOAT32); // q_tile=16, head_dim=128
@@ -94,7 +96,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
                 add_scalar(g_task_id, (int64_t)n_blocks);
                 add_scalar(g_task_id, (int64_t)(b_idx * 64 + bn)); // block_num=64
                 add_duration(g_task_id, DUR_PV_MATMUL);
-                succeed(g_task_id, sf_id);
+                task_preds[0] = sf_id;
+                add_predecessors(g_task_id, task_preds, 1, 0);
                 const uint16_t pv_id = g_task_id;
                 g_task_id++;
 
@@ -110,9 +113,12 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
                 add_scalar(g_task_id, (int64_t)is_first);
                 add_scalar(g_task_id, (int64_t)is_last);
                 add_duration(g_task_id, DUR_ONLINE_UPDATE);
-                succeed(g_task_id, pv_id);
-                if (!is_first && has_pre)
-                    succeed(g_task_id, pre_task_id);
+                task_preds[0] = pv_id;
+                add_predecessors(g_task_id, task_preds, 1, 0);
+                if (!is_first && has_pre) {
+                    task_preds[0] = pre_task_id;
+                    add_predecessors(g_task_id, task_preds, 1, 0);
+                }
                 pre_task_id = g_task_id;
                 g_task_id++;
                 has_pre = 1;

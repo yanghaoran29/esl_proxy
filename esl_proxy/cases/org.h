@@ -109,8 +109,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
 
     const int64_t user_batch = 90;
     const int64_t batch_padded = 96;
-    ext_k_cache = tensor_from_base_layout(ext_k_cache.buffer_addr, (uint32_t[]){2949120, 128}, 2, BFLOAT16);
-    ext_v_cache = tensor_from_base_layout(ext_v_cache.buffer_addr, (uint32_t[]){2949120, 128}, 2, BFLOAT16);
+    ext_out = tensor_make_2d(tensor_base(ext_out), (uint32_t)batch_padded, 5120,
+        BFLOAT16);
 
     Tensor q_proj = alloc_tensors((uint32_t[2]){batch_padded, 5120}, 2, FLOAT32);
     Tensor k_proj = alloc_tensors((uint32_t[2]){batch_padded, 1024}, 2, FLOAT32);
@@ -157,7 +157,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             set_block_num(g_task_id, (uint32_t)cur_blocks);
             add_input(g_task_id, normed_tile);
             add_input(g_task_id, ext_wq);
-            Tensor q_chunk = view(q_proj, (uint32_t)b0, base * 256u, 16u, cur_blocks * 256u);
+            Tensor q_chunk = tensor_view_2d(q_proj, (uint32_t)b0, base * 256u, 16u,
+                cur_blocks * 256u);
             add_output(g_task_id, q_chunk);
             add_scalar(g_task_id, b0);
             add_scalar(g_task_id, base);
@@ -177,7 +178,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             set_block_num(g_task_id, (uint32_t)cur_blocks);
             add_input(g_task_id, normed_tile);
             add_input(g_task_id, ext_wk);
-            Tensor k_chunk = view(k_proj, (uint32_t)b0, base * 128u, 16u, cur_blocks * 128u);
+            Tensor k_chunk = tensor_view_2d(k_proj, (uint32_t)b0, base * 128u, 16u,
+                cur_blocks * 128u);
             add_output(g_task_id, k_chunk);
             add_scalar(g_task_id, b0);
             add_scalar(g_task_id, base);
@@ -194,7 +196,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             set_block_num(g_task_id, (uint32_t)cur_blocks);
             add_input(g_task_id, normed_tile);
             add_input(g_task_id, ext_wv);
-            Tensor v_chunk = view(v_proj, (uint32_t)b0, base * 128u, 16u, cur_blocks * 128u);
+            Tensor v_chunk = tensor_view_2d(v_proj, (uint32_t)b0, base * 128u, 16u,
+                cur_blocks * 128u);
             add_output(g_task_id, v_chunk);
             add_scalar(g_task_id, b0);
             add_scalar(g_task_id, base);
@@ -212,15 +215,15 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             spin_wait();
         }
         set_task_type(g_task_id, TASK_TYPE_VECTOR);
-        Tensor k0_norm = view(k_proj_norm, (uint32_t)b0, 0u, 16u, 1024u);
+        Tensor k0_norm = tensor_view(k_proj_norm, 0u, (uint32_t)b0, 16);
         add_output(g_task_id, k0_norm);
-        Tensor q0_norm = view(q_proj_norm, (uint32_t)b0, 0u, 16u, 5120u);
+        Tensor q0_norm = tensor_view(q_proj_norm, 0u, (uint32_t)b0, 16);
         add_output(g_task_id, q0_norm);
-        Tensor q0_in = view(q_proj, (uint32_t)b0, 0u, 16u, 5120u);
+        Tensor q0_in = tensor_view(q_proj, 0u, (uint32_t)b0, 16);
         add_input(g_task_id, q0_in);
         add_input(g_task_id, ext_q_norm_weight);
         add_input(g_task_id, ext_k_norm_weight);
-        Tensor k0_in = view(k_proj, (uint32_t)b0, 0u, 16u, 1024u);
+        Tensor k0_in = tensor_view(k_proj, 0u, (uint32_t)b0, 16);
         add_input(g_task_id, k0_in);
         add_duration(g_task_id, DUR_QK_NORM);
         qwen3_succeed_all(g_task_id, q_ids,
@@ -240,8 +243,12 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         Tensor all_cur_li = alloc_tensors((uint32_t[2]){4096, 1}, 2, FLOAT32);
         Tensor all_oi_tmp = alloc_tensors((uint32_t[2]){4096, 128}, 2, FLOAT32);
         Tensor q_padded_local = alloc_tensors((uint32_t[2]){128, 128}, 2, BFLOAT16);
-        Tensor k_cache_local = view(ext_k_cache, (uint32_t)b * 8u, 0u, 8u, 128u);
-        Tensor v_cache_local = view(ext_v_cache, (uint32_t)b * 8u, 0u, 8u, 128u);
+        Tensor k_cache_local = tensor_make_2d(
+            tensor_base(ext_k_cache) + (uint64_t)b * (uint64_t)1024u * (uint64_t)BFLOAT16, 1,
+            1024, BFLOAT16);
+        Tensor v_cache_local = tensor_make_2d(
+            tensor_base(ext_v_cache) + (uint64_t)b * (uint64_t)1024u * (uint64_t)BFLOAT16, 1,
+            1024, BFLOAT16);
 
         const int64_t b_tile0 = (b / 16) * 16;
         const size_t tix = (size_t)(b / 16);
@@ -264,9 +271,9 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         add_output(g_task_id, q_padded_local);
         add_output(g_task_id, k_cache_local);
         add_output(g_task_id, v_cache_local);
-        Tensor k0_norm = view(k_proj_norm, (uint32_t)b_tile0, 0u, 16u, 1024u);
-        Tensor v0 = view(v_proj, (uint32_t)b_tile0, 0u, 16u, 1024u);
-        Tensor q0_norm = view(q_proj_norm, (uint32_t)b_tile0, 0u, 16u, 5120u);
+        Tensor k0_norm = tensor_view(k_proj_norm, 0u, (uint32_t)b_tile0, 16u);
+        Tensor v0 = tensor_view(v_proj, 0u, (uint32_t)b_tile0, 16u);
+        Tensor q0_norm = tensor_view(q_proj_norm, 0u, (uint32_t)b_tile0, 16u);
         add_input(g_task_id, k0_norm);
         add_input(g_task_id, ext_rope_cos);
         add_input(g_task_id, ext_rope_sin);
@@ -286,7 +293,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         for (int ci = 0, base = 0; base < 4; base += qwen3_blocks_per_task(4)) {
             int cur_blocks = qwen3_cur_blocks(4, base);
             Tensor row_piece =
-                view(all_raw_scores, base * 1024u, 0u, (uint32_t)(cur_blocks * 1024), 128u);
+                tensor_view(all_raw_scores, 0u, base * 1024u, cur_blocks * 1024u);
             g_task_id++;
             while (try_new_task(g_task_id)) {
                 spin_wait();
@@ -313,11 +320,11 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             set_task_type(g_task_id, TASK_TYPE_VECTOR);
             set_block_num(g_task_id, (uint32_t)cur_blocks);
             Tensor cur_li_piece =
-                view(all_cur_li, base * 1024u, 0u, (uint32_t)(cur_blocks * 1024), 1u);
+                tensor_view(all_cur_li, 0u, base * 1024u, cur_blocks * 1024u);
             Tensor cur_mi_piece =
-                view(all_cur_mi, base * 1024u, 0u, (uint32_t)(cur_blocks * 1024), 1u);
+                tensor_view(all_cur_mi, 0u, base * 1024u, cur_blocks * 1024u);
             Tensor exp_padded_piece =
-                view(all_exp_padded, base * 1024u, 0u, (uint32_t)(cur_blocks * 1024), 128u);
+                tensor_view(all_exp_padded, 0u, base * 1024u, cur_blocks * 1024u);
             add_output(g_task_id, cur_li_piece);
             add_output(g_task_id, cur_mi_piece);
             add_output(g_task_id, exp_padded_piece);
@@ -337,9 +344,9 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             set_task_type(g_task_id, TASK_TYPE_CUBE);
             set_block_num(g_task_id, (uint32_t)cur_blocks);
             Tensor oi_tmp_piece =
-                view(all_oi_tmp, base * 1024u, 0u, (uint32_t)(cur_blocks * 1024), 128u);
+                tensor_view(all_oi_tmp, 0u, base * 1024u, cur_blocks * 1024u);
             Tensor exp_piece =
-                view(all_exp_padded, base * 1024u, 0u, (uint32_t)(cur_blocks * 1024), 128u);
+                tensor_view(all_exp_padded, 0u, base * 1024u, cur_blocks * 1024u);
             add_output(g_task_id, oi_tmp_piece);
             add_input(g_task_id, ext_block_table);
             add_input(g_task_id, exp_piece);
@@ -362,7 +369,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             add_input(g_task_id, oi_tmp_piece);
             add_input(g_task_id, cur_mi_piece);
             add_input(g_task_id, cur_li_piece);
-            Tensor attn_out_piece = view(attn_out, (uint32_t)b, base * 1280u, 1u, cur_blocks * 1280u);
+            Tensor attn_out_piece = tensor_view_2d(attn_out, (uint32_t)b, base * 1280u, 1u,
+                cur_blocks * 1280u);
             add_inout(g_task_id, attn_out_piece);
             add_scalar(g_task_id, ctx_blocks);
             add_scalar(g_task_id, base);
@@ -400,13 +408,13 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             }
             set_task_type(g_task_id, TASK_TYPE_MIX);
             set_block_num(g_task_id, (uint32_t)cur_blocks);
-            add_input(g_task_id, view(ext_hidden_states, 0u, base * 128u, 90u, (uint32_t)(cur_blocks * 128)));
+            add_input(g_task_id, tensor_view(ext_hidden_states, 1u, base * 128u, cur_blocks * 128u));
             Tensor attn_out_tile =
-                view(attn_out, (uint32_t)b0, 0u, (uint32_t)cur_valid, 5120u);
+                tensor_view(attn_out, 0u, (uint32_t)b0, (uint32_t)cur_valid);
             Tensor resid1_piece =
-                view(resid1_tile, 0u, base * 128u, 16u, (uint32_t)(cur_blocks * 128));
+                tensor_view(resid1_tile, 1u, base * 128u, cur_blocks * 128u);
             add_input(g_task_id, attn_out_tile);
-            add_input(g_task_id, view(ext_wo, 0u, base * 128u, 17408u, (uint32_t)(cur_blocks * 128)));
+            add_input(g_task_id, tensor_view(ext_wo, 1u, base * 128u, cur_blocks * 128u));
             add_inout(g_task_id, resid1_piece);
             add_output(g_task_id, gm_pipe_buffer_0);
             add_scalar(g_task_id, b0);
@@ -438,8 +446,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         for (int gi = 0, ui = 0, si = 0, base = 0; base < 34;
              base += qwen3_blocks_per_task(34)) {
             int cur_blocks = qwen3_cur_blocks(34, base);
-            Tensor gate_piece = view(gate_tile, 0u, base * 512u, 16u, (uint32_t)(cur_blocks * 512));
-            Tensor up_piece = view(up_tile, 0u, base * 512u, 16u, (uint32_t)(cur_blocks * 512));
+            Tensor gate_piece = tensor_view(gate_tile, 1u, base * 512u, cur_blocks * 512u);
+            Tensor up_piece = tensor_view(up_tile, 1u, base * 512u, cur_blocks * 512u);
             g_task_id++;
             while (try_new_task(g_task_id)) {
                 spin_wait();
@@ -447,7 +455,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             set_task_type(g_task_id, TASK_TYPE_CUBE);
             set_block_num(g_task_id, (uint32_t)cur_blocks);
             add_input(g_task_id, post_norm_tile);
-            add_input(g_task_id, view(ext_w_gate, 0u, base * 512u, 17408u, (uint32_t)(cur_blocks * 512)));
+            add_input(g_task_id, tensor_view(ext_w_gate, 1u, base * 512u, cur_blocks * 512u));
             add_inout(g_task_id, gate_piece);
             add_scalar(g_task_id, base);
             add_duration(g_task_id, DUR_GATE_PROJ);
@@ -462,7 +470,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             set_task_type(g_task_id, TASK_TYPE_CUBE);
             set_block_num(g_task_id, (uint32_t)cur_blocks);
             add_input(g_task_id, post_norm_tile);
-            add_input(g_task_id, view(ext_w_up, 0u, base * 512u, 17408u, (uint32_t)(cur_blocks * 512)));
+            add_input(g_task_id, tensor_view(ext_w_up, 1u, base * 512u, cur_blocks * 512u));
             add_inout(g_task_id, up_piece);
             add_scalar(g_task_id, base);
             add_duration(g_task_id, DUR_UP_PROJ);
@@ -478,7 +486,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             set_block_num(g_task_id, (uint32_t)cur_blocks);
             add_input(g_task_id, gate_piece);
             add_input(g_task_id, up_piece);
-            Tensor mlp_piece = view(mlp_tile, 0u, base * 512u, 16u, (uint32_t)(cur_blocks * 512));
+            Tensor mlp_piece = tensor_view(mlp_tile, 1u, base * 512u, cur_blocks * 512u);
             add_inout(g_task_id, mlp_piece);
             add_scalar(g_task_id, base);
             add_duration(g_task_id, DUR_SILU);
@@ -490,9 +498,9 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
 
         for (int di = 0, dri = 0, base = 0; base < 40; base += qwen3_blocks_per_task(40)) {
             int cur_blocks = qwen3_cur_blocks(40, base);
-            Tensor down_piece = view(down_tile, 0u, base * 128u, 16u, (uint32_t)(cur_blocks * 128));
+            Tensor down_piece = tensor_view(down_tile, 1u, base * 128u, cur_blocks * 128u);
             Tensor resid1_dres_piece =
-                view(resid1_tile, 0u, base * 128u, 16u, (uint32_t)(cur_blocks * 128));
+                tensor_view(resid1_tile, 1u, base * 128u, cur_blocks * 128u);
             g_task_id++;
             while (try_new_task(g_task_id)) {
                 spin_wait();
@@ -500,7 +508,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             set_task_type(g_task_id, TASK_TYPE_CUBE);
             set_block_num(g_task_id, (uint32_t)cur_blocks);
             add_input(g_task_id, mlp_tile);
-            add_input(g_task_id, view(ext_w_down, 0u, base * 128u, 17408u, (uint32_t)(cur_blocks * 128)));
+            add_input(g_task_id, tensor_view(ext_w_down, 1u, base * 128u, cur_blocks * 128u));
             add_inout(g_task_id, down_piece);
             add_scalar(g_task_id, base);
             add_duration(g_task_id, DUR_DOWN_PROJ);
@@ -517,8 +525,8 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             set_block_num(g_task_id, (uint32_t)cur_blocks);
             add_input(g_task_id, down_piece);
             add_input(g_task_id, resid1_dres_piece);
-            /* ext_out output slice */
-            add_output(g_task_id, ext_out);
+            Tensor out_tile = tensor_view(ext_out, 0u, (uint32_t)b0, (uint32_t)cur_valid);
+            add_output(g_task_id, tensor_view(out_tile, 1u, base * 128u, cur_blocks * 128u));
             add_scalar(g_task_id, cur_valid);
             add_scalar(g_task_id, b0);
             add_scalar(g_task_id, base);

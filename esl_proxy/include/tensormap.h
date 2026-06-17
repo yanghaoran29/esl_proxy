@@ -851,8 +851,8 @@ static inline void tm_submit(uint16_t tid) {
       tm_lookup_tensor(&g_tm_map, g_tm_pend[i].t, tm_collect_on_match, &ctx);
     }
   }
-  for (i = 0; i < ctx.pn; i++) {
-    succeed(tid, ctx.preds[i]);
+  if (ctx.pn > 0) {
+    add_predecessors(tid, ctx.preds, (uint16_t)ctx.pn, 0);
   }
   for (i = 0; i < g_tm_pend_n; i++) {
     if (g_tm_pend[i].kind & TM_PEND_OUT) {
@@ -861,7 +861,6 @@ static inline void tm_submit(uint16_t tid) {
   }
   tm_pending_clear();
 #endif
-  submit(tid);
 #if !NO_DEPS
   tm_sync_tensormap(&g_tm_map, 0, (int32_t)atomic_load_explicit(&g_min_uncomplete_task, memory_order_acquire), tid);
 #endif

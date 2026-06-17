@@ -4,7 +4,7 @@
 // Mirrors
 // V200-benchmark/qwen3/qwen3_dynamic_manual_scope/orchestration/qwen3_decode.cpp.
 // Task/tensor wiring matches qwen3_dynamic_tensormap.h; cross-task ordering is
-// expressed explicitly via add_predecessors() before submit(). SPMD tier:
+// expressed explicitly via add_predecessors() before g_task_id++. SPMD tier:
 // QWEN3_SPMD_TIER (0=non-spmd .. 4=all-spmd).
 //
 // Durations are V200-benchmark per-subtask means (README.md §1.2.1 AICore View)

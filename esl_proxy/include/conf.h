@@ -39,7 +39,7 @@
 #define DEP_DUMP 0
 #endif
 
-/* 1: skip tensormap lookup/insert and succeed(); all tasks submit with no edges */
+/* 1: skip tensormap lookup/insert and add_predecessors(); all tasks have no edges */
 #ifndef NO_DEPS
 #define NO_DEPS 0
 #endif

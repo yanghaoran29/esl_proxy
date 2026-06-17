@@ -170,19 +170,4 @@ static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count)
     return true;
 }
 
-static inline void succeed(uint16_t consumer, uint16_t producer)
-{
-    add_predecessors(consumer, &producer, 1, 0);
-}
-
-static inline void submit(uint16_t task_id)
-{
-    (void)task_id;
-}
-
-static inline bool try_new_task(uint32_t task_id)
-{
-    return new_task(task_id, TASK_TYPE_VECTOR, 1);
-}
-
 #endif /* DAG_RING_BUF_H */
