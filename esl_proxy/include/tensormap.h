@@ -83,10 +83,9 @@ typedef struct {
   int32_t next_in_task;
   int32_t prev_in_task;
   int32_t bucket_index;
-  uint64_t storage_numel;
   uint64_t extent_elem_cache;
   uint32_t strides[TM_MAX_DIMS];
-  uint32_t _line2_pad[3];
+  uint32_t _line2_pad[5];
 } TmEntry;
 
 _Static_assert(sizeof(TmEntry) == 128, "TmEntry must be 128 bytes");
@@ -204,10 +203,14 @@ static inline TmOverlap tm_check_overlap(const Tensor *in, const TmEntry *e) {
 
     const uint32_t ref_shape1 = e->strides[0] / e->strides[1];
     const uint32_t stride0 = e->strides[0];
-    if (stride0 == 0u || e->storage_numel % stride0 != 0u) {
+    /* PTO2-aligned: storage size is read from the consumer tensor (it shares
+     * the same buffer as the entry, matched by base_addr), not persisted. */
+    const uint64_t numel_storage =
+        in->dtype != 0u ? in->buffer_size / (uint64_t)in->dtype : 0u;
+    if (stride0 == 0u || numel_storage % stride0 != 0u) {
       return TM_OVERLAP_OTHER;
     }
-    const uint32_t ref_shape0 = (uint32_t)(e->storage_numel / stride0);
+    const uint32_t ref_shape0 = (uint32_t)(numel_storage / stride0);
 
     const uint32_t s0 = e->strides[0];
     const uint32_t s1 = e->strides[1];
@@ -294,10 +297,12 @@ static inline TmOverlap tm_check_overlap(const Tensor *in, const TmEntry *e) {
     ref_shapes[i] = e->strides[i - 1u] / e->strides[i];
   }
   const uint32_t stride0 = e->strides[0];
-  if (stride0 == 0u || e->storage_numel % stride0 != 0u) {
+  const uint64_t numel_storage =
+      in->dtype != 0u ? in->buffer_size / (uint64_t)in->dtype : 0u;
+  if (stride0 == 0u || numel_storage % stride0 != 0u) {
     return TM_OVERLAP_OTHER;
   }
-  ref_shapes[0] = (uint32_t)(e->storage_numel / stride0);
+  ref_shapes[0] = (uint32_t)(numel_storage / stride0);
 
   uint32_t in_offsets[TM_MAX_DIMS] = {0};
   uint32_t ent_offsets[TM_MAX_DIMS] = {0};
@@ -501,8 +506,6 @@ static inline void tm_copy_tensor_to_entry(const Tensor *t, TmEntry *e) {
   e->manual_dep = t->manual_dep;
   e->is_contiguous = t->is_contiguous;
   memcpy(e->shapes, t->shapes, sizeof e->shapes);
-  e->storage_numel =
-      t->dtype != 0 ? t->buffer_size / (uint64_t)t->dtype : 0u;
   if (t->is_contiguous && t->start_offset == 0 &&
       tm_tensor_strides_row_major(t)) {
     uint64_t numel = 1;
