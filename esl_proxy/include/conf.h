@@ -13,8 +13,10 @@
 #define AIC_CNT 60
 #define EXE_TYPE_CNT 2
 
-#define CUTTER_BATCH_SIZE 1024
-#define LOCAL_BUFFER_SIZE 1024
+#define CUTTER_BATCH_SIZE 2048
+#define LOCAL_BUFFER_SIZE 4096
+#define MAX_PREDS_PER_TASK 512
+#define DISPATCH_COMPLETE_BATCH 512
 
 #define CUTTER_THREAD_CNT 1
 #define DISPATCH_THREAD_CNT 1
@@ -33,15 +35,5 @@
 
 /* 1: enable aicpu_orchestration_entry execution time logging in nanoseconds */
 #define ORCHESTRATION_TIME 1
-
-/* 1: compile post-orchestration DAG dump; runtime via DEP_DUMP=1 env */
-#ifndef DEP_DUMP
-#define DEP_DUMP 0
-#endif
-
-/* 1: skip tensormap lookup/insert and succeed(); all tasks submit with no edges */
-#ifndef NO_DEPS
-#define NO_DEPS 0
-#endif
 
 #endif /* CONF_H */
