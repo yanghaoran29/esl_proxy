@@ -293,20 +293,6 @@ static void entry_from_tensor_view(const Tensor *t, TmEntry *e) {
   memcpy(e->strides, t->strides, sizeof e->strides);
 }
 
-static void probe_from_tensor_view(const Tensor *t, TmProbe *p) {
-  memset(p, 0, sizeof *p);
-  p->base_addr = t->buffer_addr;
-  p->start_offset = t->start_offset;
-  p->version = t->version;
-  p->ndims = t->ndims;
-  p->elem_size = (uint16_t)t->dtype;
-  p->is_contiguous = t->is_contiguous;
-  p->storage_numel = t->dtype != 0 ? t->buffer_size / (uint64_t)t->dtype : 0u;
-  memcpy(p->shapes, t->shapes, sizeof p->shapes);
-  memcpy(p->strides, t->strides, sizeof p->strides);
-  p->extent_elem = t->is_contiguous ? tensor_numel(t) : t->extent_elem_cache;
-}
-
 static void test_qwen3_dim1_column_slice(void) {
   printf("Test: qwen3_dim1_column_slice (gate_tile dim=1 piece overlap)\n");
   Tensor tile = tensor_from_base_layout(0xE0000, (uint32_t[]){16, 17408}, 2, FLOAT32);
@@ -319,13 +305,10 @@ static void test_qwen3_dim1_column_slice(void) {
   TmEntry entry;
   entry_from_tensor_view(&prod0, &entry);
 
-  TmProbe probe;
-  probe_from_tensor_view(&cons1, &probe);
-  assert(tm_check_overlap(&probe, &entry) == TM_OVERLAP_NONE);
+  assert(tm_check_overlap(&cons1, &entry) == TM_OVERLAP_NONE);
 
   Tensor cons0 = view(tile, 0, 0, 16, 512);
-  probe_from_tensor_view(&cons0, &probe);
-  assert(tm_check_overlap(&probe, &entry) == TM_OVERLAP_COVERED);
+  assert(tm_check_overlap(&cons0, &entry) == TM_OVERLAP_COVERED);
 
   printf("  PASSED\n");
 }

@@ -29,6 +29,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "tensor.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -68,20 +70,6 @@ typedef enum TmOverlap {
   TM_OVERLAP_COVERED = 1,
   TM_OVERLAP_OTHER = 2
 } TmOverlap;
-
-/* Lookup / overlap probe (2D). */
-typedef struct TmProbe {
-  uint64_t base_addr;
-  uint64_t start_offset;
-  uint64_t extent_elem;
-  int32_t version;
-  uint32_t ndims;
-  uint16_t elem_size;
-  bool is_contiguous;
-  uint32_t strides[TM_MAX_DIMS];
-  uint32_t shapes[TM_MAX_DIMS];
-  uint64_t storage_numel;
-} TmProbe;
 
 /**
  * TmEntry — 128B (2 cache lines), mirrors PTO2TensorMapEntry layout semantics.
@@ -182,59 +170,160 @@ static inline uint64_t tm_entry_extent_elem(const TmEntry *e) {
   return e->extent_elem_cache;
 }
 
-static inline void tm_probe_from_region(const TmRegion *r, TmProbe *p) {
-  p->base_addr = r->base_addr;
-  p->version = r->version;
-  p->ndims = r->ndims;
-  p->elem_size = r->elem_size;
-  p->is_contiguous = true;
-  p->storage_numel = r->storage_numel;
-  p->start_offset = r->start_offset;
-  for (uint32_t i = 0; i < r->ndims; i++) {
-    p->strides[i] = r->strides[i];
-    p->shapes[i] = r->shapes[i];
-  }
-  p->extent_elem = 1;
-  for (uint32_t i = 0; i < r->ndims; i++) {
-    p->extent_elem *= r->shapes[i];
-  }
-}
-
 static inline void tm_copy_region_to_entry(const TmRegion *r, TmEntry *e) {
-  TmProbe probe;
-  tm_probe_from_region(r, &probe);
-  e->base_addr = probe.base_addr;
-  e->version = probe.version;
-  e->ndims = probe.ndims;
-  e->elem_size = probe.elem_size;
+  e->base_addr = r->base_addr;
+  e->version = r->version;
+  e->ndims = r->ndims;
+  e->elem_size = r->elem_size;
   e->manual_dep = 0;
   e->is_contiguous = 1;
-  e->start_offset = probe.start_offset;
-  e->storage_numel = probe.storage_numel;
-  e->extent_elem_cache = probe.extent_elem;
-  for (uint32_t i = 0; i < probe.ndims; i++) {
-    e->shapes[i] = probe.shapes[i];
-    e->strides[i] = probe.strides[i];
+  e->start_offset = r->start_offset;
+  e->storage_numel = r->storage_numel;
+  uint64_t numel = 1;
+  for (uint32_t i = 0; i < r->ndims; i++) {
+    e->shapes[i] = r->shapes[i];
+    e->strides[i] = r->strides[i];
+    numel *= r->shapes[i];
   }
+  e->extent_elem_cache = numel;
+}
+
+static inline Tensor tm_tensor_from_region(const TmRegion *r) {
+  Tensor t;
+  memset(&t, 0, sizeof t);
+  t.buffer_addr = r->base_addr;
+  t.buffer_size = (uint64_t)r->storage_numel * (uint64_t)r->elem_size;
+  t.start_offset = r->start_offset;
+  t.version = r->version;
+  t.ndims = r->ndims;
+  t.dtype = (uint8_t)r->elem_size;
+  t.is_contiguous = 1;
+  for (uint32_t i = 0; i < r->ndims; i++) {
+    t.shapes[i] = r->shapes[i];
+    t.strides[i] = r->strides[i];
+  }
+  uint64_t numel = 1;
+  for (uint32_t i = 0; i < r->ndims; i++) {
+    numel *= r->shapes[i];
+  }
+  t.extent_elem_cache = numel;
+  return t;
 }
 
 /**
- * PTO2-style overlap (2D): L1 element-range, L2 row-major per-dim, L3 OTHER.
+ * PTO2-style overlap: L1 element-range, L2 row-major per-dim, L3 OTHER.
+ * ndims==2 fast path for qwen3 / paged-attention style 2-D views.
  */
-static inline TmOverlap tm_check_overlap(const TmProbe *in, const TmEntry *e) {
+static inline TmOverlap tm_check_overlap(const Tensor *in, const TmEntry *e) {
   if (in->version > e->version) {
     return TM_OVERLAP_OTHER;
   }
 
+  if (in->ndims == 2u && e->ndims == 2u) {
+    uint64_t extent_elem;
+    if (in->is_contiguous) {
+      extent_elem = (uint64_t)in->shapes[0] * in->shapes[1];
+    } else {
+      extent_elem = in->extent_elem_cache;
+    }
+
+    uint64_t ent_extent;
+    if (e->is_contiguous) {
+      ent_extent = (uint64_t)e->shapes[0] * e->shapes[1];
+    } else {
+      ent_extent = e->extent_elem_cache;
+    }
+
+    const uint64_t in_end = in->start_offset + extent_elem;
+    const uint64_t ent_end = e->start_offset + ent_extent;
+    if (!(in_end > e->start_offset && ent_end > in->start_offset)) {
+      return TM_OVERLAP_NONE;
+    }
+
+    if ((uint16_t)in->dtype != e->elem_size) {
+      return TM_OVERLAP_OTHER;
+    }
+    if (in->strides[0] != e->strides[0] || in->strides[1] != e->strides[1]) {
+      return TM_OVERLAP_OTHER;
+    }
+    if (e->strides[1] != 1u) {
+      return TM_OVERLAP_OTHER;
+    }
+    if (e->strides[0] % e->strides[1] != 0u) {
+      return TM_OVERLAP_OTHER;
+    }
+
+    const uint32_t ref_shape1 = e->strides[0] / e->strides[1];
+    const uint32_t stride0 = e->strides[0];
+    if (stride0 == 0u || e->storage_numel % stride0 != 0u) {
+      return TM_OVERLAP_OTHER;
+    }
+    const uint32_t ref_shape0 = (uint32_t)(e->storage_numel / stride0);
+
+    const uint32_t s0 = e->strides[0];
+    const uint32_t s1 = e->strides[1];
+    uint64_t in_remain = in->start_offset;
+    uint64_t ent_remain = e->start_offset;
+    const uint32_t in_off0 = (uint32_t)(in_remain / s0);
+    in_remain %= s0;
+    const uint32_t in_off1 = (uint32_t)(in_remain / s1);
+    in_remain %= s1;
+    const uint32_t ent_off0 = (uint32_t)(ent_remain / s0);
+    ent_remain %= s0;
+    const uint32_t ent_off1 = (uint32_t)(ent_remain / s1);
+    ent_remain %= s1;
+    if (in_remain != 0u || ent_remain != 0u) {
+      return TM_OVERLAP_OTHER;
+    }
+
+    if ((uint64_t)in_off0 + in->shapes[0] > ref_shape0 ||
+        (uint64_t)ent_off0 + e->shapes[0] > ref_shape0) {
+      return TM_OVERLAP_OTHER;
+    }
+    if ((uint64_t)in_off1 + in->shapes[1] > ref_shape1 ||
+        (uint64_t)ent_off1 + e->shapes[1] > ref_shape1) {
+      return TM_OVERLAP_OTHER;
+    }
+
+    const uint64_t in_a1_0 = (uint64_t)in_off0 + in->shapes[0];
+    const uint64_t ent_b1_0 = (uint64_t)ent_off0 + e->shapes[0];
+    if (!(in_a1_0 > ent_off0 && ent_b1_0 > in_off0)) {
+      return TM_OVERLAP_NONE;
+    }
+    bool input_contains_entry = (in_off0 <= ent_off0 && ent_b1_0 <= in_a1_0);
+
+    const uint64_t in_a1_1 = (uint64_t)in_off1 + in->shapes[1];
+    const uint64_t ent_b1_1 = (uint64_t)ent_off1 + e->shapes[1];
+    if (!(in_a1_1 > ent_off1 && ent_b1_1 > in_off1)) {
+      return TM_OVERLAP_NONE;
+    }
+    if (!(in_off1 <= ent_off1 && ent_b1_1 <= in_a1_1)) {
+      input_contains_entry = false;
+    }
+
+    return input_contains_entry ? TM_OVERLAP_COVERED : TM_OVERLAP_OTHER;
+  }
+
+  uint64_t extent_elem;
+  if (in->is_contiguous) {
+    extent_elem = 1;
+    for (uint32_t i = 0; i < in->ndims; i++) {
+      extent_elem *= in->shapes[i];
+    }
+  } else {
+    extent_elem = in->extent_elem_cache;
+  }
+
   const uint64_t in_begin = in->start_offset;
-  const uint64_t in_end = in->start_offset + in->extent_elem;
+  const uint64_t in_end = in->start_offset + extent_elem;
   const uint64_t ent_begin = e->start_offset;
   const uint64_t ent_end = e->start_offset + tm_entry_extent_elem(e);
   if (!(in_end > ent_begin && ent_end > in_begin)) {
     return TM_OVERLAP_NONE;
   }
 
-  if (in->elem_size != e->elem_size || in->ndims != e->ndims || in->ndims == 0) {
+  if ((uint16_t)in->dtype != e->elem_size || in->ndims != e->ndims ||
+      in->ndims == 0) {
     return TM_OVERLAP_OTHER;
   }
   for (uint32_t i = 0; i < in->ndims; i++) {
@@ -277,10 +366,8 @@ static inline TmOverlap tm_check_overlap(const TmProbe *in, const TmEntry *e) {
   }
 
   for (uint32_t i = 0; i < in->ndims; i++) {
-    if ((uint64_t)in_offsets[i] + in->shapes[i] > ref_shapes[i]) {
-      return TM_OVERLAP_OTHER;
-    }
-    if ((uint64_t)ent_offsets[i] + e->shapes[i] > ref_shapes[i]) {
+    if ((uint64_t)in_offsets[i] + in->shapes[i] > ref_shapes[i] ||
+        (uint64_t)ent_offsets[i] + e->shapes[i] > ref_shapes[i]) {
       return TM_OVERLAP_OTHER;
     }
   }
@@ -459,8 +546,7 @@ static inline void tm_insert(TmTensorMap *self, const TmRegion *r,
 
 static inline void tm_lookup(TmTensorMap *self, const TmRegion *r,
                              TmMatchFn on_match, void *ctx) {
-  TmProbe probe;
-  tm_probe_from_region(r, &probe);
+  const Tensor tin = tm_tensor_from_region(r);
   const uint32_t b = tm_hash(self, r->base_addr);
   int32_t cur = tm_buckets(self)[b];
   TmEntry *pl = tm_pool(self);
@@ -468,7 +554,7 @@ static inline void tm_lookup(TmTensorMap *self, const TmRegion *r,
     const int32_t next = pl[cur].next_in_bucket;
     TmEntry *e = &pl[cur];
     if (tm_entry_valid(self, e) && e->base_addr == r->base_addr) {
-      const TmOverlap st = tm_check_overlap(&probe, e);
+      const TmOverlap st = tm_check_overlap(&tin, e);
       if (st != TM_OVERLAP_NONE) {
         if (!on_match(e, st, ctx)) {
           return;
@@ -608,20 +694,23 @@ static inline bool tm_tensor_strides_row_major(const Tensor *t) {
   return true;
 }
 
-static inline void tm_probe_from_tensor(const Tensor *t, TmProbe *p) {
-  p->base_addr = t->buffer_addr;
-  p->version = t->version;
-  p->ndims = t->ndims;
-  p->elem_size = (uint16_t)t->dtype;
-  p->is_contiguous = t->is_contiguous != 0;
-  p->storage_numel =
-      t->dtype != 0 ? t->buffer_size / (uint64_t)t->dtype : 0u;
-  p->start_offset = t->start_offset;
-  for (uint32_t i = 0; i < t->ndims; i++) {
-    p->strides[i] = t->strides[i];
-    p->shapes[i] = t->shapes[i];
+static inline void tm_lookup_tensor(TmTensorMap *self, const Tensor *t,
+                                    TmMatchFn on_match, void *ctx) {
+  const uint32_t b = tm_hash(self, t->buffer_addr);
+  int32_t cur = tm_buckets(self)[b];
+  TmEntry *pl = tm_pool(self);
+
+  while (cur != -1) {
+    const int32_t next = pl[cur].next_in_bucket;
+    TmEntry *e = &pl[cur];
+    if (tm_entry_valid(self, e) && e->base_addr == t->buffer_addr) {
+      const TmOverlap st = tm_check_overlap(t, e);
+      if (st != TM_OVERLAP_NONE && !on_match(e, st, ctx)) {
+        return;
+      }
+    }
+    cur = next;
   }
-  p->extent_elem = tm_tensor_extent_elem(t);
 }
 
 static inline void tm_copy_tensor_to_entry(const Tensor *t, TmEntry *e) {
@@ -677,27 +766,6 @@ after_pred:
     tm_remove(&g_tm_map, e);
   }
   return true;
-}
-
-static inline void tm_lookup_tensor(TmTensorMap *self, const Tensor *t,
-                                    TmMatchFn on_match, void *ctx) {
-  TmProbe probe;
-  tm_probe_from_tensor(t, &probe);
-  const uint32_t b = tm_hash(self, t->buffer_addr);
-  int32_t cur = tm_buckets(self)[b];
-  TmEntry *pl = tm_pool(self);
-
-  while (cur != -1) {
-    const int32_t next = pl[cur].next_in_bucket;
-    TmEntry *e = &pl[cur];
-    if (tm_entry_valid(self, e) && e->base_addr == t->buffer_addr) {
-      const TmOverlap st = tm_check_overlap(&probe, e);
-      if (st != TM_OVERLAP_NONE && !on_match(e, st, ctx)) {
-        return;
-      }
-    }
-    cur = next;
-  }
 }
 
 static inline void tm_insert_tensor(TmTensorMap *self, const Tensor *t,
