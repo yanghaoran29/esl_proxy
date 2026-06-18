@@ -16,9 +16,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#ifndef USE_TENSORMAP
-#error "paged_attention_unroll_manual_scope.h requires -DUSE_TENSORMAP"
-#endif
 
 #include "dispatch.h"
 #include "mem_pool.h"

@@ -19,16 +19,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#ifndef USE_TENSORMAP
-#error "paged_attention_unroll.h requires -DUSE_TENSORMAP"
-#endif
-
-#define ORCH_TM_DEPS 1
-
-#define ORCH_USES_TM_SUBMIT 1
 
 #include "mem_pool.h"
-#include "ring_buf.h"
 #include "tensormap.h"
 
 int g_subtask_cnt = 0;

@@ -12,16 +12,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#ifndef USE_TENSORMAP
-#error "qwen3_dynamic_tensormap.h requires -DUSE_TENSORMAP"
-#endif
-
-#define ORCH_TM_DEPS 1
-
-#define ORCH_USES_TM_SUBMIT 1
 
 #include "mem_pool.h"
-#include "ring_buf.h"
 #include "tensormap.h"
 
 #ifndef QWEN3_SPMD_TIER

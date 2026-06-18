@@ -48,8 +48,6 @@ else
 endif
 
 # All four cases use struct Tensor / tensormap helpers.
-CFLAGS   += -DUSE_TENSORMAP
-
 # Qwen3 only: default spmd-4 tier; override via make QWEN3_SPMD_TIER=N.
 ifneq ($(filter $(CASE),$(QWEN3_CASES)),)
 QWEN3_SPMD_TIER ?= 2
@@ -105,7 +103,7 @@ run: all
 test-tensormap: $(BIN_DIR)/test_tensormap
 	$(BIN_DIR)/test_tensormap
 
-TEST_TENSORMAP_CFLAGS := -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -I include -DUSE_TENSORMAP
+TEST_TENSORMAP_CFLAGS := -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -I include
 
 $(BIN_DIR)/test_tensormap: tests/test_tensormap.c | $(BIN_DIR)
 	$(CC) $(TEST_TENSORMAP_CFLAGS) tests/test_tensormap.c -o $@ $(LDFLAGS)

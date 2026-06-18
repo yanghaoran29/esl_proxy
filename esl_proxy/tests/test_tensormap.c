@@ -5,7 +5,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "tensor.h"
-#include "tensormap.h"
+#include "tensormap_core.h"
 
 #include <assert.h>
 #include <stdio.h>
