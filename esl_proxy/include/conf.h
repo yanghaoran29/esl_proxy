@@ -46,4 +46,9 @@
 #define NO_DEPS 0
 #endif
 
+/* 1: orchestration only (no cutter/dispatch threads); for DAG log generation */
+#ifndef ORCH_ONLY
+#define ORCH_ONLY 0
+#endif
+
 #endif /* CONF_H */

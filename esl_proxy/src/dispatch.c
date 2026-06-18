@@ -55,7 +55,7 @@ static inline void get_completed(uint64_t* bitmap, uint16_t task_id[], int *comp
 // TODO: add counter for spmd
 static inline void push_2_completed_queue(int tid)
 {
-    uint16_t task_id[240];
+    uint16_t task_id[DISPATCH_COMPLETE_BATCH];
     int complete_cnt = 0;
     for (int i = 0; i < EXE_TYPE_CNT; i++) {
         get_completed(&g_ctrl_t[tid].msg_bitmap[i][0], task_id, &complete_cnt,
@@ -144,9 +144,21 @@ void *dispatch_worker(void *arg)
     while (!atomic_load(&g_orch_is_done)) {
         total_sent += dispatch(tid);
     }
-    
+    int prev = g_completed_cnt;
+    int count = 10000;
     while (atomic_load(&g_completed_cnt) < atomic_load(&g_task_id)) {
         total_sent += dispatch(tid);
+        if (prev == g_completed_cnt) {
+            count--;
+            if (count < 0) {
+                MAIN_LOGF("[scheduler] stall timeout: completed_cnt=%u task_id=%u",
+                          (unsigned)g_completed_cnt, (unsigned)g_task_id);
+                break;
+            }
+        } else {
+            count = 10000;
+        }
+        prev = g_completed_cnt;
     }
     
     atomic_store(&g_is_done, true);

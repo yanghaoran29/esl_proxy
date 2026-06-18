@@ -123,7 +123,6 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             tm_submit(g_task_id);
             g_task_id++;
         }
-
         for (int base = 0; base < 8; base += qwen3_blocks_per_task(8)) {
             int cur_blocks = qwen3_cur_blocks(8, base);
             new_task(g_task_id, TASK_TYPE_CUBE, (uint16_t)cur_blocks, DUR_K_PROJ);
@@ -259,7 +258,6 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             g_task_id++;
         }
     }
-
     for (int64_t b0 = 0; b0 < batch_padded; b0 += 16) {
         Tensor resid1_tile = alloc_tensors((uint32_t[2]){16, 5120}, 2, FLOAT32);
         Tensor gm_pipe_buffer_0 = alloc_tensors((uint32_t[2]){16384, 40}, 2, FLOAT32);

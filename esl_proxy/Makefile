@@ -86,6 +86,9 @@ ORCH_CONFIG := case=$(CASE) tier=$(QWEN3_SPMD_TIER) log=$(MAIN_LOG)
 
 all: $(TARGET)
 
+gen-dag:
+	bash ../tools/gen_all_dags.sh
+
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CC) $(CFLAGS) $(OBJS) -o $@ $(LDFLAGS)
 
