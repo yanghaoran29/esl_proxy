@@ -110,11 +110,6 @@ static inline void add_scalar(uint16_t task_id, int64_t t)
     g_basic_buf[task_id & RING_MASK].scalar[idx] = t;
 }
 
-static inline void add_duration(uint16_t task_id, int64_t t)
-{
-    g_basic_buf[task_id & RING_MASK].duration = (uint16_t)t;
-}
-
 static inline void lock(int slotIdx)
 {
     while (atomic_flag_test_and_set_explicit(&g_lock_buf[slotIdx], memory_order_acquire)) {
@@ -150,7 +145,7 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
     return cnt;
 }
 
-static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count)
+static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uint16_t duration)
 {
     while ((task_id - atomic_load(&g_min_uncomplete_task)) >= RING_SIZE ) {
         MAIN_LOGF("[orchestration] task_id = %u g_min_uncomplete_task = %u", task_id, g_min_uncomplete_task);
@@ -159,6 +154,7 @@ static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count)
     if (count > 1)
         g_basic_buf[task_id & RING_MASK].mode = ORG_MODE_SPMD_SYNC;
     g_basic_buf[task_id & RING_MASK].count = count; 
+    g_basic_buf[task_id & RING_MASK].duration = duration;
     g_subtask_cnt += count;
     WORKER_LOGF("new,task_id,%u,type,%d,subtask_cnt,%d", task_id, type, count);
 }
