@@ -43,7 +43,6 @@ static inline void get_completed(uint64_t* bitmap, uint16_t task_id[], int *comp
 {
     int cnt = __builtin_popcountll(*bitmap);
     while (cnt > 0) {
-        // 从二进制最最右边开始向高位看，连续的 0 的个数。
         uint64_t idx = (uint64_t)__builtin_ctzll(*bitmap);
         task_id[(*complete_cnt)] = task_id_map[idx];
         WORKER_LOGF("completed,complete_cnt,%d,task_id,%u,core,%d,bitmap,%u",*complete_cnt, task_id_map[idx], idx, *bitmap);
