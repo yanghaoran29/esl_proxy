@@ -11,6 +11,17 @@
 
 #include <stdint.h>
 
+#ifdef ESL_PROXY_ONBOARD
+#include "aicore_bridge.h"
+#include "onboard_shm_sync.h"
+#include "onboard_sync.h"
+static AicoreBridge *g_aicore_bridge;
+void dispatch_set_aicore_bridge(void *bridge)
+{
+    g_aicore_bridge = (AicoreBridge *)bridge;
+}
+#endif
+
 extern atomic_int g_task_id;
 extern atomic_bool g_orch_is_done;
 extern atomic_int g_completed_cnt;
@@ -19,15 +30,6 @@ extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
 extern struct task_desc g_basic_buf[RING_SIZE];
 extern executor_t g_executors[EXE_TYPE_CNT][AIC_CNT];
 
-static inline void set_mix(int tid)
-{
-    for (int j = 0; j < AIC_OSTD; j++) {
-        g_ctrl_t[tid].free_bitmap[TASK_TYPE_MIX][j] =
-            g_ctrl_t[tid].free_bitmap[TASK_TYPE_CUBE][j] &
-            g_ctrl_t[tid].free_bitmap[TASK_TYPE_VECTOR][j];
-    }
-}
-
 static inline void get_free_exe(int tid)
 {
     for (int i = 0; i < EXE_TYPE_CNT; i++) {
@@ -35,7 +37,6 @@ static inline void get_free_exe(int tid)
             g_ctrl_t[tid].free_bitmap[i][j] |= g_ctrl_t[tid].msg_bitmap[i][j];
         }
     }
-    set_mix(tid);
 }
 
 static inline void get_completed(uint64_t* bitmap, uint16_t task_id[], int *complete_cnt,
@@ -105,11 +106,19 @@ static inline int send_task(ctrl_t *ctrl, int type)
             ctrl->task_id_map1[type][idx] = task_id;
         }
         
-        // Clear the free bit for this core/slot combination (mark as busy)
         ctrl->free_bitmap[type][slot] &= ~mask;
 
-        // Fake Return
+#ifdef ESL_PROXY_ONBOARD
+        if (g_aicore_bridge != NULL) {
+            aicore_bridge_dispatch_task(g_aicore_bridge, (int)ctrl->tid, task_id, core, slot,
+                                        exe_type);
+        } else {
+            ctrl->msg_bitmap[type][slot] |= mask;
+        }
+#else
+        /* Host sim: Fake Return */
         ctrl->msg_bitmap[type][slot] |= mask;
+#endif
         WORKER_LOGF("send,task_id,%u,core,%d,slot,%d,type,%d", task_id, core, slot, type);
         sent++;
         free_bitmap &= ~mask;
@@ -122,32 +131,43 @@ int dispatch(int tid)
     int total_sent = 0;
     get_free_exe(tid);
     push_2_completed_queue(tid);
-    total_sent += send_task(&g_ctrl_t[tid], TASK_TYPE_MIX);
     total_sent += send_task(&g_ctrl_t[tid], TASK_TYPE_VECTOR);
     total_sent += send_task(&g_ctrl_t[tid], TASK_TYPE_CUBE);
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_flush_after_dispatch();
+#endif
     return total_sent;
 }
 
-/*
- * Dispatch worker thread entry point
- * Runs the dispatch loop for task distribution
- */
-void *dispatch_worker(void *arg)
+void dispatch_loop_run(int tid)
 {
-    // atomic_store(&g_is_done, true);
-    // return NULL;
-    int tid = (int)(intptr_t)arg;
-
     int total_sent = 0;
     uint64_t start_ns = get_time_ns();
-    
+
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_invalidate_shared_before_worker();
+#endif
     while (!atomic_load(&g_orch_is_done)) {
+#ifdef ESL_PROXY_ONBOARD
+        esl_onboard_invalidate_shared_before_worker();
+#endif
         total_sent += dispatch(tid);
+#ifdef ESL_PROXY_ONBOARD
+        if (g_aicore_bridge != NULL) {
+            aicore_bridge_poll_completions(g_aicore_bridge, tid);
+        }
+#endif
     }
     int prev = g_completed_cnt;
     int count = 10000;
     while (atomic_load(&g_completed_cnt) < atomic_load(&g_task_id)) {
+        esl_onboard_invalidate_shared_before_worker();
         total_sent += dispatch(tid);
+#ifdef ESL_PROXY_ONBOARD
+        if (g_aicore_bridge != NULL) {
+            aicore_bridge_poll_completions(g_aicore_bridge, tid);
+        }
+#endif
         if (prev == g_completed_cnt) {
             count--;
             if (count < 0) {
@@ -160,13 +180,20 @@ void *dispatch_worker(void *arg)
         }
         prev = g_completed_cnt;
     }
-    
+
     atomic_store(&g_is_done, true);
+    (void)total_sent;
     uint64_t end_ns = get_time_ns();
     uint64_t elapsed_ns = end_ns - start_ns;
 
     MAIN_LOGF("[scheduler] task_cnt = %u", g_completed_cnt);
     MAIN_LOGF("[scheduler] duration = %llu ns", (unsigned long long)elapsed_ns);
-    MAIN_LOGF("[scheduler] task_tp = %f MTasks/s",(float)(g_completed_cnt * 1000.0 / elapsed_ns));
+    MAIN_LOGF("[scheduler] task_tp = %f MTasks/s", (float)(g_completed_cnt * 1000.0 / elapsed_ns));
+}
+
+void *dispatch_worker(void *arg)
+{
+    int tid = (int)(intptr_t)arg;
+    dispatch_loop_run(tid);
     return NULL;
 }

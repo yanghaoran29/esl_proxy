@@ -44,12 +44,21 @@ struct ring_buf {
     uint16_t* _Atomic tail;
 };
 
+#ifdef ESL_PROXY_ONBOARD
+/* onboard: static buffers only (no malloc on AICPU) */
+#endif
+
 static inline void ring_buf_init(void)
 {
     for (size_t i = 0; i < RING_SIZE; i++) {
         g_successor_buf[i].next = NULL;
     }
+#ifdef ESL_PROXY_ONBOARD
+    static uint16_t predecessor_storage[NODE_BUFF_SIZE];
+    g_predecessor_ring.head = predecessor_storage;
+#else
     g_predecessor_ring.head = malloc(sizeof(uint16_t) * NODE_BUFF_SIZE);
+#endif
     atomic_store(&g_predecessor_ring.tail, g_predecessor_ring.head);
     atomic_store(&g_predecessor_ring.start, g_predecessor_ring.head);
 }
@@ -122,10 +131,12 @@ static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uin
     }
     if (count > 1)
         g_basic_buf[task_id & RING_MASK].mode = ORG_MODE_SPMD_SYNC;
+    g_basic_buf[task_id & RING_MASK].type = (task_type_t)type;
     g_basic_buf[task_id & RING_MASK].count = count; 
     g_basic_buf[task_id & RING_MASK].duration = duration;
     g_subtask_cnt += count;
     WORKER_LOGF("new,task_id,%u,type,%d,subtask_cnt,%d", task_id, type, count);
+    return true;
 }
 
 #endif /* DAG_RING_BUF_H */

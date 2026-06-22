@@ -30,11 +30,16 @@
 
 #include "conf.h"
 
-static inline uint64_t get_time_ns(void) {
+#ifdef ESL_PROXY_ONBOARD
+#include "onboard_time.h"
+#else
+static inline uint64_t get_time_ns(void)
+{
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
 }
+#endif
 
 #if WORKER_LOG
 extern int g_worker_log;

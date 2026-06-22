@@ -162,14 +162,18 @@ void log_close(void)
 #if MAIN_LOG
 void main_log_write(int line, const char *fmt, ...)
 {
+#ifdef ESL_PROXY_ONBOARD
+    (void)line;
+    (void)fmt;
+#else
     va_list args;
     va_start(args, fmt);
-    
-    // Output to stdout only
+
     fprintf(stdout, "[main:%d] ", line);
     vfprintf(stdout, fmt, args);
     fprintf(stdout, "\n");
-    
+
     va_end(args);
+#endif
 }
 #endif

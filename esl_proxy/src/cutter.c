@@ -1,6 +1,10 @@
 #include "cutter.h"
 #include "log.h"
 #include "ring_buf.h"
+#ifdef ESL_PROXY_ONBOARD
+#include "onboard_shm_sync.h"
+#include "onboard_sync.h"
+#endif
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,7 +12,12 @@
 task_state* g_state_buf;
 
 void init_state_buf(void) {
+#ifdef ESL_PROXY_ONBOARD
+    static task_state state_storage[RING_SIZE];
+    g_state_buf = state_storage;
+#else
     g_state_buf = malloc(sizeof(task_state) * RING_SIZE);
+#endif
     for (size_t i = 0; i < RING_SIZE; i++) {
         g_state_buf[i].state = TASK_STATUS_CREATING;
         g_state_buf[i].task_id = 0;
@@ -24,6 +33,14 @@ extern _Atomic bool g_is_done;
 uint16_t  g_predecessor_cnt[RING_SIZE];
 uint16_t g_commit_task_id = 0;
 uint16_t g_completed_task_cnt = 0;
+
+static inline int ready_queue_index(task_type_t type)
+{
+    if (type == TASK_TYPE_MIX) {
+        return TASK_TYPE_CUBE;
+    }
+    return (int)type;
+}
 
 static inline bool update_task_state(uint16_t cnt, uint16_t* cq_buf)
 {
@@ -60,9 +77,10 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) 
         if (ptr->cnt <= 0) {
             // WORKER_LOGF("ready, task_id,%u, task_idx,%u, ready_cnt,%u", g_commit_task_id, task_idx, *ready_cnt);
             task_type_t type = g_basic_buf[g_commit_task_id].type;
-            rq_buf[type][ready_cnt[type]] = g_commit_task_id++;
-            ready_cnt[type]++;
-            WORKER_LOGF("ready_cnt[%d],%d",type, ready_cnt[type]);
+            int q = ready_queue_index(type);
+            rq_buf[q][ready_cnt[q]] = g_commit_task_id++;
+            ready_cnt[q]++;
+            WORKER_LOGF("ready_cnt[%d],%d", q, ready_cnt[q]);
             continue;
         }
         uint16_t precessor_id = 0;
@@ -85,9 +103,10 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) 
         if (predecessor_cnt <= 0)
         {
             task_type_t type = g_basic_buf[g_commit_task_id].type;
-            rq_buf[type][ready_cnt[type]] = g_commit_task_id;
-            ready_cnt[type]++;
-            WORKER_LOGF("ready_cnt[%d],%d",type, ready_cnt[type]);
+            int q = ready_queue_index(type);
+            rq_buf[q][ready_cnt[q]] = g_commit_task_id;
+            ready_cnt[q]++;
+            WORKER_LOGF("ready_cnt[%d],%d", q, ready_cnt[q]);
         }
         g_commit_task_id++;
     }
@@ -150,17 +169,57 @@ void deal_completed_queue() {
     }
 }
 
+void cutter_loop_once(void)
+{
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_invalidate_shared_before_worker();
+#endif
+    deal_completed_queue();
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_flush_after_cutter();
+#endif
+}
+
+void cutter_loop_run(void)
+{
+#ifdef ESL_PROXY_ONBOARD
+    /* worker_enter called from executor.cpp */
+#else
+    init_state_buf();
+#endif
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_invalidate_shared_before_worker();
+#endif
+    while (!atomic_load(&g_is_done)) {
+#ifdef ESL_PROXY_ONBOARD
+        esl_onboard_invalidate_shared_before_worker();
+#endif
+        cutter_loop_once();
+    }
+    int stall = 0;
+    uint16_t prev_commit = g_commit_task_id;
+    while (g_commit_task_id < atomic_load(&g_task_id)) {
+        esl_onboard_invalidate_shared_before_worker();
+        cutter_loop_once();
+        if (g_commit_task_id != prev_commit) {
+            prev_commit = g_commit_task_id;
+            stall = 0;
+        } else {
+            stall++;
+            if (stall > 10000) {
+                WORKER_LOGF("cutter stall timeout: commit=%u task_id=%u", (unsigned)g_commit_task_id,
+                            (unsigned)atomic_load(&g_task_id));
+                break;
+            }
+        }
+    }
+    WORKER_LOGF("cutter, commit_tasks_cnt,%d,completed_task_cnt,%d ", g_commit_task_id,
+                g_completed_task_cnt);
+}
+
 void *cutter_worker(void *arg)
 {
-    int tid = (int)(intptr_t)arg;
-    init_state_buf();
-    while (!atomic_load(&g_is_done)) {
-        deal_completed_queue();
-    }
-
-    while(g_commit_task_id < atomic_load(&g_task_id)){
-        deal_completed_queue();
-    }
-    WORKER_LOGF("cutter, commit_tasks_cnt,%d,completed_task_cnt,%d ", g_commit_task_id, g_completed_task_cnt);
+    (void)arg;
+    cutter_loop_run();
     return NULL;
 }
