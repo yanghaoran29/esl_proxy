@@ -1,10 +1,6 @@
 /*
- * Shared onboard utilities: file I/O, fingerprinting, dispatcher offsets, AICPU logging.
- *
- * Logging layering (AICPU only):
- *   dev_vlog_*     — va_list → CANN dlog (implemented in aicpu_kernel.c)
- *   unified_log_*  — severity / verbosity gating (inline below)
- *   LOG_*          — call-site macros with file/line prefix
+ * Shared onboard utilities: file I/O, fingerprinting, dispatcher offsets.
+ * AICPU CANN logging lives in onboard_log.h (implementation in aicpu_kernel.c).
  */
 #ifndef ESL_PROXY_ONBOARD_TOOLS_H
 #define ESL_PROXY_ONBOARD_TOOLS_H
@@ -231,101 +227,5 @@ static inline int write_bytes(const char *path, const char *data, uint64_t len)
     }
     return 1;
 }
-
-/* --- AICPU onboard logging (CANN dlog backend) --- */
-
-extern bool g_is_log_enable_debug;
-extern bool g_is_log_enable_info;
-extern bool g_is_log_enable_warn;
-extern bool g_is_log_enable_error;
-extern int g_log_info_v;
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void set_log_level(int level);
-void set_log_info_v(int v);
-int get_log_info_v(void);
-void init_log_switch(void);
-
-void dev_vlog_debug(const char *func, const char *fmt, va_list args);
-void dev_vlog_warn(const char *func, const char *fmt, va_list args);
-void dev_vlog_error(const char *func, const char *fmt, va_list args);
-void dev_vlog_info_v(int v, const char *func, const char *fmt, va_list args);
-
-#ifdef __cplusplus
-}
-#endif
-
-static inline bool is_log_enable_debug(void) { return g_is_log_enable_debug; }
-static inline bool is_log_enable_info(void) { return g_is_log_enable_info; }
-static inline bool is_log_enable_warn(void) { return g_is_log_enable_warn; }
-static inline bool is_log_enable_error(void) { return g_is_log_enable_error; }
-
-static inline void unified_log_error(const char *func, const char *fmt, ...)
-{
-    va_list args;
-
-    if (!is_log_enable_error()) {
-        return;
-    }
-    va_start(args, fmt);
-    dev_vlog_error(func, fmt, args);
-    va_end(args);
-}
-
-static inline void unified_log_warn(const char *func, const char *fmt, ...)
-{
-    va_list args;
-
-    if (!is_log_enable_warn()) {
-        return;
-    }
-    va_start(args, fmt);
-    dev_vlog_warn(func, fmt, args);
-    va_end(args);
-}
-
-static inline void unified_log_debug(const char *func, const char *fmt, ...)
-{
-    va_list args;
-
-    if (!is_log_enable_debug()) {
-        return;
-    }
-    va_start(args, fmt);
-    dev_vlog_debug(func, fmt, args);
-    va_end(args);
-}
-
-static inline void unified_log_info_v(const char *func, int v, const char *fmt, ...)
-{
-    va_list args;
-
-    if (!is_log_enable_info() || v < g_log_info_v) {
-        return;
-    }
-    va_start(args, fmt);
-    dev_vlog_info_v(v, func, fmt, args);
-    va_end(args);
-}
-
-#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
-
-#define LOG_ERROR(fmt, ...) unified_log_error(__FUNCTION__, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define LOG_WARN(fmt, ...) unified_log_warn(__FUNCTION__, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define LOG_DEBUG(fmt, ...) unified_log_debug(__FUNCTION__, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
-/* V0 milestone traces align with CANN DLOG_DEBUG (not DLOG_INFO). */
-#define LOG_INFO_V0(fmt, ...) unified_log_debug(__FUNCTION__, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define LOG_INFO_V1(fmt, ...) unified_log_info_v(__FUNCTION__, 1, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define LOG_INFO_V2(fmt, ...) unified_log_info_v(__FUNCTION__, 2, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define LOG_INFO_V3(fmt, ...) unified_log_info_v(__FUNCTION__, 3, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define LOG_INFO_V4(fmt, ...) unified_log_info_v(__FUNCTION__, 4, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define LOG_INFO_V5(fmt, ...) unified_log_info_v(__FUNCTION__, 5, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define LOG_INFO_V6(fmt, ...) unified_log_info_v(__FUNCTION__, 6, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define LOG_INFO_V7(fmt, ...) unified_log_info_v(__FUNCTION__, 7, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define LOG_INFO_V8(fmt, ...) unified_log_info_v(__FUNCTION__, 8, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define LOG_INFO_V9(fmt, ...) unified_log_info_v(__FUNCTION__, 9, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
 
 #endif /* ESL_PROXY_ONBOARD_TOOLS_H */

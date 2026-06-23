@@ -3,6 +3,7 @@
 
 #include "onboard_config.h"
 #include "tools.h"
+#include "onboard_log.h"
 #include "dlog_pub.h"
 #include "aicpu_bridge.h"
 #include "kernel_args.h"
@@ -190,7 +191,7 @@ void cache_flush_range(const void *addr, size_t size)
 }
 
 /* ========================================================================== */
-/* AICPU logging (tools.h implementation)                                     */
+/* AICPU logging (onboard_log.h implementation)                               */
 /* ========================================================================== */
 
 bool g_is_log_enable_debug = false;
