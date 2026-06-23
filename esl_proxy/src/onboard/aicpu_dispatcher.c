@@ -2,20 +2,15 @@
  * AICPU Dispatcher — transient bootstrap-only upload helper.
  */
 #include "tools.h"
+#include "onboard_log.h"
 
 #include <errno.h>
-#include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
-extern void DlogRecord(int moduleId, int level, const char *fmt, ...);
-
-#define kDlogModuleCcecpu 3
-#define kDlogLevelError 3
 
 struct DispatcherKernelArgs {
     uint64_t unused[5];
@@ -40,17 +35,6 @@ _Static_assert(offsetof(struct DispatcherDeviceArgs, device_id) == 112, "device_
 _Static_assert(offsetof(struct DispatcherDeviceArgs, inner_so_bin) == 120, "inner_so_bin offset drift");
 _Static_assert(offsetof(struct DispatcherDeviceArgs, inner_so_len) == 128, "inner_so_len offset drift");
 
-static void dispatcher_log(const char *fmt, ...)
-{
-    char buf[1024];
-    va_list ap;
-
-    va_start(ap, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, ap);
-    va_end(ap);
-    DlogRecord(kDlogModuleCcecpu, kDlogLevelError, "[simpler-dispatcher] %s", buf);
-}
-
 static void make_inner_so_path(uint64_t fp, uint64_t device_id, char *buf, size_t buf_size)
 {
     snprintf(buf, buf_size, "/usr/lib64/aicpu_kernels/0/aicpu_kernels_device/simpler_inner_%016lx_%lu.so",
@@ -60,14 +44,14 @@ static void make_inner_so_path(uint64_t fp, uint64_t device_id, char *buf, size_
 int StaticTileFwkBackendKernelServer(void *args)
 {
     (void)args;
-    dispatcher_log("Static: stub (not expected to be called)");
+    onboard_dispatcher_log("Static: stub (not expected to be called)");
     return 0;
 }
 
 uint32_t DynTileFwkBackendKernelServer(void *args)
 {
     (void)args;
-    dispatcher_log("Server: stub (dispatcher is upload-only, not expected to be called)");
+    onboard_dispatcher_log("Server: stub (dispatcher is upload-only, not expected to be called)");
     return 0;
 }
 
@@ -80,18 +64,18 @@ uint32_t DynTileFwkBackendKernelServerInit(void *args)
     char path[256];
 
     if (args == NULL) {
-        dispatcher_log("Init: args==nullptr");
+        onboard_dispatcher_log("Init: args==nullptr");
         return 1;
     }
     k = (struct DispatcherKernelArgs *)args;
     d = (struct DispatcherDeviceArgs *)k->device_args;
     if (d == NULL) {
-        dispatcher_log("Init: device_args==nullptr");
+        onboard_dispatcher_log("Init: device_args==nullptr");
         return 1;
     }
     if (d->inner_so_bin == 0 || d->inner_so_len == 0) {
-        dispatcher_log("Init: empty inner SO bundle (bin=%lx len=%lu", (unsigned long)d->inner_so_bin,
-                       (unsigned long)d->inner_so_len);
+        onboard_dispatcher_log("Init: empty inner SO bundle (bin=%lx len=%lu", (unsigned long)d->inner_so_bin,
+                               (unsigned long)d->inner_so_len);
         return 1;
     }
     inner_bytes = (const char *)(uintptr_t)d->inner_so_bin;
@@ -100,6 +84,6 @@ uint32_t DynTileFwkBackendKernelServerInit(void *args)
     if (!write_bytes(path, inner_bytes, d->inner_so_len)) {
         return 1;
     }
-    dispatcher_log("Init: wrote %s (%lu bytes)", path, (unsigned long)d->inner_so_len);
+    onboard_dispatcher_log("Init: wrote %s (%lu bytes)", path, (unsigned long)d->inner_so_len);
     return 0;
 }

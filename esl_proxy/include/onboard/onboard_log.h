@@ -112,4 +112,16 @@ static inline void unified_log_info_v(const char *func, int v, const char *fmt, 
 #define LOG_INFO_V8(fmt, ...) unified_log_info_v(__FUNCTION__, 8, "[%s:%d] " fmt, __ONBOARD_FILENAME__, __LINE__, ##__VA_ARGS__)
 #define LOG_INFO_V9(fmt, ...) unified_log_info_v(__FUNCTION__, 9, "[%s:%d] " fmt, __ONBOARD_FILENAME__, __LINE__, ##__VA_ARGS__)
 
+/* Lightweight direct dlog for bootstrap-only TUs (e.g. aicpu_dispatcher). */
+static inline void onboard_dispatcher_log(const char *fmt, ...)
+{
+    char buf[1024];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    dlog_error(CCECPU, "[simpler-dispatcher] %s", buf);
+}
+
 #endif /* ESL_PROXY_ONBOARD_LOG_H */
