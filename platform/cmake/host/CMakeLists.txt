@@ -29,6 +29,7 @@ target_include_directories(esl_onboard_runner
         "${ONBOARD_INC}"
         "${ASCEND_HOME_PATH}/include"
         "${ASCEND_HOME_PATH}/pkg_inc"
+        "${ASCEND_HOME_PATH}/pkg_inc/base"
         "${ASCEND_HOME_PATH}/pkg_inc/runtime"
         "${ASCEND_HOME_PATH}/pkg_inc/runtime/runtime"
         "${ASCEND_HOME_PATH}/pkg_inc/profiling"
@@ -46,6 +47,7 @@ target_link_libraries(esl_onboard_runner
     PRIVATE
         ascendcl
         runtime
+        unified_dlog
         dl
         pthread
 )

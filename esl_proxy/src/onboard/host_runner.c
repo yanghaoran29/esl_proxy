@@ -17,6 +17,11 @@
 #include <stddef.h>
 #include <unistd.h>
 #include <errno.h>
+#include "dlog_pub.h"
+
+#ifndef ESL_PROXY_KARGS_LOG_LEVEL
+#define ESL_PROXY_KARGS_LOG_LEVEL 1 /* DLOG_INFO */
+#endif
 
 #define ESL_AICPU_INIT_NAME "simpler_aicpu_init"
 #define ESL_AICPU_EXEC_NAME "simpler_aicpu_exec"
@@ -641,6 +646,20 @@ static aclError devmem_alloc(DevMem *mem, size_t n)
     return aclrtMalloc(&mem->ptr, n, ACL_MEM_MALLOC_HUGE_FIRST);
 }
 
+static void esl_host_sync_cann_log_level(int level)
+{
+    if (getenv("ASCEND_GLOBAL_LOG_LEVEL") != NULL) {
+        return;
+    }
+    if (level < DLOG_DEBUG) {
+        level = DLOG_DEBUG;
+    }
+    if (level > DLOG_ERROR) {
+        level = DLOG_ERROR;
+    }
+    dlog_setlevel(-1, level, 0);
+}
+
 static int resolve_device_id(int cli_dev)
 {
     const char *env = getenv("TASK_DEVICE");
@@ -744,6 +763,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "[esl_proxy] dispatcher=%s aicpu=%s aicore=%s\n", dispatcher_path, aicpu_path, aicore_path);
 
     ACL_CHECK(aclInit(NULL), "aclInit");
+    esl_host_sync_cann_log_level(ESL_PROXY_KARGS_LOG_LEVEL);
     ACL_CHECK(aclrtSetDevice(device_id), "aclrtSetDevice");
     ACL_CHECK(aclrtCreateStream(&stream_aicpu), "aclrtCreateStream aicpu");
     ACL_CHECK(aclrtCreateStream(&stream_aicore), "aclrtCreateStream aicore");
@@ -815,7 +835,7 @@ int main(int argc, char **argv)
     memset(&k_args, 0, sizeof(k_args));
     k_args.runtime_args = (struct EslRuntime *)dev_runtime.ptr;
     k_args.regs = dev_regs;
-    k_args.log_level = 1;
+    k_args.log_level = ESL_PROXY_KARGS_LOG_LEVEL;
     k_args.log_info_v = 5;
     k_args.device_wall_data_base = (uint64_t)(uintptr_t)dev_wall.ptr;
     k_args.device_id = (uint32_t)device_id;
