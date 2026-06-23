@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16.3)
-project(esl_onboard_runner LANGUAGES CXX)
+project(esl_onboard_runner LANGUAGES C)
 
 if(NOT DEFINED ASCEND_HOME_PATH)
     if(DEFINED ENV{ASCEND_HOME_PATH})
@@ -9,20 +9,24 @@ if(NOT DEFINED ASCEND_HOME_PATH)
     endif()
 endif()
 
-set(ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../..")
+get_filename_component(REPO "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
+if(NOT DEFINED ONBOARD_INC)
+    set(ONBOARD_INC "${REPO}/esl_proxy/include/onboard")
+endif()
+if(NOT DEFINED ONBOARD_SRC)
+    set(ONBOARD_SRC "${REPO}/esl_proxy/src/onboard")
+endif()
+set(ROOT "${REPO}")
 
 add_executable(esl_onboard_runner
-    onboard_runner.cpp
-    aicpu_loader.cpp
-    elf_fingerprint.cpp
+    "${ONBOARD_SRC}/host_runner.c"
 )
 
-target_compile_features(esl_onboard_runner PRIVATE cxx_std_17)
-target_compile_options(esl_onboard_runner PRIVATE -Wall -Wextra -O2 -g)
+target_compile_options(esl_onboard_runner PRIVATE -Wall -Wextra -O2 -g -std=c11)
 
 target_include_directories(esl_onboard_runner
     PRIVATE
-        "${ROOT}/platform/include"
+        "${ONBOARD_INC}"
         "${ASCEND_HOME_PATH}/include"
         "${ASCEND_HOME_PATH}/pkg_inc"
         "${ASCEND_HOME_PATH}/pkg_inc/runtime"

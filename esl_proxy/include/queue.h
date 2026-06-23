@@ -33,10 +33,18 @@ static inline bool batch_dequeue(queue_t *queue, uint16_t *item, uint16_t *n)
         unlock_q(queue);
         return false;
     }
-    uint64_t head = queue->head;
-    memcpy(item, &queue->tasks[head], *n * sizeof(uint16_t));
+    /* Ring index must wrap (head/tail kept masked in [0,RING_SIZE), like the
+     * single-element enqueue/dequeue). Without the split-copy, tasks[head]
+     * reads out of bounds when head+*n crosses RING_SIZE — which corrupts any
+     * task flow larger than the ring (e.g. qwen3's 3096-task DAG). */
+    uint64_t head = queue->head & (RING_SIZE - 1);
+    uint16_t first = (uint16_t)(((RING_SIZE - head) < *n) ? (RING_SIZE - head) : *n);
+    memcpy(item, &queue->tasks[head], first * sizeof(uint16_t));
+    if (*n > first) {
+        memcpy(item + first, &queue->tasks[0], (*n - first) * sizeof(uint16_t));
+    }
 
-    queue->head = queue->head + *n;
+    queue->head = (head + *n) & (RING_SIZE - 1);
     queue->cnt -= *n;
     unlock_q(queue);
     return true;
@@ -49,9 +57,13 @@ static inline bool batch_enqueue(queue_t *queue, uint16_t *item, uint16_t n)
         unlock_q(queue);
         return false;
     }
-    uint64_t tail = queue->tail;
-    memcpy(&queue->tasks[tail], item, n * sizeof(uint16_t));
-    queue->tail = tail + n;
+    uint64_t tail = queue->tail & (RING_SIZE - 1);
+    uint16_t first = (uint16_t)(((RING_SIZE - tail) < n) ? (RING_SIZE - tail) : n);
+    memcpy(&queue->tasks[tail], item, first * sizeof(uint16_t));
+    if (n > first) {
+        memcpy(&queue->tasks[0], item + first, (n - first) * sizeof(uint16_t));
+    }
+    queue->tail = (tail + n) & (RING_SIZE - 1);
     queue->cnt += n;
     unlock_q(queue);
     return true;

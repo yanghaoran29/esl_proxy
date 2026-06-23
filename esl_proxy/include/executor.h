@@ -18,6 +18,13 @@
 #include "conf.h"
 
 /*
+ * Sentinel for an unoccupied executor slot. Task ids are dense in [0, RING_SIZE)
+ * so id 0 is a VALID task id and cannot double as "empty" — the HW completion
+ * poll would otherwise never poll task 0 and the chain rooted at it would hang.
+ */
+#define EXEC_SLOT_EMPTY ((uint16_t)0xFFFF)
+
+/*
  * Executor
  */
 typedef struct executor {

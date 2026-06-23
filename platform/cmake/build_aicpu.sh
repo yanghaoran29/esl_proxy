@@ -3,23 +3,19 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DEFAULT_SIMPLER="$(cd "$ROOT/../simpler" 2>/dev/null && pwd || true)"
-SIMPLER_ROOT="${SIMPLER_ROOT:-$DEFAULT_SIMPLER}"
-if [[ -z "$SIMPLER_ROOT" || ! -d "$SIMPLER_ROOT" ]]; then
-  ALT="$(cd "$ROOT/../../simpler" 2>/dev/null && pwd || true)"
-  if [[ -n "$ALT" && -d "$ALT" ]]; then
-    SIMPLER_ROOT="$ALT"
-  fi
-fi
-BUILD_DIR="${ROOT}/build/onboard/aicpu"
+# Self-contained: all onboard code lives under esl_proxy/{include,src}/onboard.
+# No external ../simpler checkout and no SIMPLER_ROOT env var.
 ESL_CORE="${ROOT}/esl_proxy"
+ONBOARD_INC="${ESL_CORE}/include/onboard"
+ONBOARD_SRC="${ESL_CORE}/src/onboard"
+BUILD_DIR="${ROOT}/build/onboard/aicpu"
 
 if [[ -z "${ASCEND_HOME_PATH:-}" ]]; then
   echo "ASCEND_HOME_PATH is not set" >&2
   exit 1
 fi
-if [[ -z "$SIMPLER_ROOT" || ! -d "$SIMPLER_ROOT" ]]; then
-  echo "SIMPLER_ROOT not found (expected sibling ../simpler)" >&2
+if [[ ! -d "$ONBOARD_INC" ]]; then
+  echo "onboard platform headers missing: $ONBOARD_INC" >&2
   exit 1
 fi
 
@@ -44,35 +40,38 @@ if [[ -f "${BUILD_DIR}/CMakeCache.txt" ]]; then
   fi
 fi
 
-HOST_BUILD_GRAPH="${SIMPLER_ROOT}/src/a2a3/runtime"
-RUNTIME_INC="${SIMPLER_ROOT}/src/a2a3/runtime/tensormap_and_ringbuffer/runtime"
-PLATFORM_COMMON="${SIMPLER_ROOT}/src/a2a3/platform/include"
-PLATFORM_COMMON_SHARED="${SIMPLER_ROOT}/src/common/platform/include"
-PLATFORM_ONBOARD_AICPU="${SIMPLER_ROOT}/src/common/platform/onboard/aicpu"
+# Orchestration case: case_orch.c includes cases/${ORCH_CASE} (which defines
+# aicpu_orchestration_entry). Override with ORCH_CASE=... env. Defaults to the
+# real paged-attention manual-scope case (1920 tasks).
+ORCH_CASE="${ORCH_CASE:-paged_attention_unroll_manual_scope.h}"
+QWEN3_SPMD_TIER="${QWEN3_SPMD_TIER:-2}"
 
-CUSTOM_INCLUDES="${ROOT}/platform/include"
-CUSTOM_INCLUDES="${CUSTOM_INCLUDES};${ESL_CORE}/include"
-CUSTOM_INCLUDES="${CUSTOM_INCLUDES};${ROOT}/tests/onboard/smoke"
-CUSTOM_INCLUDES="${CUSTOM_INCLUDES};${ROOT}/platform/a2a3/aicpu"
-CUSTOM_INCLUDES="${CUSTOM_INCLUDES};${PLATFORM_COMMON}"
-CUSTOM_INCLUDES="${CUSTOM_INCLUDES};${PLATFORM_COMMON_SHARED}"
-CUSTOM_INCLUDES="${CUSTOM_INCLUDES};${PLATFORM_ONBOARD_AICPU}"
-CUSTOM_INCLUDES="${CUSTOM_INCLUDES};${HOST_BUILD_GRAPH}"
-CUSTOM_INCLUDES="${CUSTOM_INCLUDES};${RUNTIME_INC}"
+CUSTOM_INCLUDES="${ONBOARD_INC};${ESL_CORE}/include;${ESL_CORE}/cases"
 
-CUSTOM_SOURCES="${ROOT}/platform/a2a3/aicpu"
-CUSTOM_SOURCES="${CUSTOM_SOURCES};${ROOT}/platform/a2a3/aicpu/esl_src"
+# Sources are flat in src/onboard. Build the AICPU kernel file list = everything
+# in src/onboard EXCEPT the aicore / host / dispatcher sources, plus the core
+# scheduler files from esl_proxy/src.
+NOT_AICPU="aicore_kernel.cpp host_runner.c aicpu_dispatcher.c"
+SRC_FILES=""
+for f in "$ONBOARD_SRC"/*.c "$ONBOARD_SRC"/*.cpp; do
+  [[ -e "$f" ]] || continue
+  base="$(basename "$f")"
+  skip=0
+  for e in $NOT_AICPU; do [[ "$base" == "$e" ]] && skip=1 && break; done
+  [[ $skip -eq 0 ]] && SRC_FILES="${SRC_FILES:+$SRC_FILES;}$f"
+done
+for f in cutter dispatch shm log; do SRC_FILES="${SRC_FILES};${ESL_CORE}/src/${f}.c"; done
 
 export SIMPLER_DISABLE_WARNINGS_AS_ERRORS=1
 
 cmake -B "$BUILD_DIR" -S "${ROOT}/platform/cmake/aicpu" \
   -DCMAKE_CXX_COMPILER="$CROSS_CXX" \
   -DCMAKE_C_COMPILER="$CROSS_CC" \
-  -DCMAKE_C_FLAGS="-DESL_PROXY_ONBOARD -Wno-error -w" \
-  -DCMAKE_CXX_FLAGS="-DESL_PROXY_ONBOARD -Wno-error -w" \
-  -DSIMPLER_ROOT="$SIMPLER_ROOT" \
+  -DCMAKE_C_FLAGS="-DESL_PROXY_ONBOARD -DORCH_CASE=${ORCH_CASE} -DQWEN3_SPMD_TIER=${QWEN3_SPMD_TIER} -Wno-error -w" \
+  -DCMAKE_CXX_FLAGS="-DESL_PROXY_ONBOARD -DORCH_CASE=${ORCH_CASE} -DQWEN3_SPMD_TIER=${QWEN3_SPMD_TIER} -Wno-error -w" \
+  -DESL_ONBOARD_DIR="$ONBOARD_SRC" \
   -DCUSTOM_INCLUDE_DIRS="${CUSTOM_INCLUDES}" \
-  -DCUSTOM_SOURCE_DIRS="${CUSTOM_SOURCES}" \
+  -DCUSTOM_SOURCE_FILES="${SRC_FILES}" \
   -DESCEND_HOME_PATH="$ASCEND_HOME_PATH"
 
 cmake --build "$BUILD_DIR" -j"$(nproc)"

@@ -1,16 +1,11 @@
-# esl_proxy onboard AICPU kernel — fork of simpler onboard/aicpu CMakeLists.
-# Does NOT compile simpler's kernel.cpp; esl_proxy supplies its own entry in CUSTOM_SOURCE_DIRS.
+# esl_proxy onboard AICPU kernel. Self-contained: the minimal platform runtime
+# ported from simpler lives under platform/onboard (passed as ESL_ONBOARD_DIR).
+# No SIMPLER_ROOT. All kernel sources/includes arrive via CUSTOM_SOURCE_DIRS /
+# CUSTOM_INCLUDE_DIRS; only the separate aicpu_dispatcher lib is named here.
 cmake_minimum_required(VERSION 3.16.3)
 
 project(aicpu_kernel LANGUAGES C CXX)
 
-if(NOT DEFINED SIMPLER_ROOT)
-    if(DEFINED ENV{SIMPLER_ROOT})
-        set(SIMPLER_ROOT "$ENV{SIMPLER_ROOT}")
-    else()
-        message(FATAL_ERROR "MUST set SIMPLER_ROOT")
-    endif()
-endif()
 if(NOT DEFINED ASCEND_HOME_PATH)
     if(DEFINED ENV{ASCEND_HOME_PATH})
         set(ASCEND_HOME_PATH "$ENV{ASCEND_HOME_PATH}")
@@ -18,18 +13,11 @@ if(NOT DEFINED ASCEND_HOME_PATH)
         message(FATAL_ERROR "MUST set ASCEND_HOME_PATH")
     endif()
 endif()
-
-set(SIMPLER_A2A3_PLATFORM "${SIMPLER_ROOT}/src/a2a3/platform")
-set(SIMPLER_COMMON "${SIMPLER_ROOT}/src/common")
+if(NOT DEFINED ESL_ONBOARD_DIR)
+    get_filename_component(ESL_ONBOARD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../esl_proxy/src/onboard" ABSOLUTE)
+endif()
 
 set(CMAKE_CUSTOM_INCLUDE_DIRS "")
-list(APPEND CMAKE_CUSTOM_INCLUDE_DIRS "${SIMPLER_A2A3_PLATFORM}/include")
-list(APPEND CMAKE_CUSTOM_INCLUDE_DIRS "${SIMPLER_COMMON}/platform/include")
-list(APPEND CMAKE_CUSTOM_INCLUDE_DIRS "${SIMPLER_COMMON}/platform/onboard/aicpu")
-list(APPEND CMAKE_CUSTOM_INCLUDE_DIRS "${SIMPLER_COMMON}/task_interface")
-list(APPEND CMAKE_CUSTOM_INCLUDE_DIRS "${SIMPLER_COMMON}/log/include")
-list(APPEND CMAKE_CUSTOM_INCLUDE_DIRS "${SIMPLER_COMMON}")
-
 if(DEFINED CUSTOM_INCLUDE_DIRS)
     foreach(INC_DIR ${CUSTOM_INCLUDE_DIRS})
         list(APPEND CMAKE_CUSTOM_INCLUDE_DIRS "${INC_DIR}")
@@ -38,21 +26,12 @@ else()
     message(FATAL_ERROR "MUST set CUSTOM_INCLUDE_DIRS to build AICPU kernel")
 endif()
 
-set(AICPU_KERNEL_SOURCES "")
-file(GLOB COMMON_SOURCES CONFIGURE_DEPENDS
-    "${SIMPLER_A2A3_PLATFORM}/shared/aicpu/*.cpp"
-    "${SIMPLER_COMMON}/platform/shared/aicpu/*.cpp"
-    "${SIMPLER_COMMON}/platform/onboard/aicpu/*.cpp"
-)
-list(APPEND AICPU_KERNEL_SOURCES ${COMMON_SOURCES})
-
-if(DEFINED CUSTOM_SOURCE_DIRS)
-    foreach(SRC_DIR ${CUSTOM_SOURCE_DIRS})
-        file(GLOB_RECURSE DIR_SOURCES "${SRC_DIR}/*.cpp" "${SRC_DIR}/*.c")
-        list(APPEND AICPU_KERNEL_SOURCES ${DIR_SOURCES})
-    endforeach()
+# Sources are flat in esl_proxy/src/onboard (mixed with aicore/host/dispatcher),
+# so the caller passes an explicit AICPU file list via CUSTOM_SOURCE_FILES.
+if(DEFINED CUSTOM_SOURCE_FILES)
+    set(AICPU_KERNEL_SOURCES ${CUSTOM_SOURCE_FILES})
 else()
-    message(FATAL_ERROR "MUST set CUSTOM_SOURCE_DIRS to build AICPU kernel")
+    message(FATAL_ERROR "MUST set CUSTOM_SOURCE_FILES to build AICPU kernel")
 endif()
 
 list(LENGTH AICPU_KERNEL_SOURCES NUM_AICPU_KERNEL_SOURCES)
@@ -99,7 +78,7 @@ target_link_directories(aicpu_kernel
 set_target_properties(aicpu_kernel PROPERTIES OUTPUT_NAME aicpu_kernel)
 
 set(AICPU_DISPATCHER_SOURCES
-    "${SIMPLER_COMMON}/aicpu_loader/device/aicpu_dispatcher.cpp"
+    "${ESL_ONBOARD_DIR}/aicpu_dispatcher.c"
 )
 add_library(aicpu_dispatcher SHARED ${AICPU_DISPATCHER_SOURCES})
 
@@ -111,15 +90,15 @@ target_compile_options(aicpu_dispatcher
         -O3
         -fPIC
         -g
-        $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++17>
+        $<$<COMPILE_LANGUAGE:C>:-std=gnu11>
 )
 
 target_include_directories(aicpu_dispatcher
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CUSTOM_INCLUDE_DIRS}
-        ${SIMPLER_COMMON}
         ${ASCEND_HOME_PATH}/include
+        ${ASCEND_HOME_PATH}/pkg_inc/base
 )
 
 target_link_libraries(aicpu_dispatcher PRIVATE dl)

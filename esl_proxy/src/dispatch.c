@@ -12,9 +12,7 @@
 #include <stdint.h>
 
 #ifdef ESL_PROXY_ONBOARD
-#include "aicore_bridge.h"
-#include "onboard_shm_sync.h"
-#include "onboard_sync.h"
+#include "aicpu_bridge.h"
 static AicoreBridge *g_aicore_bridge;
 void dispatch_set_aicore_bridge(void *bridge)
 {
@@ -139,6 +137,7 @@ int dispatch(int tid)
     return total_sent;
 }
 
+/* Host-sim pthread path only (main.c). Onboard uses esl_singlethread_drive instead. */
 void dispatch_loop_run(int tid)
 {
     int total_sent = 0;
@@ -197,3 +196,68 @@ void *dispatch_worker(void *arg)
     dispatch_loop_run(tid);
     return NULL;
 }
+
+#ifdef ESL_PROXY_ONBOARD
+/*
+ * Single-threaded onboard driver: orchestration has already run; here we drive
+ * the cutter (dependency resolution) and dispatch (send + HW completion poll)
+ * from ONE AICPU thread. The AICPU cores are not cache-coherent and the
+ * shared-queue spinlocks do not provide cross-core mutual exclusion, so running
+ * cutter and dispatch on separate threads corrupts the ready/completed queues.
+ * Single-threading removes all cross-core queue contention.
+ */
+void esl_singlethread_drive(void)
+{
+    extern void deal_completed_queue(void);
+    extern int g_subtask_cnt;
+    extern uint16_t g_commit_task_id;
+    extern atomic_int g_min_uncomplete_task;
+    extern void esl_write_stats(uint64_t task_cnt, uint64_t subtask_cnt, uint64_t completed_cnt,
+                                uint64_t commit, uint64_t ready_cube, uint64_t ready_vec,
+                                uint64_t min_uncomplete);
+
+    /* First pass: commit all tasks, build the dependency graph, ready roots. */
+    deal_completed_queue();
+
+    int prev = atomic_load(&g_completed_cnt);
+    int stall = 0;
+    while (atomic_load(&g_completed_cnt) < atomic_load(&g_task_id)) {
+        if (g_aicore_bridge != NULL) {
+            aicore_bridge_poll_completions(g_aicore_bridge, 0);
+        }
+        dispatch(0);
+        deal_completed_queue();
+
+        int cc = atomic_load(&g_completed_cnt);
+        if (cc == prev) {
+            if (++stall > 2000000) {
+                break;  /* avoid AICPU watchdog hang if a task never completes */
+            }
+        } else {
+            stall = 0;
+        }
+        prev = cc;
+    }
+    atomic_store(&g_is_done, true);
+    /* Diagnostic: find the first uncompleted task and whether it is ready
+     * (predecessor_cnt==0 => readied-but-lost; >0 => predecessor never completed). */
+    extern task_state *g_state_buf;
+    extern uint16_t g_predecessor_cnt[];
+    int end = atomic_load(&g_task_id);
+    int first_uncomp = -1, second_uncomp = -1, n_uncomp = 0;
+    for (int i = 0; i < end; i++) {
+        if (g_state_buf[i].state != TASK_STATUS_COMPLETED) {
+            if (first_uncomp < 0) first_uncomp = i;
+            else if (second_uncomp < 0) second_uncomp = i;
+            n_uncomp++;
+        }
+    }
+    uint64_t pred0 = (first_uncomp >= 0) ? (uint64_t)g_predecessor_cnt[first_uncomp] : 0;
+    uint64_t rqc = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_CUBE].cnt;
+    uint64_t rqv = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_VECTOR].cnt;
+    esl_write_stats((uint64_t)end, (uint64_t)g_subtask_cnt,
+                    (uint64_t)atomic_load(&g_completed_cnt), (uint64_t)g_commit_task_id,
+                    (uint64_t)n_uncomp, ((uint64_t)(uint32_t)first_uncomp) | (pred0 << 32),
+                    (rqc & 0xffffffffULL) | (rqv << 32));
+}
+#endif

@@ -1,0 +1,71 @@
+/*
+ * AICPU platform glue: AICore bridge, register access, shm sync, affinity gate.
+ */
+#ifndef ESL_PROXY_AICPU_BRIDGE_H
+#define ESL_PROXY_AICPU_BRIDGE_H
+
+#include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+#include "conf.h"
+#include "esl_runtime.h"
+#include "onboard_config.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct AicoreBridge {
+    EslRuntime *runtime;
+    uint64_t fake_kernel_addr;
+    int initialized;
+} AicoreBridge;
+
+int aicore_bridge_init(AicoreBridge *bridge, EslRuntime *runtime, uint64_t fake_kernel_addr);
+void aicore_bridge_shutdown(AicoreBridge *bridge);
+int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid);
+int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t task_id,
+                                int core, int slot, int exe_type);
+
+static inline int esl_phys_worker(int core, int exe_type)
+{
+    return core * EXE_TYPE_CNT + exe_type;
+}
+
+int esl_hw_poll_fin(uint64_t reg_addr, uint16_t task_id);
+void esl_hw_dispatch_reg(uint64_t reg_addr, uint16_t task_id);
+
+int esl_handshake_all_cores(EslRuntime *runtime);
+void esl_shutdown_all_cores(EslRuntime *runtime);
+uint64_t esl_handshake_reg_addr(int core_idx);
+
+void esl_dispatch_payload_init(EslRuntime *runtime);
+void esl_dispatch_payload_prepare(int core, uint16_t task_id, uint32_t raw_duration);
+
+void set_platform_regs(uint64_t regs);
+uint64_t get_platform_regs(void);
+
+volatile uint32_t *get_reg_ptr(uint64_t reg_base_addr, RegId reg);
+uint64_t read_reg(uint64_t reg_base_addr, RegId reg);
+void write_reg(uint64_t reg_base_addr, RegId reg, uint64_t value);
+
+void platform_init_aicore_regs(uint64_t reg_addr);
+void cache_invalidate_range(const void *addr, size_t size);
+void cache_flush_range(const void *addr, size_t size);
+
+void esl_onboard_invalidate_runtime(void *runtime);
+void esl_onboard_flush_shared_after_orch(void);
+void esl_onboard_invalidate_shared_before_worker(void);
+void esl_onboard_flush_after_cutter(void);
+void esl_onboard_flush_after_dispatch(void);
+
+bool platform_aicpu_affinity_gate(int32_t logical_count, int32_t total_launched);
+bool platform_aicpu_affinity_gate_filter(const int32_t *allowed_cpus, int32_t allowed_count, int32_t total_launched);
+int32_t platform_aicpu_affinity_thread_idx(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* ESL_PROXY_AICPU_BRIDGE_H */

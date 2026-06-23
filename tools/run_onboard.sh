@@ -30,14 +30,16 @@ fi
 
 if [[ "$SKIP_BUILD" -eq 0 ]]; then
   bash platform/cmake/build_aicpu.sh
+  bash platform/cmake/build_aicore.sh
   bash platform/cmake/build_onboard_host.sh
 fi
 
 RUNNER="${ROOT}/build/onboard/host/esl_onboard_runner"
 DISPATCHER="${ROOT}/build/onboard/aicpu/libsimpler_aicpu_dispatcher.so"
 AICPU="${ROOT}/build/onboard/aicpu/libaicpu_kernel.so"
+AICORE="${ROOT}/build/onboard/aicore/aicore_kernel.o"
 
-for f in "$RUNNER" "$DISPATCHER" "$AICPU"; do
+for f in "$RUNNER" "$DISPATCHER" "$AICPU" "$AICORE"; do
   if [[ ! -f "$f" ]]; then
     echo "missing $f (run without --skip-build first)" >&2
     exit 1
@@ -46,4 +48,5 @@ done
 
 exec "$RUNNER" -d "$DEVICE_ID" \
   --dispatcher "$DISPATCHER" \
-  --aicpu "$AICPU"
+  --aicpu "$AICPU" \
+  --aicore "$AICORE"

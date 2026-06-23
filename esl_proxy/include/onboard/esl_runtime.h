@@ -41,6 +41,8 @@ typedef struct EslRuntime {
     uint8_t orch_to_sched;
 } EslRuntime;
 
+int32_t esl_aicpu_execute(EslRuntime *runtime);
+
 #ifdef __cplusplus
 }
 #endif

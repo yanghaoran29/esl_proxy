@@ -44,10 +44,6 @@ struct ring_buf {
     uint16_t* _Atomic tail;
 };
 
-#ifdef ESL_PROXY_ONBOARD
-/* onboard: static buffers only (no malloc on AICPU) */
-#endif
-
 static inline void ring_buf_init(void)
 {
     for (size_t i = 0; i < RING_SIZE; i++) {
@@ -115,7 +111,12 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
         if (target[i] < min_uncomplete_task)
             continue;
         WORKER_LOGF("succeed,task_id,%u,predecessor_id,%u,idx,%d", task_id, target[i], cnt);
-        uint16_t* idx = atomic_fetch_add(&g_predecessor_ring.tail, 1);
+        /* Reserve one uint16 slot. NOTE: atomic_fetch_add on an _Atomic(uint16_t*)
+         * advances by BYTES (not elements) under the AICPU cross-compiler, which
+         * half-overwrites the previous slot and corrupts the dependency graph.
+         * Use explicit element-stride pointer arithmetic instead. */
+        uint16_t* idx = atomic_load_explicit(&g_predecessor_ring.tail, memory_order_relaxed);
+        atomic_store_explicit(&g_predecessor_ring.tail, idx + 1, memory_order_relaxed);
         *idx = target[i];
         cnt++;
     }

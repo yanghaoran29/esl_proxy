@@ -2,8 +2,7 @@
 #include "log.h"
 #include "ring_buf.h"
 #ifdef ESL_PROXY_ONBOARD
-#include "onboard_shm_sync.h"
-#include "onboard_sync.h"
+#include "aicpu_bridge.h"
 #endif
 #include <stdint.h>
 #include <stdlib.h>
@@ -70,7 +69,10 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) 
     uint16_t end = atomic_load(&g_task_id);
     uint16_t tmp = g_commit_task_id + ADD_BATCH_SIZE;
     end = tmp > end ? end : tmp;
-    while ( g_commit_task_id <= end)
+    /* end is exclusive: valid task indices are [0, g_task_id). Using <= here
+     * processed a phantom task at index == g_task_id (uninitialized
+     * predecessor/basic-buf state). */
+    while ( g_commit_task_id < end)
     {
         uint16_t task_idx = g_commit_task_id;
         struct predecessor_list *ptr = &g_predecessors[task_idx];
@@ -140,10 +142,13 @@ void resolve_dep(uint16_t cnt, uint16_t* cq_buf, uint16_t rq_buf[][LOCAL_BUFFER_
             g_predecessor_cnt[succ_id & RING_MASK]--;
             WORKER_LOGF("cutter, task_id,%u, successor_id,%u, predecessor_cnt,%u", task_id, succ_id, g_predecessor_cnt[succ_id & RING_MASK]);
             if (g_predecessor_cnt[succ_id & RING_MASK] < 1) {
-                task_type_t type = g_basic_buf[succ_id].type;
-                rq_buf[type][ready_cnt[type]] = succ_id;
-                ready_cnt[type]++;
-                WORKER_LOGF("ready_cnt[%d],%d",type, ready_cnt[type]);
+                /* ready_queue_index maps MIX→CUBE (MIX dispatched as AIC). Using
+                 * the raw type indexes rq_buf[MIX=2] out of bounds (rq_buf is
+                 * [2][...]), losing the successor — qwen3's MIX tasks got stuck. */
+                int q = ready_queue_index(g_basic_buf[succ_id].type);
+                rq_buf[q][ready_cnt[q]] = succ_id;
+                ready_cnt[q]++;
+                WORKER_LOGF("ready_cnt[%d],%d", q, ready_cnt[q]);
             }
         }
     }
@@ -152,7 +157,10 @@ void resolve_dep(uint16_t cnt, uint16_t* cq_buf, uint16_t rq_buf[][LOCAL_BUFFER_
 void deal_completed_queue() {
     for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
         uint16_t cq_buf[CUTTER_BATCH_SIZE];
-        uint16_t rq_buf[2][LOCAL_BUFFER_SIZE];
+        /* static: LOCAL_BUFFER_SIZE is sized to RING_SIZE to hold a high-fanout
+         * burst (one completion can ready hundreds of successors), which is too
+         * large for the AICPU stack. Safe because CUTTER_THREAD_CNT == 1. */
+        static uint16_t rq_buf[2][LOCAL_BUFFER_SIZE];
         uint16_t ready_cnt[2] = {0, 0};
         queue_t *cq = &g_ctrl_t[i].completed_queue;
         uint16_t cnt = CUTTER_BATCH_SIZE;
@@ -169,6 +177,7 @@ void deal_completed_queue() {
     }
 }
 
+/* Host-sim pthread path only (main.c). Onboard uses esl_singlethread_drive instead. */
 void cutter_loop_once(void)
 {
 #ifdef ESL_PROXY_ONBOARD

@@ -11,7 +11,7 @@
 #include "dispatch.h"
 
 #ifdef ESL_PROXY_ONBOARD
-#include "onboard_shm_sync.h"
+#include "aicpu_bridge.h"
 #endif
 
 atomic_int g_task_id = 0;
@@ -34,7 +34,9 @@ executor_t g_executors[EXE_TYPE_CNT][AIC_CNT];
 atomic_flag g_lock_buf[RING_SIZE];
 mem_pool_t g_mem_pool;
 ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
-int g_subtask_cnt = 0;
+/* Weak so an orchestration case header (which defines its own g_subtask_cnt)
+ * overrides this default; the smoke path (no case definition) uses this one. */
+int __attribute__((weak)) g_subtask_cnt = 0;
 
 void init_predecessors(void)
 {
@@ -85,11 +87,6 @@ void esl_signal_orch_done(void)
 {
     atomic_store_explicit(&g_orch_is_done, true, memory_order_release);
 #ifdef ESL_PROXY_ONBOARD
-    /* M1: bridge marks completions via msg_bitmap only after send_task;
-     * force completed_cnt so dispatch/cutter exit without waiting on cutter
-     * to populate ready queues across AICPU cores. */
-    int end = atomic_load_explicit(&g_task_id, memory_order_acquire);
-    atomic_store_explicit(&g_completed_cnt, end, memory_order_release);
     esl_onboard_flush_shared_after_orch();
 #endif
 }

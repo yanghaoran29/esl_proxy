@@ -17,7 +17,9 @@ endif()
 set(ALL_SOURCES "")
 if(DEFINED CUSTOM_SOURCE_DIRS)
     foreach(SRC_DIR ${CUSTOM_SOURCE_DIRS})
-        list(APPEND ALL_SOURCES "${SRC_DIR}/kernel.cpp" "${SRC_DIR}/aicore_executor.cpp")
+        list(APPEND ALL_SOURCES
+            "${SRC_DIR}/aicore_kernel.cpp"
+        )
     endforeach()
 else()
     message(FATAL_ERROR "MUST set CUSTOM_SOURCE_DIRS")

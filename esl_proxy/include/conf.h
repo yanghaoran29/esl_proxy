@@ -4,10 +4,14 @@
 #define RING_SIZE 4096
 #define RING_MASK (RING_SIZE - 1)
 #define HALF_RING_SIZE 2048
-#define NODE_BUFF_SIZE 8192
+/* Predecessor-id ring: total dependency edges across the whole run. qwen3's
+ * attention DAG has many edges; 8192 overflowed. */
+#define NODE_BUFF_SIZE 65536
 
-// TODO: ERROR
-#define CON_NODE_CNT 32
+/* Max successors recorded per task. A shared-scope producer (e.g. an RMSNorm
+ * tile feeding every head's projection) fans out to many consumers; 32
+ * overflowed g_successor_buf[].node[] and corrupted the successor graph. */
+#define CON_NODE_CNT 256
 
 #define AIC_OSTD 2
 #define AIC_CNT 60
@@ -15,7 +19,10 @@
 
 #define CUTTER_BATCH_SIZE 512
 #define ADD_BATCH_SIZE 240
-#define LOCAL_BUFFER_SIZE 512
+/* Per-pass cutter ready buffer. Sized to RING_SIZE so one deal_completed pass
+ * can hold a high-fanout burst (qwen3 readies hundreds of successors when a
+ * shared-scope predecessor completes); 512 overflowed and lost ~348 tasks. */
+#define LOCAL_BUFFER_SIZE RING_SIZE
 #define DISPATCH_COMPLETE_BATCH 512
 
 #define CUTTER_THREAD_CNT 1
@@ -23,7 +30,9 @@
 #define EXECUTOR_THREAD_CNT 1
 
 /* 1: compile in worker logs; toggle at runtime via g_worker_log or WORKER_LOG env */
+#ifndef WORKER_LOG
 #define WORKER_LOG 1
+#endif
 
 /* 1: compile in main thread logs; output to screen only */
 #ifndef MAIN_LOG
