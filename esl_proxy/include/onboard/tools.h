@@ -316,7 +316,8 @@ static inline void unified_log_info_v(const char *func, int v, const char *fmt, 
 #define LOG_ERROR(fmt, ...) unified_log_error(__FUNCTION__, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
 #define LOG_WARN(fmt, ...) unified_log_warn(__FUNCTION__, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
 #define LOG_DEBUG(fmt, ...) unified_log_debug(__FUNCTION__, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
-#define LOG_INFO_V0(fmt, ...) unified_log_info_v(__FUNCTION__, 0, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
+/* V0 milestone traces align with CANN DLOG_DEBUG (not DLOG_INFO). */
+#define LOG_INFO_V0(fmt, ...) unified_log_debug(__FUNCTION__, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
 #define LOG_INFO_V1(fmt, ...) unified_log_info_v(__FUNCTION__, 1, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
 #define LOG_INFO_V2(fmt, ...) unified_log_info_v(__FUNCTION__, 2, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
 #define LOG_INFO_V3(fmt, ...) unified_log_info_v(__FUNCTION__, 3, "[%s:%d] " fmt, __FILENAME__, __LINE__, ##__VA_ARGS__)
