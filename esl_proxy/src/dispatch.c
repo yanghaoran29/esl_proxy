@@ -25,7 +25,7 @@
 #include "onboard/onboard_crosscore_sync.h"
 #include "onboard/onboard_trace.h"
 #include "onboard_log.h"
-extern _Atomic uint16_t g_commit_task_id;
+extern uint16_t g_commit_task_id;
 static AicoreBridge *g_aicore_bridge;
 void dispatch_set_aicore_bridge(void *bridge)
 {
@@ -264,7 +264,7 @@ void dispatch_loop_run(int tid)
         uint64_t rqv = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_VECTOR].cnt;
         esl_write_stats((uint64_t)end, (uint64_t)g_subtask_cnt,
                         (uint64_t)atomic_load_explicit(&g_completed_cnt, memory_order_acquire),
-                        (uint64_t)atomic_load_explicit(&g_commit_task_id, memory_order_acquire),
+                        (uint64_t)g_commit_task_id,
                         (uint64_t)n_uncomp, ((uint64_t)(uint32_t)first_uncomp) | (pred0 << 32),
                         (rqc & 0xffffffffULL) | (rqv << 32));
     }

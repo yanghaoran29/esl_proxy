@@ -16,7 +16,7 @@
 #endif
 
 atomic_int g_task_id = 0;
-atomic_int g_min_uncomplete_task = 0;
+int g_min_uncomplete_task = 0;
 // Keep Atomic For Multi Dispatch Thread
 atomic_int g_completed_cnt = 0;
 atomic_bool g_is_done = false;

@@ -29,7 +29,7 @@ void init_state_buf(void) {
     }
 }
 
-extern atomic_int g_min_uncomplete_task;
+extern int g_min_uncomplete_task;
 extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
 extern _Atomic bool g_orch_is_done;
 extern _Atomic bool g_is_done;
@@ -38,7 +38,9 @@ extern _Atomic bool g_is_done;
  * decrements it); cross-core visibility for the dispatch diag read is via
  * esl_onboard_publish_predecessor_cnt / invalidate. Single-writer → no atomic. */
 uint16_t g_predecessor_cnt[RING_SIZE];
-_Atomic uint16_t g_commit_task_id = 0;
+/* Single-writer: only the cutter advances commit (add_successors); dispatch
+ * reads it for diag only. Visibility via publish/invalidate counters. */
+uint16_t g_commit_task_id = 0;
 uint16_t g_completed_task_cnt = 0;
 
 static inline int ready_queue_index(task_type_t type)
@@ -61,14 +63,14 @@ static inline bool update_task_state(uint16_t cnt, uint16_t* cq_buf)
         uint16_t idx = task_id & RING_MASK;
         g_state_buf[idx].state = TASK_STATUS_COMPLETED;
     }
-    uint16_t i = atomic_load_explicit(&g_min_uncomplete_task, memory_order_acquire);
+    uint16_t i = g_min_uncomplete_task;
     uint16_t end = atomic_load_explicit(&g_task_id, memory_order_acquire);
     for (; i < end; i++) {
         if (g_state_buf[i].state != TASK_STATUS_COMPLETED) {
             break;
         }
     }
-    atomic_store(&g_min_uncomplete_task, i);
+    (g_min_uncomplete_task = i);
 #ifdef ESL_PROXY_ONBOARD
     esl_onboard_publish_counters();
 #endif
@@ -78,7 +80,7 @@ static inline bool update_task_state(uint16_t cnt, uint16_t* cq_buf)
 
 void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) {
     uint16_t end = atomic_load_explicit(&g_task_id, memory_order_acquire);
-    uint16_t commit = atomic_load_explicit(&g_commit_task_id, memory_order_acquire);
+    uint16_t commit = g_commit_task_id;
     uint16_t tmp = commit + ADD_BATCH_SIZE;
     end = tmp > end ? end : tmp;
     while (commit < end) {
@@ -94,7 +96,7 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) 
             ready_cnt[q]++;
             WORKER_LOGF("ready_cnt[%d],%d", q, ready_cnt[q]);
             commit++;
-            atomic_store_explicit(&g_commit_task_id, commit, memory_order_release);
+            (g_commit_task_id = commit);
 #ifdef ESL_PROXY_ONBOARD
             esl_onboard_publish_counters();
 #endif
@@ -128,7 +130,7 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) 
             WORKER_LOGF("ready_cnt[%d],%d", q, ready_cnt[q]);
         }
         commit++;
-        atomic_store_explicit(&g_commit_task_id, commit, memory_order_release);
+        (g_commit_task_id = commit);
 #ifdef ESL_PROXY_ONBOARD
         esl_onboard_publish_counters();
 #endif
@@ -221,7 +223,7 @@ void cutter_loop_run(void)
 #ifdef ESL_PROXY_ONBOARD
         if ((loop_iter & 0x3FFFFU) == 0) {
             esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_LOOP, loop_iter,
-                              (uint64_t)atomic_load_explicit(&g_commit_task_id, memory_order_acquire),
+                              (uint64_t)g_commit_task_id,
                               (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire));
         }
         loop_iter++;
@@ -232,15 +234,15 @@ void cutter_loop_run(void)
 #endif
     }
     int stall = 0;
-    uint16_t prev_commit = atomic_load_explicit(&g_commit_task_id, memory_order_acquire);
+    uint16_t prev_commit = g_commit_task_id;
 #ifdef ESL_PROXY_ONBOARD
     esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_DRAIN, prev_commit,
                       (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire), 0);
 #endif
-    while (atomic_load_explicit(&g_commit_task_id, memory_order_acquire) <
+    while (g_commit_task_id <
            atomic_load_explicit(&g_task_id, memory_order_acquire)) {
         cutter_loop_once();
-        uint16_t cur_commit = atomic_load_explicit(&g_commit_task_id, memory_order_acquire);
+        uint16_t cur_commit = g_commit_task_id;
         if (cur_commit != prev_commit) {
             prev_commit = cur_commit;
             stall = 0;
@@ -257,7 +259,7 @@ void cutter_loop_run(void)
         }
     }
     WORKER_LOGF("cutter, commit_tasks_cnt,%d,completed_task_cnt,%d ",
-                (int)atomic_load_explicit(&g_commit_task_id, memory_order_acquire),
+                (int)g_commit_task_id,
                 g_completed_task_cnt);
 }
 

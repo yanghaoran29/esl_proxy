@@ -27,7 +27,7 @@
 #include "onboard/onboard_crosscore_sync.h"
 
 extern atomic_int g_task_id;
-extern atomic_int g_min_uncomplete_task;
+extern int g_min_uncomplete_task;
 extern atomic_int g_completed_cnt;
 extern atomic_bool g_orch_is_done;
 extern atomic_bool g_is_done;
@@ -96,7 +96,7 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
     if (ptr->cnt <= 0)
         ptr->exp = atomic_load(&g_predecessor_ring.tail);
     
-    uint16_t min_uncomplete_task = atomic_load_explicit(&g_min_uncomplete_task, memory_order_acquire);
+    uint16_t min_uncomplete_task = g_min_uncomplete_task;
     for (uint16_t i = 0; i < n; i++)
     {
         if (target[i] < min_uncomplete_task)
@@ -124,7 +124,7 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
 static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uint32_t duration_ns,
                             uint32_t jitter_mask)
 {
-    while ((task_id - (uint32_t)atomic_load(&g_min_uncomplete_task)) >= RING_SIZE) {
+    while ((task_id - (uint32_t)g_min_uncomplete_task) >= RING_SIZE) {
 #ifdef ESL_PROXY_ONBOARD
         esl_onboard_consume_min_uncomplete();
 #endif

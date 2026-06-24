@@ -17,14 +17,14 @@
 #endif
 
 extern atomic_int g_task_id;
-extern atomic_int g_min_uncomplete_task;
+extern int g_min_uncomplete_task;
 extern atomic_int g_completed_cnt;
 extern atomic_bool g_orch_is_done;
 extern struct task_desc g_basic_buf[RING_SIZE];
 extern struct predecessor_list g_predecessors[RING_SIZE];
 extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
 extern uint16_t g_predecessor_cnt[RING_SIZE];
-extern _Atomic uint16_t g_commit_task_id;
+extern uint16_t g_commit_task_id;
 extern struct ring_buf g_predecessor_ring;
 
 void esl_onboard_publish_queue(queue_t *queue)
