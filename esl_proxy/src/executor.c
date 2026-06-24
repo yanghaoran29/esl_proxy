@@ -68,9 +68,7 @@ void* executor_worker(void *arg)
                         
                         // Check if all blocks are done
                         if (block_idx >= block_count) {
-                            (void)atomic_fetch_or_explicit(
-                                &g_ctrl_t[core % DISPATCH_THREAD_CNT].msg_bitmap[exe_type][idx],
-                                ((uint64_t)0x1 << core), memory_order_release);
+                            g_ctrl_t[core % DISPATCH_THREAD_CNT].msg_bitmap[exe_type][idx] |= ((uint64_t)0x1 << core);
                             g_executors[exe_type][core].idx = AIC_OSTD;
                             // Reset block_idx for reuse
                             g_executors[exe_type][core].block_idx[idx] = 0;
@@ -83,9 +81,7 @@ void* executor_worker(void *arg)
                             g_executors[exe_type][core].duration[idx]--;
                         }
                         if (g_executors[exe_type][core].duration[idx] == 0) {
-                            (void)atomic_fetch_or_explicit(
-                                &g_ctrl_t[core % DISPATCH_THREAD_CNT].msg_bitmap[exe_type][idx],
-                                ((uint64_t)0x1 << core), memory_order_release);
+                            g_ctrl_t[core % DISPATCH_THREAD_CNT].msg_bitmap[exe_type][idx] |= ((uint64_t)0x1 << core);
                             g_executors[exe_type][core].idx = AIC_OSTD;
                             // Reset block_idx for reuse
                             g_executors[exe_type][core].block_idx[idx] = 0;

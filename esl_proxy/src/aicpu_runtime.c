@@ -353,8 +353,7 @@ int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid)
                     continue;
                 }
                 uint64_t mask = (uint64_t)1 << core;
-                if (atomic_load_explicit(&g_ctrl_t[0].msg_bitmap[exe_type][slot],
-                                         memory_order_acquire) &
+                if (g_ctrl_t[0].msg_bitmap[exe_type][slot] &
                     mask) {
                     continue;
                 }
@@ -373,8 +372,7 @@ int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid)
                                                      g_hw_dispatch_ts[exe_type][core][slot],
                                                      finish_ts);
 #endif
-                    (void)atomic_fetch_or_explicit(&g_ctrl_t[0].msg_bitmap[exe_type][slot], mask,
-                                                   memory_order_release);
+                    g_ctrl_t[0].msg_bitmap[exe_type][slot] |= mask;
                     esl_onboard_publish_atomic_u64(&g_ctrl_t[0].msg_bitmap[exe_type][slot]);
                     g_executors[exe_type][core].idx = (uint8_t)AIC_OSTD;
                     g_executors[exe_type][core].tasks[slot] = EXEC_SLOT_EMPTY;
@@ -420,8 +418,7 @@ int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t
     const int phys = esl_pick_phys_worker(core, exe_type);
     g_executors[exe_type][core].block_idx[slot] = (uint16_t)phys;
     if (bridge != NULL && bridge->runtime != NULL && phys >= bridge->runtime->worker_count) {
-        (void)atomic_fetch_or_explicit(&g_ctrl_t[0].msg_bitmap[exe_type][slot],
-                                       (uint64_t)1 << core, memory_order_release);
+        g_ctrl_t[0].msg_bitmap[exe_type][slot] |= (uint64_t)1 << core;
         g_executors[exe_type][core].base[slot] = 0;
         return 0;
     }

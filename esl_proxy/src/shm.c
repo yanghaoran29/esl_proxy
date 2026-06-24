@@ -60,14 +60,14 @@ void init_ctrl_t(void)
         // Initialize free_bitmap for TASK_TYPE
         for (int i = 0; i < TASK_TYPE_CNT; i++) {
             for (int j = 0; j < AIC_OSTD; j++) {
-                atomic_store_explicit(&g_ctrl_t[tid].free_bitmap[i][j], free_init, memory_order_relaxed);
+                g_ctrl_t[tid].free_bitmap[i][j] = free_init;
             }
         }
         // set_mix(tid);
         // Initialize msg_bitmap for EXE_TYPE
         for (int i = 0; i < EXE_TYPE_CNT; i++) {
             for (int j = 0; j < AIC_OSTD; j++) {
-                atomic_store_explicit(&g_ctrl_t[tid].msg_bitmap[i][j], 0, memory_order_relaxed);
+                g_ctrl_t[tid].msg_bitmap[i][j] = 0;
             }
         }
         

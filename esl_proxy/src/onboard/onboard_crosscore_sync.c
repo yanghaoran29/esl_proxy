@@ -78,7 +78,7 @@ void esl_onboard_publish_counters(void)
     ESL_ONBOARD_STORE_BARRIER();
 }
 
-void esl_onboard_publish_atomic_u64(_Atomic uint64_t *field)
+void esl_onboard_publish_atomic_u64(uint64_t *field)
 {
     if (field != NULL) {
         cache_flush_range((const void *)field, sizeof(uint64_t));

@@ -24,7 +24,7 @@ void esl_onboard_publish_queue(queue_t *queue);
 void esl_onboard_publish_task_slot(uint16_t task_id);
 void esl_onboard_publish_predecessor_cnt(uint16_t task_id);
 void esl_onboard_publish_counters(void);
-void esl_onboard_publish_atomic_u64(_Atomic uint64_t *field);
+void esl_onboard_publish_atomic_u64(uint64_t *field);
 void esl_onboard_publish_u16(uint16_t *field);
 
 void esl_onboard_consume_task_slot(uint16_t task_id);
@@ -64,7 +64,7 @@ static inline void esl_onboard_publish_counters(void)
 {
 }
 
-static inline void esl_onboard_publish_atomic_u64(_Atomic uint64_t *field)
+static inline void esl_onboard_publish_atomic_u64(uint64_t *field)
 {
     (void)field;
 }

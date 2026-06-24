@@ -38,8 +38,8 @@ static inline void get_free_exe(int tid)
     for (int i = 0; i < EXE_TYPE_CNT; i++) {
         for (int j = 0; j < AIC_OSTD; j++) {
             uint64_t msg =
-                atomic_load_explicit(&g_ctrl_t[tid].msg_bitmap[i][j], memory_order_acquire);
-            (void)atomic_fetch_or_explicit(&g_ctrl_t[tid].free_bitmap[i][j], msg, memory_order_release);
+                g_ctrl_t[tid].msg_bitmap[i][j];
+            g_ctrl_t[tid].free_bitmap[i][j] |= msg;
 #ifdef ESL_PROXY_ONBOARD
             esl_onboard_publish_atomic_u64(&g_ctrl_t[tid].free_bitmap[i][j]);
 #endif
@@ -47,10 +47,10 @@ static inline void get_free_exe(int tid)
     }
 }
 
-static inline void get_completed(_Atomic uint64_t *bitmap, uint16_t task_id[], int *complete_cnt,
+static inline void get_completed(uint64_t *bitmap, uint16_t task_id[], int *complete_cnt,
                                  const uint16_t task_id_map[])
 {
-    uint64_t b = atomic_exchange_explicit(bitmap, 0, memory_order_acq_rel);
+    uint64_t b = *bitmap; *bitmap = 0;
     int cnt = __builtin_popcountll(b);
     while (cnt > 0) {
         uint64_t idx = (uint64_t)__builtin_ctzll(b);
@@ -87,8 +87,8 @@ static inline int send_task(ctrl_t *ctrl, int type)
     int exe_type = type;
     // Check both slots - slot is free if neither slot 0 nor slot 1 has been sent a task
     uint64_t free_bitmap =
-        atomic_load_explicit(&ctrl->free_bitmap[type][0], memory_order_acquire) &
-        atomic_load_explicit(&ctrl->free_bitmap[type][1], memory_order_acquire);
+        ctrl->free_bitmap[type][0] &
+        ctrl->free_bitmap[type][1];
 #ifdef ESL_PROXY_ONBOARD
     free_bitmap &= (uint64_t)((1ULL << ESL_PROXY_ONBOARD_BLOCK_DIM) - 1);
 #endif
@@ -109,7 +109,7 @@ static inline int send_task(ctrl_t *ctrl, int type)
 
         uint64_t mask = (uint64_t)0x1 << idx;
         // Determine which slot to use - prefer slot 0 if it's not busy
-        uint64_t fb0 = atomic_load_explicit(&ctrl->free_bitmap[type][0], memory_order_acquire);
+        uint64_t fb0 = ctrl->free_bitmap[type][0];
         int slot = (fb0 & mask) != 0 ? 0 : 1;
         // Set executor's tasks and duration
         int core = (int)idx;
@@ -128,7 +128,7 @@ static inline int send_task(ctrl_t *ctrl, int type)
             ctrl->task_id_map1[type][idx] = task_id;
         }
         
-        (void)atomic_fetch_and_explicit(&ctrl->free_bitmap[type][slot], ~mask, memory_order_release);
+        ctrl->free_bitmap[type][slot] &= ~mask;
 #ifdef ESL_PROXY_ONBOARD
         esl_onboard_publish_atomic_u64(&ctrl->free_bitmap[type][slot]);
 #endif
@@ -138,11 +138,11 @@ static inline int send_task(ctrl_t *ctrl, int type)
             aicore_bridge_dispatch_task(g_aicore_bridge, (int)ctrl->tid, task_id, core, slot,
                                         exe_type);
         } else {
-            (void)atomic_fetch_or_explicit(&ctrl->msg_bitmap[type][slot], mask, memory_order_release);
+            ctrl->msg_bitmap[type][slot] |= mask;
         }
 #else
         /* Host sim: Fake Return */
-        (void)atomic_fetch_or_explicit(&ctrl->msg_bitmap[type][slot], mask, memory_order_release);
+        ctrl->msg_bitmap[type][slot] |= mask;
 #endif
         WORKER_LOGF("send,task_id,%u,core,%d,slot,%d,type,%d", task_id, core, slot, type);
         sent++;
