@@ -46,7 +46,7 @@ extern task_state *g_state_buf;
 extern uint16_t g_predecessor_cnt[RING_SIZE];
 extern uint16_t g_commit_task_id;
 extern int g_completed_cnt;
-extern atomic_bool g_orch_is_done;
+extern volatile bool g_orch_is_done;
 extern atomic_bool g_is_done;
 extern executor_t g_executors[EXE_TYPE_CNT][AIC_CNT];
 

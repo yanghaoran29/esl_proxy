@@ -174,7 +174,7 @@ void dispatch_loop_run(int tid)
     uint32_t phase2_iter = 0;
 
     esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE1, start_ns, 0, 0);
-    while (!atomic_load(&g_orch_is_done)) {
+    while (!g_orch_is_done) {
 #ifdef ESL_PROXY_ONBOARD
         if ((phase1_iter & 0x3FFFFU) == 0) {
             esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE1, phase1_iter,

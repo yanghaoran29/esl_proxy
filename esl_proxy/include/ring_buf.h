@@ -29,7 +29,7 @@
 extern atomic_int g_task_id;
 extern int g_min_uncomplete_task;
 extern int g_completed_cnt;
-extern atomic_bool g_orch_is_done;
+extern volatile bool g_orch_is_done;
 extern atomic_bool g_is_done;
 extern struct task_desc g_basic_buf[RING_SIZE];
 extern struct predecessor_list g_predecessors[RING_SIZE];

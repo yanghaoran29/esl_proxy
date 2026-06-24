@@ -56,7 +56,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args);
 static uint8_t g_mem_pool_storage[MEM_POOL_BYTES];
 static when2free_entry_t g_when2free_entries[WHEN2FREE_CAP];
 
-extern atomic_bool g_orch_is_done;
+extern volatile bool g_orch_is_done;
 
 int main(void) {
     pthread_t dispatch_threads[DISPATCH_THREAD_CNT];
@@ -116,7 +116,7 @@ int main(void) {
 #else
     aicpu_orchestration_entry(0);
 #endif
-    atomic_store(&g_orch_is_done, true);
+    g_orch_is_done = true;
 
     // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
     //     pthread_join(executor_threads[i], NULL);

@@ -31,7 +31,7 @@ void init_state_buf(void) {
 
 extern int g_min_uncomplete_task;
 extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
-extern _Atomic bool g_orch_is_done;
+extern volatile bool g_orch_is_done;
 extern _Atomic bool g_is_done;
 
 /* Written only by the cutter thread (add_successors sets it, resolve_dep
