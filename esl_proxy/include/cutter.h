@@ -13,7 +13,7 @@ void cutter(queue_t *cq, queue_t *rq);
 void *cutter_worker(void *arg);
 void init_state_buf(void);
 
-/* Onboard AICPU: single-thread loop (no pthread) */
+/* Onboard AICPU: cutter / dispatch / orchestrator on separate threads */
 void cutter_loop_once(void);
 void cutter_loop_run(void);
 

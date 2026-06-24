@@ -60,12 +60,17 @@ bash tools/run_onboard.sh -d $TASK_DEVICE'
 cd esl_proxy && make run
 ```
 
-## 调度模型（最小上板：单线程）
+## 调度模型（三 AICPU 线程）
 
-AICPU 各核非 cache 一致，跨核共享队列的自旋锁不可靠，故最小上板把
-orchestration + cutter + dispatch 全部放在**单个 AICPU 线程**串行执行
-（`esl_singlethread_drive`），其余 CANN launch 线程立即返回。dispatch 通过
-`aicore_bridge` 写寄存器下发任务、轮询 FIN 完成。多线程版本待跨核安全队列就绪后再恢复。
+CANN 拉起 `ESL_PROXY_AICPU_THREAD_NUM=3` 个 AICPU 线程，按进入 `esl_aicpu_execute` 的顺序分配角色（与 host 仿真 pthread 模型对齐）：
+
+| idx | 角色 | 入口 |
+|-----|------|------|
+| 0 | Cutter | `cutter_loop_run()` |
+| 1 | Dispatch | `dispatch_loop_run(0)` + `aicore_bridge` 寄存器下发 / FIN 轮询 |
+| 2 | Orchestrator | `aicpu_orchestration_entry()` → `esl_signal_orch_done()` |
+
+AICPU 核间非 cache 一致，cutter / dispatch / orch 共享队列与计数器通过 `onboard_crosscore_sync`（队列自旋锁 + `cache_flush` / `cache_invalidate`）保持可见性。编排期间 cutter 与 dispatch **并行**运行（与 `main.c` 一致）。
 
 ## 构建说明
 

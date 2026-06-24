@@ -8,9 +8,9 @@
 按"执行所在位置"分为五层：**Host 启动器** → **AICPU 调度内核** → **AICore 执行内核** → **Dispatcher** →
 **移植自 simpler 的平台运行时**，外加一组 host/device 共用的**布局与平台头**。
 
-数据流：host 加载三件产物并按序 launch → AICPU 单线程跑 orchestration/cutter/dispatch，
-经寄存器把任务下发给 AICore → AICore（fake_kernel 忙等）写 FIN → AICPU 轮询 FIN 收完成 →
-依赖链推进直至全部完成 → AICPU best-effort 关停 AICore → host 读 `device_wall` 打印 `OK`。
+数据流：host 加载三件产物并按序 launch → AICPU **三线程**并行跑 cutter / dispatch / orchestrator，
+经寄存器把任务下发给 AICore → AICore（fake_kernel 忙等）写 FIN → dispatch 轮询 FIN 收完成 →
+cutter 解依赖推进 → 全部完成后 last-thread barrier 关停 AICore → host 读 `device_wall` 打印 `OK`。
 
 ## 合并后文件 → 构建目标
 

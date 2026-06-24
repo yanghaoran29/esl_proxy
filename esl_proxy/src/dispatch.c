@@ -11,6 +11,10 @@
 #include "log.h"
 #include "ring_buf.h"
 
+#ifdef ESL_PROXY_ONBOARD
+#include "spin.h"
+#endif
+
 #include <stdint.h>
 
 #include <stdatomic.h>
@@ -18,6 +22,10 @@
 #ifdef ESL_PROXY_ONBOARD
 #include "aicpu_runtime.h"
 #include "onboard_config.h"
+#include "onboard/onboard_crosscore_sync.h"
+#include "onboard/onboard_trace.h"
+#include "onboard_log.h"
+extern _Atomic uint16_t g_commit_task_id;
 static AicoreBridge *g_aicore_bridge;
 void dispatch_set_aicore_bridge(void *bridge)
 {
@@ -32,6 +40,9 @@ static inline void get_free_exe(int tid)
             uint64_t msg =
                 atomic_load_explicit(&g_ctrl_t[tid].msg_bitmap[i][j], memory_order_acquire);
             (void)atomic_fetch_or_explicit(&g_ctrl_t[tid].free_bitmap[i][j], msg, memory_order_release);
+#ifdef ESL_PROXY_ONBOARD
+            esl_onboard_publish_atomic_u64(&g_ctrl_t[tid].free_bitmap[i][j]);
+#endif
         }
     }
 }
@@ -65,6 +76,9 @@ static inline void push_2_completed_queue(int tid)
     }
     batch_enqueue(&g_ctrl_t[tid].completed_queue, task_id, (uint16_t)complete_cnt);
     atomic_fetch_add_explicit(&g_completed_cnt, complete_cnt, memory_order_acquire);
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_publish_counters();
+#endif
 }
 
 // TODO: Work Stealing
@@ -100,6 +114,9 @@ static inline int send_task(ctrl_t *ctrl, int type)
         // Set executor's tasks and duration
         int core = (int)idx;
         g_executors[exe_type][core].tasks[slot] = task_id;
+#ifdef ESL_PROXY_ONBOARD
+        esl_onboard_consume_task_slot(task_id);
+#endif
         // Scale down duration for faster simulation (divide by 10000 to handle large durations)
         uint32_t raw_duration = g_basic_buf[task_id & RING_MASK].duration;
         g_executors[exe_type][core].duration[slot] = (raw_duration > 10000) ? (raw_duration / 10000) : 1;
@@ -112,6 +129,9 @@ static inline int send_task(ctrl_t *ctrl, int type)
         }
         
         (void)atomic_fetch_and_explicit(&ctrl->free_bitmap[type][slot], ~mask, memory_order_release);
+#ifdef ESL_PROXY_ONBOARD
+        esl_onboard_publish_atomic_u64(&ctrl->free_bitmap[type][slot]);
+#endif
 
 #ifdef ESL_PROXY_ONBOARD
         if (g_aicore_bridge != NULL) {
@@ -134,6 +154,9 @@ static inline int send_task(ctrl_t *ctrl, int type)
 int dispatch(int tid)
 {
     int total_sent = 0;
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_invalidate_sched_snapshot();
+#endif
     get_free_exe(tid);
     push_2_completed_queue(tid);
     total_sent += send_task(&g_ctrl_t[tid], TASK_TYPE_VECTOR);
@@ -141,35 +164,67 @@ int dispatch(int tid)
     return total_sent;
 }
 
-/* Host-sim pthread path only (main.c). Onboard uses esl_singlethread_drive instead. */
+/* Cutter / dispatch / orchestrator run on separate AICPU threads when onboard. */
 void dispatch_loop_run(int tid)
 {
+    esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_LOOP_ENTER, (uint64_t)tid, 0, 0);
     int total_sent = 0;
     uint64_t start_ns = get_time_ns();
+    uint32_t phase1_iter = 0;
+    uint32_t phase2_iter = 0;
 
+    esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE1, start_ns, 0, 0);
     while (!atomic_load(&g_orch_is_done)) {
+#ifdef ESL_PROXY_ONBOARD
+        if ((phase1_iter & 0x3FFFFU) == 0) {
+            esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE1, phase1_iter,
+                              (uint64_t)atomic_load_explicit(&g_completed_cnt, memory_order_acquire),
+                              (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire));
+        }
+        phase1_iter++;
+#endif
+#ifdef ESL_PROXY_ONBOARD
+        esl_onboard_invalidate_sched_snapshot();
+#endif
         total_sent += dispatch(tid);
 #ifdef ESL_PROXY_ONBOARD
         if (g_aicore_bridge != NULL) {
             aicore_bridge_poll_completions(g_aicore_bridge, tid);
         }
+        spin_wait();
 #endif
     }
+    esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE2,
+                      (uint64_t)atomic_load_explicit(&g_completed_cnt, memory_order_acquire),
+                      (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire), 0);
     int prev = atomic_load_explicit(&g_completed_cnt, memory_order_acquire);
     int count = 10000;
     while (atomic_load_explicit(&g_completed_cnt, memory_order_acquire) <
            atomic_load_explicit(&g_task_id, memory_order_acquire)) {
+#ifdef ESL_PROXY_ONBOARD
+        if ((phase2_iter & 0x3FFFFU) == 0) {
+            esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE2, phase2_iter,
+                              (uint64_t)prev, (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire));
+        }
+        phase2_iter++;
+#endif
+#ifdef ESL_PROXY_ONBOARD
+        esl_onboard_invalidate_sched_snapshot();
+#endif
         total_sent += dispatch(tid);
 #ifdef ESL_PROXY_ONBOARD
         if (g_aicore_bridge != NULL) {
             aicore_bridge_poll_completions(g_aicore_bridge, tid);
         }
+        spin_wait();
 #endif
         if (prev == atomic_load_explicit(&g_completed_cnt, memory_order_acquire)) {
             count--;
             if (count < 0) {
-                MAIN_LOGF("[scheduler] stall timeout: completed_cnt=%u task_id=%u",
+                LOG_ERROR("[scheduler] stall timeout: completed_cnt=%u task_id=%u",
                           (unsigned)g_completed_cnt, (unsigned)g_task_id);
+                esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_STALL,
+                                  (uint64_t)g_completed_cnt, (uint64_t)g_task_id, (uint64_t)prev);
                 break;
             }
         } else {
@@ -187,6 +242,36 @@ void dispatch_loop_run(int tid)
     MAIN_LOGF("[scheduler] duration = %llu ns", (unsigned long long)elapsed_ns);
     MAIN_LOGF("[scheduler] task_tp = %f MTasks/s",
               (float)(atomic_load_explicit(&g_completed_cnt, memory_order_acquire) * 1000.0 / elapsed_ns));
+
+#ifdef ESL_PROXY_ONBOARD
+    {
+        extern task_state *g_state_buf;
+        extern _Atomic uint16_t g_predecessor_cnt[];
+        extern int g_subtask_cnt;
+        int end = atomic_load_explicit(&g_task_id, memory_order_acquire);
+        int first_uncomp = -1;
+        int n_uncomp = 0;
+        for (int i = 0; i < end; i++) {
+            if (g_state_buf[i].state != TASK_STATUS_COMPLETED) {
+                if (first_uncomp < 0) {
+                    first_uncomp = i;
+                }
+                n_uncomp++;
+            }
+        }
+        uint64_t pred0 = (first_uncomp >= 0)
+                             ? (uint64_t)atomic_load_explicit(&g_predecessor_cnt[first_uncomp],
+                                                              memory_order_acquire)
+                             : 0;
+        uint64_t rqc = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_CUBE].cnt;
+        uint64_t rqv = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_VECTOR].cnt;
+        esl_write_stats((uint64_t)end, (uint64_t)g_subtask_cnt,
+                        (uint64_t)atomic_load_explicit(&g_completed_cnt, memory_order_acquire),
+                        (uint64_t)atomic_load_explicit(&g_commit_task_id, memory_order_acquire),
+                        (uint64_t)n_uncomp, ((uint64_t)(uint32_t)first_uncomp) | (pred0 << 32),
+                        (rqc & 0xffffffffULL) | (rqv << 32));
+    }
+#endif
 }
 
 void *dispatch_worker(void *arg)
@@ -195,71 +280,3 @@ void *dispatch_worker(void *arg)
     dispatch_loop_run(tid);
     return NULL;
 }
-
-#ifdef ESL_PROXY_ONBOARD
-/*
- * Single-threaded onboard driver: orchestration has already run; here we drive
- * the cutter (dependency resolution) and dispatch (send + HW completion poll)
- * from ONE AICPU thread. The AICPU cores are not cache-coherent and the
- * shared-queue spinlocks do not provide cross-core mutual exclusion, so running
- * cutter and dispatch on separate threads corrupts the ready/completed queues.
- * Single-threading removes all cross-core queue contention.
- */
-void esl_singlethread_drive(void)
-{
-    extern void deal_completed_queue(void);
-    extern int g_subtask_cnt;
-    extern _Atomic uint16_t g_commit_task_id;
-    extern atomic_int g_min_uncomplete_task;
-    extern void esl_write_stats(uint64_t task_cnt, uint64_t subtask_cnt, uint64_t completed_cnt,
-                                uint64_t commit, uint64_t ready_cube, uint64_t ready_vec,
-                                uint64_t min_uncomplete);
-
-    /* First pass: commit all tasks, build the dependency graph, ready roots. */
-    deal_completed_queue();
-
-    int prev = atomic_load(&g_completed_cnt);
-    int stall = 0;
-    while (atomic_load(&g_completed_cnt) < atomic_load(&g_task_id)) {
-        if (g_aicore_bridge != NULL) {
-            aicore_bridge_poll_completions(g_aicore_bridge, 0);
-        }
-        dispatch(0);
-        deal_completed_queue();
-
-        int cc = atomic_load(&g_completed_cnt);
-        if (cc == prev) {
-            if (++stall > 10000000) {
-                break;  /* avoid AICPU watchdog hang if a task never completes */
-            }
-        } else {
-            stall = 0;
-        }
-        prev = cc;
-    }
-    atomic_store(&g_is_done, true);
-    /* Diagnostic: find the first uncompleted task and whether it is ready
-     * (predecessor_cnt==0 => readied-but-lost; >0 => predecessor never completed). */
-    extern task_state *g_state_buf;
-    extern _Atomic uint16_t g_predecessor_cnt[];
-    int end = atomic_load(&g_task_id);
-    int first_uncomp = -1, second_uncomp = -1, n_uncomp = 0;
-    for (int i = 0; i < end; i++) {
-        if (g_state_buf[i].state != TASK_STATUS_COMPLETED) {
-            if (first_uncomp < 0) first_uncomp = i;
-            else if (second_uncomp < 0) second_uncomp = i;
-            n_uncomp++;
-        }
-    }
-    uint64_t pred0 = (first_uncomp >= 0)
-                         ? (uint64_t)atomic_load_explicit(&g_predecessor_cnt[first_uncomp], memory_order_acquire)
-                         : 0;
-    uint64_t rqc = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_CUBE].cnt;
-    uint64_t rqv = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_VECTOR].cnt;
-    esl_write_stats((uint64_t)end, (uint64_t)g_subtask_cnt,
-                    (uint64_t)atomic_load(&g_completed_cnt),
-                    (uint64_t)atomic_load_explicit(&g_commit_task_id, memory_order_acquire),
-                    (uint64_t)n_uncomp, ((uint64_t)(uint32_t)first_uncomp) | (pred0 << 32),
-                    (rqc & 0xffffffffULL) | (rqv << 32));
-}
-#endif

@@ -36,7 +36,7 @@ typedef struct ctrl {
 void *dispatch_worker(void *arg);
 void init_ctrl_t(void);
 
-/* Onboard AICPU: single-thread loop (no pthread) */
+/* Onboard AICPU: cutter / dispatch / orchestrator on separate threads */
 void dispatch_loop_run(int tid);
 #ifdef ESL_PROXY_ONBOARD
 void dispatch_set_aicore_bridge(void *bridge);

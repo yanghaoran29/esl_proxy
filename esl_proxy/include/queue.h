@@ -13,6 +13,10 @@
 #include "spin.h"
 #include "log.h"
 
+#ifdef ESL_PROXY_ONBOARD
+#include "onboard/onboard_crosscore_sync.h"
+#endif
+
 typedef struct queue {
     uint64_t cnt;
     uint64_t head;
@@ -100,20 +104,18 @@ static inline bool enqueue(queue_t *queue, uint16_t item)
 static inline void lock_q(queue_t *queue)
 {
 #ifdef ESL_PROXY_ONBOARD
-    (void)queue;
-#else
+    esl_onboard_queue_lock_prepare(queue);
+#endif
     while (atomic_flag_test_and_set_explicit(&queue->lock, memory_order_acquire)) {
         spin_wait();
     }
-#endif
 }
 
 static inline void unlock_q(queue_t *queue)
 {
-#ifdef ESL_PROXY_ONBOARD
-    (void)queue;
-#else
     atomic_flag_clear_explicit(&queue->lock, memory_order_release);
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_queue_unlock_publish(queue);
 #endif
 }
 

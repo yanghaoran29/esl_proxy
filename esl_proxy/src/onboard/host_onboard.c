@@ -8,6 +8,7 @@
 #include "esl_swimlane_host_onboard.h"
 #include "kernel_args.h"
 #include "onboard_config.h"
+#include "onboard/onboard_trace.h"
 #include "tools.h"
 #include <acl/acl_rt.h>
 #include <ascend_hal.h>
@@ -53,6 +54,114 @@
         if (_rc != ACL_SUCCESS) {                                          \
             fprintf(stderr, "[esl_proxy] %s failed: %d\n", (label),        \
                 (int)_rc);                                                 \
+            return 1;                                                      \
+        }                                                                  \
+    } while (0)
+
+static const char *host_trace_stage_name(uint32_t stage)
+{
+    switch (stage) {
+    case ESL_TRACE_EXEC_ENTER: return "exec_enter";
+    case ESL_TRACE_INIT_ONCE_WAIT: return "init_once_wait";
+    case ESL_TRACE_INIT_ONCE_LEADER: return "init_once_leader";
+    case ESL_TRACE_INIT_PLATFORM: return "init_platform";
+    case ESL_TRACE_INIT_HANDSHAKE: return "init_handshake";
+    case ESL_TRACE_INIT_DONE: return "init_done";
+    case ESL_TRACE_WORKER_BARRIER: return "worker_barrier";
+    case ESL_TRACE_CUTTER_START: return "cutter_start";
+    case ESL_TRACE_CUTTER_PRE_CALL: return "cutter_pre_call";
+    case ESL_TRACE_CUTTER_LOOP_ENTER: return "cutter_loop_enter";
+    case ESL_TRACE_CUTTER_LOOP: return "cutter_loop";
+    case ESL_TRACE_CUTTER_DRAIN: return "cutter_drain";
+    case ESL_TRACE_CUTTER_DONE: return "cutter_done";
+    case ESL_TRACE_DISPATCH_START: return "dispatch_start";
+    case ESL_TRACE_DISPATCH_PRE_CALL: return "dispatch_pre_call";
+    case ESL_TRACE_DISPATCH_LOOP_ENTER: return "dispatch_loop_enter";
+    case ESL_TRACE_DISPATCH_PHASE1: return "dispatch_phase1";
+    case ESL_TRACE_DISPATCH_PHASE2: return "dispatch_phase2";
+    case ESL_TRACE_DISPATCH_STALL: return "dispatch_stall";
+    case ESL_TRACE_DISPATCH_DONE: return "dispatch_done";
+    case ESL_TRACE_ORCH_START: return "orch_start";
+    case ESL_TRACE_ORCH_PRE_CALL: return "orch_pre_call";
+    case ESL_TRACE_ORCH_IN_ENTRY: return "orch_in_entry";
+    case ESL_TRACE_ORCH_DONE: return "orch_done";
+    case ESL_TRACE_SIGNAL_ORCH_DONE: return "signal_orch_done";
+    case ESL_TRACE_FINISHED_BARRIER: return "finished_barrier";
+    case ESL_TRACE_SHUTDOWN: return "shutdown";
+    case ESL_TRACE_EXEC_RETURN: return "exec_return";
+    case ESL_TRACE_SPARE_WAIT: return "spare_wait";
+    case ESL_TRACE_SPARE_EXIT: return "spare_exit";
+    default: return "unknown";
+    }
+}
+
+static void esl_host_dump_trace_region(const uint64_t *wall, int slot_idx, const char *label)
+{
+    uint32_t thread_id;
+    uint32_t stage_id;
+
+    thread_id = (uint32_t)(wall[slot_idx] >> 32);
+    stage_id = (uint32_t)(wall[slot_idx] & 0xffffffffULL);
+    if (wall[slot_idx] == 0) {
+        fprintf(stderr, "[esl_proxy] trace %s: (empty)\n", label);
+        return;
+    }
+    fprintf(stderr,
+        "[esl_proxy] trace %s: thread=%u stage=%s(%u) aux_a=%llu aux_b=%llu aux_c=%llu\n",
+        label, thread_id, host_trace_stage_name(stage_id), stage_id,
+        (unsigned long long)wall[slot_idx + 1], (unsigned long long)wall[slot_idx + 2],
+        (unsigned long long)wall[slot_idx + 3]);
+}
+
+static void esl_host_dump_device_wall(const void *dev_wall_ptr)
+{
+    uint64_t wall[ESL_DEVICE_WALL_SLOTS];
+    aclError rc;
+
+    if (dev_wall_ptr == NULL) {
+        return;
+    }
+    rc = aclrtMemcpy(wall, sizeof(wall), dev_wall_ptr, sizeof(wall),
+        ACL_MEMCPY_DEVICE_TO_HOST);
+    if (rc != ACL_SUCCESS) {
+        fprintf(stderr, "[esl_proxy] D2H device_wall failed: %d\n", (int)rc);
+        return;
+    }
+
+    fprintf(stderr,
+        "[esl_proxy] device_wall stats: task_cnt=%llu subtask_cnt=%llu "
+        "completed_cnt=%llu wall_ns=%llu\n",
+        (unsigned long long)wall[0], (unsigned long long)wall[1],
+        (unsigned long long)wall[2], (unsigned long long)wall[3]);
+    fprintf(stderr,
+        "[esl_proxy] device_wall diag: commit=%llu n_uncomp=%llu "
+        "first_uncomp=%u pred_cnt[first]=%u ready_cube=%u ready_vec=%u\n",
+        (unsigned long long)wall[4], (unsigned long long)wall[5],
+        (unsigned)(wall[6] & 0xffffffffULL), (unsigned)(wall[6] >> 32),
+        (unsigned)(wall[7] & 0xffffffffULL), (unsigned)(wall[7] >> 32));
+
+    esl_host_dump_trace_region(wall, 8, "cutter(t0)");
+    esl_host_dump_trace_region(wall, 12, "dispatch(t1)");
+    esl_host_dump_trace_region(wall, 16, "orch(t2)");
+    esl_host_dump_trace_region(wall, 20, "global");
+    fflush(stderr);
+}
+
+#define ESL_HOST_SYNC_STREAM_DUMP(stream, label, dev_wall_ptr)             \
+    do {                                                                   \
+        aclError _rc = aclrtSynchronizeStreamWithTimeout(                  \
+            (stream), PLATFORM_STREAM_SYNC_TIMEOUT_MS);                    \
+        if (_rc == ACL_ERROR_RT_STREAM_SYNC_TIMEOUT) {                     \
+            fprintf(stderr,                                               \
+                "[esl_proxy] %s: TIMEOUT after %d ms\n", (label),          \
+                PLATFORM_STREAM_SYNC_TIMEOUT_MS);                          \
+            esl_host_dump_device_wall((dev_wall_ptr));                     \
+            return 1;                                                      \
+        }                                                                  \
+        if (_rc != ACL_SUCCESS) {                                          \
+            fprintf(stderr, "[esl_proxy] %s failed: %d\n", (label),        \
+                (int)_rc);                                                 \
+            esl_host_dump_device_wall((dev_wall_ptr));                     \
             return 1;                                                      \
         }                                                                  \
     } while (0)
@@ -804,7 +913,8 @@ int esl_onboard_run(int argc, char **argv) {
     host_runtime.aicpu_thread_num = ESL_PROXY_AICPU_THREAD_NUM;
 
     ACL_CHECK(devmem_alloc(&dev_runtime, sizeof(EslRuntime)), "runtime GM");
-    ACL_CHECK(devmem_alloc(&dev_wall, 8 * sizeof(uint64_t)), "device stats GM");
+    ACL_CHECK(devmem_alloc(&dev_wall, ESL_DEVICE_WALL_SLOTS * sizeof(uint64_t)),
+        "device stats GM");
     ACL_CHECK(devmem_alloc(&dev_k_args, sizeof(EslKernelArgs)),
         "device KernelArgs GM");
     payload_bytes = (size_t)ESL_PROXY_ONBOARD_WORKER_COUNT * 2U *
@@ -826,7 +936,8 @@ int esl_onboard_run(int argc, char **argv) {
                   sizeof(EslRuntime), ACL_MEMCPY_HOST_TO_DEVICE),
         "H2D runtime");
     ACL_CHECK(
-        aclrtMemset(dev_wall.ptr, 8 * sizeof(uint64_t), 0, 8 * sizeof(uint64_t)),
+        aclrtMemset(dev_wall.ptr, ESL_DEVICE_WALL_SLOTS * sizeof(uint64_t), 0,
+            ESL_DEVICE_WALL_SLOTS * sizeof(uint64_t)),
         "zero stats");
 
     ESL_SWIMLANE_HOST_ONBOARD_INIT_OR(
@@ -906,31 +1017,13 @@ int esl_onboard_run(int argc, char **argv) {
 
     ESL_SWIMLANE_HOST_ONBOARD_SYNC_CORE_TYPES(swimlane_level, dev_runtime.ptr);
 
-    fprintf(stderr, "[esl_proxy] aicpu exec launch (before aicore — swimlane "
-                    "init runs in exec init_once)\n");
-    rc = esl_aicpu_loader_launch(loader, stream_aicpu, &k_args,
-        ESL_PROXY_CANN_AICPU_LAUNCH_THREADS,
-        ESL_AICPU_EXEC_NAME);
-    if (rc != 0) {
-        esl_aicore_launcher_destroy(aicore);
-        esl_aicpu_loader_destroy(loader);
-        devmem_free(&dev_payload);
-        devmem_free(&dev_k_args);
-        devmem_free(&dev_wall);
-        devmem_free(&dev_runtime);
-        aclrtDestroyStream(stream_aicore);
-        aclrtDestroyStream(stream_aicpu);
-        aclrtResetDevice(device_id);
-        aclFinalize();
-        free(dispatcher_bytes);
-        free(aicpu_bytes);
-        free(aicore_bytes);
-        return 1;
-    }
-
+    /* Launch AICore BEFORE the AICPU exec kernel: the AICore cores first spin on
+     * `aicpu_ready` (set by the exec handshake), so making them resident first
+     * removes the launch-latency window where the exec handshake busy-waits for
+     * not-yet-scheduled cores and trips the AICPU watchdog (rt err 507018). */
     fprintf(stderr,
-        "[esl_proxy] aicore launch block_dim=%d (stream_aicore, after exec "
-        "kickoff)\n",
+        "[esl_proxy] aicore launch block_dim=%d (stream_aicore, before exec so "
+        "cores are resident for handshake)\n",
         ESL_PROXY_ONBOARD_BLOCK_DIM);
     rc = esl_aicore_launcher_launch(aicore, stream_aicore, dev_k_args.ptr,
         ESL_PROXY_ONBOARD_BLOCK_DIM);
@@ -951,8 +1044,31 @@ int esl_onboard_run(int argc, char **argv) {
         return 1;
     }
 
+    fprintf(stderr, "[esl_proxy] aicpu exec launch (after aicore; aicore waits "
+                    "on aicpu_ready)\n");
+    rc = esl_aicpu_loader_launch(loader, stream_aicpu, &k_args,
+        ESL_PROXY_AICPU_THREAD_NUM,
+        ESL_AICPU_EXEC_NAME);
+    if (rc != 0) {
+        esl_aicore_launcher_destroy(aicore);
+        esl_aicpu_loader_destroy(loader);
+        devmem_free(&dev_payload);
+        devmem_free(&dev_k_args);
+        devmem_free(&dev_wall);
+        devmem_free(&dev_runtime);
+        aclrtDestroyStream(stream_aicore);
+        aclrtDestroyStream(stream_aicpu);
+        aclrtResetDevice(device_id);
+        aclFinalize();
+        free(dispatcher_bytes);
+        free(aicpu_bytes);
+        free(aicore_bytes);
+        return 1;
+    }
+
     fprintf(stderr, "[esl_proxy] aicpu exec sync\n");
-    ESL_HOST_SYNC_STREAM(stream_aicpu, "sync after aicpu exec");
+    ESL_HOST_SYNC_STREAM_DUMP(stream_aicpu, "sync after aicpu exec",
+        dev_wall.ptr);
     ESL_SWIMLANE_HOST_STOP_EXPORT();
     ESL_SWIMLANE_HOST_FINALIZE();
     fprintf(stderr, "[esl_proxy] done (aicore stream left to device reset)\n");
@@ -980,16 +1096,25 @@ int esl_onboard_run(int argc, char **argv) {
     free(aicpu_bytes);
     free(aicore_bytes);
 
+    /* The AICore kernel loops until device reset (no exit signal is sent), so we
+     * MUST reset the device before exiting — otherwise the lingering AICore
+     * kernel stays resident on the cores and the NEXT run's AICore launch /
+     * handshake collides with it (intermittent rt err 507018 on repeated runs
+     * sharing one device lock). */
     if (stats[0] == 0 || stats[2] != stats[0]) {
         fprintf(stderr,
             "esl_proxy onboard: FAIL (completed %llu != task_cnt %llu — DAG "
             "not fully scheduled)\n",
             (unsigned long long)stats[2], (unsigned long long)stats[0]);
         fflush(stderr);
+        aclrtResetDevice(device_id);
+        aclFinalize();
         _Exit(1);
     }
     printf("esl_proxy onboard: OK (all %llu tasks completed)\n",
         (unsigned long long)stats[0]);
     fflush(stdout);
+    aclrtResetDevice(device_id);
+    aclFinalize();
     _Exit(0);
 }

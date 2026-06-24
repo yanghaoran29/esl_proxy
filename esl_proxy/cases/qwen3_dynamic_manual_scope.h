@@ -155,7 +155,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         add_scalar(g_task_id, b0);
         add_scalar(g_task_id, cur_valid);
         const uint16_t rmsnorm_id = g_task_id;
-        g_task_id++;
+        esl_onboard_advance_task_id();
         
         for (int qi = 0, base = 0; base < 20; base += qwen3_blocks_per_task(20)) {
             int cur_blocks = qwen3_cur_blocks(20, base);
@@ -169,7 +169,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             batch_predecessors[0] = rmsnorm_id;
             add_predecessors(g_task_id, batch_predecessors, 1, 0);
             q_ids[qi++] = g_task_id;
-            g_task_id++;
+            esl_onboard_advance_task_id();
             
         }
 
@@ -185,7 +185,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             batch_predecessors[0] = rmsnorm_id;
             add_predecessors(g_task_id, batch_predecessors, 1, 0);
             k_ids[ki++] = g_task_id;
-            g_task_id++;
+            esl_onboard_advance_task_id();
             
             new_task(g_task_id, TASK_TYPE_CUBE, cur_blocks, DUR_V_PROJ, MASK_V_PROJ);
             add_input(g_task_id, normed_tile);
@@ -197,7 +197,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             batch_predecessors[0] = rmsnorm_id;
             add_predecessors(g_task_id, batch_predecessors, 1, 0);
             v_ids[vi++] = g_task_id;
-            g_task_id++;
+            esl_onboard_advance_task_id();
             
         }
         for (int i = 0; i < qwen3_n_tasks(8, qwen3_blocks_per_task(8)); i++)
@@ -218,7 +218,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         int idx = add_predecessors(g_task_id, q_ids, qwen3_n_tasks(20, qwen3_blocks_per_task(20)), 0);
         add_predecessors(g_task_id, k_ids, qwen3_n_tasks(8, qwen3_blocks_per_task(8)), idx);
         qk_norm_per_tile[tix] = g_task_id;
-        g_task_id++;
+        esl_onboard_advance_task_id();
         
     }
 
@@ -270,7 +270,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         add_predecessors(g_task_id, batch_predecessors,
                          (uint16_t)(1 + v_cnt_per_tile[tix]), 0);
         const uint16_t rope_id = g_task_id;
-        g_task_id++;
+        esl_onboard_advance_task_id();
         
 
         for (int ci = 0, base = 0; base < 4; base += qwen3_blocks_per_task(4)) {
@@ -289,7 +289,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             batch_predecessors[0] = rope_id;
             add_predecessors(g_task_id, batch_predecessors, 1, 0);
             qk_ids[ci] = g_task_id;
-            g_task_id++;
+            esl_onboard_advance_task_id();
 
 
 
@@ -307,7 +307,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             batch_predecessors[0] = qk_ids[ci];
             add_predecessors(g_task_id, batch_predecessors, 1, 0);
             sm_ids[ci] = g_task_id;
-            g_task_id++;
+            esl_onboard_advance_task_id();
             
             new_task(g_task_id, TASK_TYPE_CUBE, cur_blocks, DUR_SV_MATMUL, MASK_SV_MATMUL);
             Tensor oi_tmp_piece = view(all_oi_tmp, base * 1024u, 0u, (uint32_t)(cur_blocks * 1024), 128u);
@@ -323,7 +323,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             batch_predecessors[1] = sm_ids[ci];
             add_predecessors(g_task_id, batch_predecessors, 2, 0);
             sv_ids[ci] = g_task_id;
-            g_task_id++;
+            esl_onboard_advance_task_id();
 
             new_task(g_task_id, TASK_TYPE_VECTOR, cur_blocks, DUR_ONLINE_SOFTMAX, MASK_ONLINE_SOFTMAX);
             add_input(g_task_id, oi_tmp_piece);
@@ -338,7 +338,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             add_predecessors(g_task_id, batch_predecessors, 2, 0);
             os_by_b[b][ci] = g_task_id;
             ci++;
-            g_task_id++;
+            esl_onboard_advance_task_id();
 
         }
         os_cnt_by_b[b] = qwen3_n_tasks(4, qwen3_blocks_per_task(4));
@@ -381,7 +381,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
                 add_predecessors(g_task_id, os_preds, (uint16_t)nos, 0);
             }
             op_ids[opi++] = g_task_id;
-            g_task_id++;
+            esl_onboard_advance_task_id();
         }
         new_task(g_task_id, TASK_TYPE_VECTOR, 1, DUR_POST_RMSNORM, MASK_POST_RMSNORM);
         add_input(g_task_id, resid1_tile);
@@ -389,7 +389,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         add_input(g_task_id, ext_post_rms_weight);
         add_predecessors(g_task_id, op_ids, (uint16_t)qwen3_n_tasks(40, qwen3_blocks_per_task(40)), 0);
         const uint16_t post_rmsnorm_id = g_task_id;
-        g_task_id++;
+        esl_onboard_advance_task_id();
         for (int gi = 0, ui = 0, si = 0, base = 0; base < 34;
              base += qwen3_blocks_per_task(34)) {
             int cur_blocks = qwen3_cur_blocks(34, base);
@@ -403,7 +403,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             batch_predecessors[0] = post_rmsnorm_id;
             add_predecessors(g_task_id, batch_predecessors, 1, 0);
             gate_ids[gi++] = g_task_id;
-            g_task_id++;
+            esl_onboard_advance_task_id();
             new_task(g_task_id, TASK_TYPE_CUBE, (uint16_t)cur_blocks, DUR_UP_PROJ, MASK_UP_PROJ);
             add_input(g_task_id, post_norm_tile);
             add_input(g_task_id, view(ext_w_up, 0u, base * 512u, 5120u, (uint32_t)(cur_blocks * 512)));
@@ -412,7 +412,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             batch_predecessors[0] = post_rmsnorm_id;
             add_predecessors(g_task_id, batch_predecessors, 1, 0);
             up_ids[ui++] = g_task_id;
-            g_task_id++;
+            esl_onboard_advance_task_id();
             new_task(g_task_id, TASK_TYPE_VECTOR, (uint16_t)cur_blocks, DUR_SILU, MASK_SILU);
             add_input(g_task_id, gate_piece);
             add_input(g_task_id, up_piece);
@@ -423,7 +423,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             batch_predecessors[1] = up_ids[si];
             add_predecessors(g_task_id, batch_predecessors, 2, 0);
             silu_ids[si++] = g_task_id;
-            g_task_id++;
+            esl_onboard_advance_task_id();
         }
         for (int di = 0, dri = 0, base = 0; base < 40; base += qwen3_blocks_per_task(40)) {
             int cur_blocks = qwen3_cur_blocks(40, base);
@@ -436,7 +436,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             add_scalar(g_task_id, base);
             add_predecessors(g_task_id, silu_ids, (uint16_t)qwen3_n_tasks(34, qwen3_blocks_per_task(34)), 0);
             down_ids[di++] = g_task_id;
-            g_task_id++;
+            esl_onboard_advance_task_id();
             new_task(g_task_id, TASK_TYPE_VECTOR, (uint16_t)cur_blocks, DUR_DOWN_PROJ_RES, MASK_DOWN_PROJ_RES);
             add_input(g_task_id, down_piece);
             add_input(g_task_id, resid1_dres_piece);
@@ -447,7 +447,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             batch_predecessors[0] = down_ids[dri];
             batch_predecessors[1] = op_ids[dri];
             add_predecessors(g_task_id, batch_predecessors, 2, 0);
-            g_task_id++;
+            esl_onboard_advance_task_id();
             dri++;
         }
     }

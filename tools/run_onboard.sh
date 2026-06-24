@@ -37,6 +37,10 @@ if [[ "$SKIP_BUILD" -eq 0 ]]; then
   if [[ "$SWIMLANE_LEVEL" != "0" ]]; then
     export ESL_PROXY_ENABLE_L2_SWIMLANE=1
   fi
+  if [[ -n "${ESL_PROXY_ORCH_CASE:-}" ]]; then
+    export ORCH_CASE="$ESL_PROXY_ORCH_CASE"
+    echo "[esl_proxy] ORCH_CASE=$ORCH_CASE"
+  fi
   bash cmake/onboard/build_aicpu.sh
   bash cmake/onboard/build_aicore.sh
   bash cmake/onboard/build_onboard_host.sh

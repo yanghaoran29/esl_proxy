@@ -176,7 +176,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         tm_in_ro(g_task_id, ext_k_norm_weight);
         tm_in(g_task_id, k0_in);
         tm_submit(g_task_id);
-        g_task_id++;
+        esl_onboard_advance_task_id();
     }
 
     Tensor attn_out[6];

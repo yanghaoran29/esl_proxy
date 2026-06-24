@@ -24,12 +24,12 @@
 | `smoke_orch.c` | 已删除，编排并入 `aicpu_kernel.c`（`ORCH_CASE`） |
 | 多文件 platform/glue/host | 已合并为 4 个单 TU |
 
-### B. 编译进 onboard 但运行时不可达（单线程路径）
+### B. 编译进 onboard、三线程路径使用
 
-| 代码 | 位置 | 为何不可达 |
-|------|------|-----------|
-| 多线程调度入口 | `src/cutter.c`、`src/dispatch.c` | onboard 单线程 `esl_singlethread_drive` |
-| `esl_onboard_flush_after_cutter` | `aicpu_kernel.c` runtime 段 | 仅 `cutter_loop_once` 调用 |
+| 代码 | 位置 | 说明 |
+|------|------|------|
+| 多线程调度入口 | `src/cutter.c`、`src/dispatch.c` | onboard：`esl_aicpu_execute` idx 0/1/2 分流 |
+| `onboard_crosscore_sync` | `src/onboard/onboard_crosscore_sync.c` | 跨 AICPU 核 cache flush/invalidate |
 
 ### C. 易误判为"未用"、但实际在用
 

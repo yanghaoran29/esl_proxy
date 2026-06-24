@@ -130,7 +130,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         uint16_t k_ids[8];
         uint16_t v_ids[8];
 
-        g_task_id++;
+        esl_onboard_advance_task_id();
         while (try_new_task(g_task_id)) {
             spin_wait();
         }
@@ -146,7 +146,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
 
         for (int qi = 0, base = 0; base < 20; base += qwen3_blocks_per_task(20)) {
             int cur_blocks = qwen3_cur_blocks(20, base);
-            g_task_id++;
+            esl_onboard_advance_task_id();
             while (try_new_task(g_task_id)) {
                 spin_wait();
             }
@@ -167,7 +167,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
 
         for (int ki = 0, vi = 0, base = 0; base < 8; base += qwen3_blocks_per_task(8)) {
             int cur_blocks = qwen3_cur_blocks(8, base);
-            g_task_id++;
+            esl_onboard_advance_task_id();
             while (try_new_task(g_task_id)) {
                 spin_wait();
             }
@@ -185,7 +185,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             submit(g_task_id);
             k_ids[ki++] = g_task_id;
 
-            g_task_id++;
+            esl_onboard_advance_task_id();
             while (try_new_task(g_task_id)) {
                 spin_wait();
             }
@@ -207,7 +207,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             v_ids_per_tile[tix][i] = v_ids[i];
         v_cnt_per_tile[tix] = qwen3_n_tasks(8, qwen3_blocks_per_task(8));
 
-        g_task_id++;
+        esl_onboard_advance_task_id();
         while (try_new_task(g_task_id)) {
             spin_wait();
         }
@@ -260,7 +260,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         uint16_t sm_ids[4];
         uint16_t sv_ids[4];
 
-        g_task_id++;
+        esl_onboard_advance_task_id();
         while (try_new_task(g_task_id)) {
             spin_wait();
         }
@@ -291,7 +291,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             int cur_blocks = qwen3_cur_blocks(4, base);
             Tensor row_piece =
                 tensor_view(all_raw_scores, 0u, base * 1024u, cur_blocks * 1024u);
-            g_task_id++;
+            esl_onboard_advance_task_id();
             while (try_new_task(g_task_id)) {
                 spin_wait();
             }
@@ -310,7 +310,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             submit(g_task_id);
             qk_ids[ci] = g_task_id;
 
-            g_task_id++;
+            esl_onboard_advance_task_id();
             while (try_new_task(g_task_id)) {
                 spin_wait();
             }
@@ -334,7 +334,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             submit(g_task_id);
             sm_ids[ci] = g_task_id;
 
-            g_task_id++;
+            esl_onboard_advance_task_id();
             while (try_new_task(g_task_id)) {
                 spin_wait();
             }
@@ -357,7 +357,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             submit(g_task_id);
             sv_ids[ci] = g_task_id;
 
-            g_task_id++;
+            esl_onboard_advance_task_id();
             while (try_new_task(g_task_id)) {
                 spin_wait();
             }
@@ -399,7 +399,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
 
         for (int opi = 0, base = 0; base < 40; base += qwen3_blocks_per_task(40)) {
             int cur_blocks = qwen3_cur_blocks(40, base);
-            g_task_id++;
+            esl_onboard_advance_task_id();
             while (try_new_task(g_task_id)) {
                 spin_wait();
             }
@@ -426,7 +426,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             op_ids[opi++] = g_task_id;
         }
 
-        g_task_id++;
+        esl_onboard_advance_task_id();
         while (try_new_task(g_task_id)) {
             spin_wait();
         }
@@ -445,7 +445,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             int cur_blocks = qwen3_cur_blocks(34, base);
             Tensor gate_piece = tensor_view(gate_tile, 1u, base * 512u, cur_blocks * 512u);
             Tensor up_piece = tensor_view(up_tile, 1u, base * 512u, cur_blocks * 512u);
-            g_task_id++;
+            esl_onboard_advance_task_id();
             while (try_new_task(g_task_id)) {
                 spin_wait();
             }
@@ -460,7 +460,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             submit(g_task_id);
             gate_ids[gi++] = g_task_id;
 
-            g_task_id++;
+            esl_onboard_advance_task_id();
             while (try_new_task(g_task_id)) {
                 spin_wait();
             }
@@ -475,7 +475,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             submit(g_task_id);
             up_ids[ui++] = g_task_id;
 
-            g_task_id++;
+            esl_onboard_advance_task_id();
             while (try_new_task(g_task_id)) {
                 spin_wait();
             }
@@ -498,7 +498,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             Tensor down_piece = tensor_view(down_tile, 1u, base * 128u, cur_blocks * 128u);
             Tensor resid1_dres_piece =
                 tensor_view(resid1_tile, 1u, base * 128u, cur_blocks * 128u);
-            g_task_id++;
+            esl_onboard_advance_task_id();
             while (try_new_task(g_task_id)) {
                 spin_wait();
             }
@@ -514,7 +514,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             submit(g_task_id);
             down_ids[di++] = g_task_id;
 
-            g_task_id++;
+            esl_onboard_advance_task_id();
             while (try_new_task(g_task_id)) {
                 spin_wait();
             }

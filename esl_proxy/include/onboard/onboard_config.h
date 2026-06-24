@@ -14,6 +14,12 @@ extern "C" {
 
 /* --- esl_proxy bring-up --- */
 #define ESL_PROXY_AICPU_THREAD_NUM 3
+#define ESL_AICPU_ROLE_CUTTER 0
+#define ESL_AICPU_ROLE_DISPATCH 1
+#define ESL_AICPU_ROLE_ORCH (ESL_PROXY_AICPU_THREAD_NUM - 1)
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+_Static_assert(ESL_PROXY_AICPU_THREAD_NUM == 3, "three-thread cutter/dispatch/orch model");
+#endif
 /* block_dim=24 → 24 AIC + 48 AIV = 72 workers (1+2 per blockdim) */
 #define ESL_PROXY_ONBOARD_BLOCK_DIM 24
 #define ESL_PROXY_ONBOARD_AIC_COUNT ESL_PROXY_ONBOARD_BLOCK_DIM

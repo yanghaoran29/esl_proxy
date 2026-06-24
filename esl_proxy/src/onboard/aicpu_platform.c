@@ -25,7 +25,7 @@
 #define OUT_OF_ORDER_STORE_BARRIER() __asm__ __volatile__("" ::: "memory")
 #endif
 
-#define HANDSHAKE_SPIN_MAX 50000000ULL
+#define HANDSHAKE_SPIN_MAX 10000000ULL
 #define DEINIT_ACK_SPIN_MAX 5000000ULL
 
 static uint64_t g_platform_regs;
@@ -231,7 +231,23 @@ int esl_handshake_all_cores(EslRuntime *runtime)
         uint64_t reg_addr;
 
         if (!wait_handshake_field(&wk->aicore_regs_ready, 1)) {
-            LOG_ERROR("Core %d aicore_regs_ready timeout", i);
+            /* Diagnostic scan: how far did the AICore side get overall? */
+            int ready_cnt = 0;
+            int first_not_ready = -1;
+            for (int j = 0; j < n_handshake; j++) {
+                EslHandshake *wj = &runtime->workers[j];
+                cache_invalidate_range((const void *)wj, sizeof(EslHandshake));
+                if (wj->aicore_regs_ready == 1) {
+                    ready_cnt++;
+                } else if (first_not_ready < 0) {
+                    first_not_ready = j;
+                }
+            }
+            cache_invalidate_range((const void *)wk, sizeof(EslHandshake));
+            LOG_ERROR("Core %d aicore_regs_ready timeout: regs_ready=%u aicpu_ready=%u "
+                      "ready_cnt=%d/%d first_not_ready=%d",
+                      i, wk->aicore_regs_ready, wk->aicpu_ready, ready_cnt, n_handshake,
+                      first_not_ready);
             return -1;
         }
         cache_invalidate_range((const void *)&wk->physical_core_id, sizeof(wk->physical_core_id));

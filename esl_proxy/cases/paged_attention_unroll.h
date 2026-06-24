@@ -68,7 +68,7 @@ void aicpu_orchestration_entry(uint64_t orch_args) {
                 add_scalar(g_task_id, (int64_t)n_blocks);
                 add_scalar(g_task_id, (int64_t)(b_idx * 64 + bn)); // max_blocks=64
                 tm_submit(g_task_id);
-        g_task_id++;
+        esl_onboard_advance_task_id();
                 Tensor pij_buf = alloc_tensors((uint32_t[2]){16, 8192}, 2, BFLOAT16); // q_tile=16, n_unroll*block_size=64*128
                 Tensor mi = alloc_tensors((uint32_t[2]){1, 16}, 2, FLOAT32); // q_tile=16
                 Tensor li = alloc_tensors((uint32_t[2]){1, 16}, 2, FLOAT32); // q_tile=16
@@ -83,7 +83,7 @@ void aicpu_orchestration_entry(uint64_t orch_args) {
                 add_scalar(g_task_id, (int64_t)n_blocks);
                 add_scalar(g_task_id, (int64_t)128); // block_size=128
                 tm_submit(g_task_id);
-        g_task_id++;
+        esl_onboard_advance_task_id();
                 Tensor oi_new = alloc_tensors((uint32_t[2]){16, 128}, 2, FLOAT32); // q_tile=16, block_size=128
 
                 /* task 2: pv_matmul */
@@ -95,7 +95,7 @@ void aicpu_orchestration_entry(uint64_t orch_args) {
                 add_scalar(g_task_id, (int64_t)n_blocks);
                 add_scalar(g_task_id, (int64_t)(b_idx * 64 + bn)); // max_blocks=64
                 tm_submit(g_task_id);
-        g_task_id++;
+        esl_onboard_advance_task_id();
 
                 /* task 3: online_update */
                 new_task(g_task_id, TASK_TYPE_VECTOR, 1, DUR_PA_ONLINE_UPDATE, MASK_PA_ONLINE_UPDATE);
@@ -109,7 +109,7 @@ void aicpu_orchestration_entry(uint64_t orch_args) {
                 add_scalar(g_task_id, (int64_t)is_first);
                 add_scalar(g_task_id, (int64_t)is_last);
                 tm_submit(g_task_id);
-        g_task_id++;
+        esl_onboard_advance_task_id();
             }
         }
     }

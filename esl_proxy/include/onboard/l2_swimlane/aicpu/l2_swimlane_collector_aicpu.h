@@ -41,6 +41,8 @@ void l2_swimlane_aicpu_on_aicore_dispatch(int core_id, int thread_idx);
 int l2_swimlane_aicpu_complete_task(
     int core_id, int thread_idx, uint32_t reg_task_id, uint64_t dispatch_time, uint64_t finish_time);
 void l2_swimlane_aicpu_flush(int thread_idx, const int *cur_thread_cores, int core_num);
+/* C-callable: the orchestrator thread (C: aicpu_runtime.c) sets its index here. */
+void l2_swimlane_aicpu_set_orch_thread_idx(int thread_idx);
 
 #ifdef __cplusplus
 }
@@ -110,8 +112,9 @@ void l2_swimlane_aicpu_record_sched_phase(
  *
  * @param thread_idx Thread index for the orchestrator (typically num_sched_threads;
  *                   in orch_to_sched mode each scheduler thread sets its own)
+ *
+ * (Declared in the extern "C" block above — C-callable from aicpu_runtime.c.)
  */
-void l2_swimlane_aicpu_set_orch_thread_idx(int thread_idx);
 
 /**
  * Record one orchestrator submit envelope

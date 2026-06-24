@@ -24,6 +24,7 @@
 #include "spin.h"
 
 #include "tensor.h"
+#include "onboard/onboard_crosscore_sync.h"
 
 extern atomic_int g_task_id;
 extern atomic_int g_min_uncomplete_task;
@@ -108,16 +109,25 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
         uint16_t* idx = atomic_load_explicit(&g_predecessor_ring.tail, memory_order_relaxed);
         atomic_store_explicit(&g_predecessor_ring.tail, idx + 1, memory_order_relaxed);
         *idx = target[i];
+#ifdef ESL_PROXY_ONBOARD
+        esl_onboard_publish_u16(idx);
+#endif
         cnt++;
     }
     ptr->cnt = cnt;
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_publish_task_slot(task_id);
+#endif
     return cnt;
 }
 
 static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uint32_t duration_ns,
                             uint32_t jitter_mask)
 {
-    while ((task_id - atomic_load(&g_min_uncomplete_task)) >= RING_SIZE ) {
+    while ((task_id - (uint32_t)atomic_load(&g_min_uncomplete_task)) >= RING_SIZE) {
+#ifdef ESL_PROXY_ONBOARD
+        esl_onboard_consume_min_uncomplete();
+#endif
         MAIN_LOGF("[orchestration] task_id = %u g_min_uncomplete_task = %u", task_id, g_min_uncomplete_task);
         spin_wait();
     }

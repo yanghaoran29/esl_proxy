@@ -2,7 +2,11 @@
 #include "log.h"
 #include "ring_buf.h"
 #ifdef ESL_PROXY_ONBOARD
-#include "aicpu_runtime.h"
+#include "onboard/onboard_crosscore_sync.h"
+#include "onboard/onboard_trace.h"
+#include "onboard/onboard_config.h"
+#include "onboard_log.h"
+#include "spin.h"
 #endif
 #include <stdint.h>
 #include <stdlib.h>
@@ -62,6 +66,9 @@ static inline bool update_task_state(uint16_t cnt, uint16_t* cq_buf)
         }
     }
     atomic_store(&g_min_uncomplete_task, i);
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_publish_counters();
+#endif
     WORKER_LOGF("min_uncomplete_task,%u, completed_cnt,%u, cube_ready_cnt,%d,vector_ready_cnt,%d", \
         g_min_uncomplete_task, end, g_ctrl_t[0].ready_queue[2].cnt, g_ctrl_t[0].ready_queue[1].cnt);
 }
@@ -73,6 +80,9 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) 
     end = tmp > end ? end : tmp;
     while (commit < end) {
         uint16_t task_idx = commit;
+#ifdef ESL_PROXY_ONBOARD
+        esl_onboard_consume_task_slot(task_idx);
+#endif
         struct predecessor_list *ptr = &g_predecessors[task_idx];
         if (ptr->cnt <= 0) {
             task_type_t type = g_basic_buf[task_idx & RING_MASK].type;
@@ -82,6 +92,9 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) 
             WORKER_LOGF("ready_cnt[%d],%d", q, ready_cnt[q]);
             commit++;
             atomic_store_explicit(&g_commit_task_id, commit, memory_order_release);
+#ifdef ESL_PROXY_ONBOARD
+            esl_onboard_publish_counters();
+#endif
             continue;
         }
         uint16_t precessor_id = 0;
@@ -101,6 +114,9 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) 
             ptr->exp++;
         }
         atomic_store_explicit(&g_predecessor_cnt[task_idx], predecessor_cnt, memory_order_release);
+#ifdef ESL_PROXY_ONBOARD
+        esl_onboard_publish_predecessor_cnt(task_idx);
+#endif
         if (predecessor_cnt <= 0) {
             task_type_t type = g_basic_buf[task_idx & RING_MASK].type;
             int q = ready_queue_index(type);
@@ -110,6 +126,9 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) 
         }
         commit++;
         atomic_store_explicit(&g_commit_task_id, commit, memory_order_release);
+#ifdef ESL_PROXY_ONBOARD
+        esl_onboard_publish_counters();
+#endif
     }
 }
 
@@ -140,6 +159,9 @@ void resolve_dep(uint16_t cnt, uint16_t* cq_buf, uint16_t rq_buf[][LOCAL_BUFFER_
             succ_id = g_successor_buf[idx].node[k];
             uint16_t pred_left =
                 atomic_fetch_sub_explicit(&g_predecessor_cnt[succ_id & RING_MASK], 1U, memory_order_acq_rel) - 1U;
+#ifdef ESL_PROXY_ONBOARD
+            esl_onboard_publish_predecessor_cnt(succ_id);
+#endif
             WORKER_LOGF("cutter, task_id,%u, successor_id,%u, predecessor_cnt,%u", task_id, succ_id, pred_left);
             if (pred_left < 1) {
                 /* ready_queue_index maps MIX→CUBE (MIX dispatched as AIC). Using
@@ -155,6 +177,9 @@ void resolve_dep(uint16_t cnt, uint16_t* cq_buf, uint16_t rq_buf[][LOCAL_BUFFER_
 }
 
 void deal_completed_queue() {
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_invalidate_sched_snapshot();
+#endif
     for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
         uint16_t cq_buf[CUTTER_BATCH_SIZE];
         /* static: LOCAL_BUFFER_SIZE is sized to RING_SIZE to hold a high-fanout
@@ -177,7 +202,6 @@ void deal_completed_queue() {
     }
 }
 
-/* Host-sim pthread path only (main.c). Onboard uses esl_singlethread_drive instead. */
 void cutter_loop_once(void)
 {
     deal_completed_queue();
@@ -185,14 +209,32 @@ void cutter_loop_once(void)
 
 void cutter_loop_run(void)
 {
-#ifndef ESL_PROXY_ONBOARD
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_LOOP_ENTER, 0, 0, 0);
+    uint32_t loop_iter = 0;
+#else
     init_state_buf();
 #endif
     while (!atomic_load(&g_is_done)) {
+#ifdef ESL_PROXY_ONBOARD
+        if ((loop_iter & 0x3FFFFU) == 0) {
+            esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_LOOP, loop_iter,
+                              (uint64_t)atomic_load_explicit(&g_commit_task_id, memory_order_acquire),
+                              (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire));
+        }
+        loop_iter++;
+#endif
         cutter_loop_once();
+#ifdef ESL_PROXY_ONBOARD
+        spin_wait();
+#endif
     }
     int stall = 0;
     uint16_t prev_commit = atomic_load_explicit(&g_commit_task_id, memory_order_acquire);
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_DRAIN, prev_commit,
+                      (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire), 0);
+#endif
     while (atomic_load_explicit(&g_commit_task_id, memory_order_acquire) <
            atomic_load_explicit(&g_task_id, memory_order_acquire)) {
         cutter_loop_once();
@@ -203,8 +245,11 @@ void cutter_loop_run(void)
         } else {
             stall++;
             if (stall > 10000) {
-                WORKER_LOGF("cutter stall timeout: commit=%u task_id=%u", (unsigned)cur_commit,
-                            (unsigned)atomic_load(&g_task_id));
+                LOG_ERROR("cutter stall timeout: commit=%u task_id=%u", (unsigned)cur_commit,
+                          (unsigned)atomic_load(&g_task_id));
+                esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_DRAIN, (uint64_t)cur_commit,
+                                  (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire),
+                                  0xDEADBEEFULL);
                 break;
             }
         }

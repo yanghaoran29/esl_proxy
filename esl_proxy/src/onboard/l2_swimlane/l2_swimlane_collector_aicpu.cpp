@@ -840,7 +840,7 @@ void l2_swimlane_aicpu_record_sched_phase(
     copy_snapshot(record->shared_depth_at_end, shared_at_end);
 }
 
-void l2_swimlane_aicpu_set_orch_thread_idx(int thread_idx) { s_orch_thread_idx = thread_idx; }
+extern "C" void l2_swimlane_aicpu_set_orch_thread_idx(int thread_idx) { s_orch_thread_idx = thread_idx; }
 
 void l2_swimlane_aicpu_record_orch_phase(
     uint64_t start_time, uint64_t end_time, uint64_t task_id, uint32_t submit_idx
