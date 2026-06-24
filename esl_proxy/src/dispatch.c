@@ -33,6 +33,16 @@ void dispatch_set_aicore_bridge(void *bridge)
 }
 #endif
 
+/* --- SPMD subtask dispatch state (dispatch-thread-private) ---
+ * An SPMD task with count=N blocks is fanned out as N independent subtask
+ * dispatches (claim min(idle_cores, remaining) per pass, re-queue while blocks
+ * remain — mirrors simpler's dispatch_shape). The task is reported complete to
+ * the cutter only after all N subtask FINs arrive. Indexed by task_id&RING_MASK,
+ * reset to 0 on task completion so the ring slot is clean for reuse. */
+static uint16_t g_spmd_dispatched[RING_SIZE]; /* blocks already dispatched */
+static uint16_t g_spmd_completed[RING_SIZE];  /* block FINs received */
+int g_completed_subtask_cnt = 0;              /* total subtask FINs (== g_subtask_cnt at end) */
+
 static inline void get_free_exe(int tid)
 {
     for (int i = 0; i < EXE_TYPE_CNT; i++) {
@@ -54,10 +64,24 @@ static inline void get_completed(uint64_t *bitmap, uint16_t task_id[], int *comp
     int cnt = __builtin_popcountll(b);
     while (cnt > 0) {
         uint64_t idx = (uint64_t)__builtin_ctzll(b);
-        task_id[(*complete_cnt)] = task_id_map[idx];
-        WORKER_LOGF("completed,complete_cnt,%d,task_id,%u,core,%d,bitmap,%u", *complete_cnt,
-                    task_id_map[idx], (int)idx, (unsigned)b);
-        (*complete_cnt)++;
+        uint16_t tid = task_id_map[idx];
+        uint16_t slot = (uint16_t)(tid & RING_MASK);
+        uint32_t total = g_basic_buf[slot].count;
+        if (total < 1) {
+            total = 1;
+        }
+        /* Each FIN is one subtask of `tid`. The task is only reported complete to
+         * the cutter once all `total` of its blocks have FINed (SPMD aggregation). */
+        g_completed_subtask_cnt++;
+        g_spmd_completed[slot]++;
+        if (g_spmd_completed[slot] >= total) {
+            task_id[(*complete_cnt)] = tid;
+            (*complete_cnt)++;
+            g_spmd_completed[slot] = 0;
+            g_spmd_dispatched[slot] = 0;
+        }
+        WORKER_LOGF("completed,complete_cnt,%d,task_id,%u,core,%d,subtask,%u/%u", *complete_cnt,
+                    tid, (int)idx, (unsigned)g_spmd_completed[slot], (unsigned)total);
         cnt--;
         b &= (b - 1);
     }
@@ -82,71 +106,90 @@ static inline void push_2_completed_queue(int tid)
 }
 
 // TODO: Work Stealing
+/* Dispatch one block (subtask) of `task_id` to (core, slot). */
+static inline void send_block(ctrl_t *ctrl, int type, int exe_type, uint16_t task_id, int core,
+                              int slot, uint64_t mask)
+{
+    g_executors[exe_type][core].tasks[slot] = task_id;
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_consume_task_slot(task_id);
+#endif
+    uint32_t raw_duration = g_basic_buf[task_id & RING_MASK].duration;
+    g_executors[exe_type][core].duration[slot] = (raw_duration > 10000) ? (raw_duration / 10000) : 1;
+    g_executors[exe_type][core].idx = slot;
+
+    if (slot == 1) {
+        ctrl->task_id_map2[type][core] = task_id;
+    } else {
+        ctrl->task_id_map1[type][core] = task_id;
+    }
+
+    ctrl->free_bitmap[type][slot] &= ~mask;
+#ifdef ESL_PROXY_ONBOARD
+    esl_onboard_publish_atomic_u64(&ctrl->free_bitmap[type][slot]);
+    if (g_aicore_bridge != NULL) {
+        aicore_bridge_dispatch_task(g_aicore_bridge, (int)ctrl->tid, task_id, core, slot, exe_type);
+    } else {
+        ctrl->msg_bitmap[type][slot] |= mask;
+    }
+#else
+    /* Host sim: Fake Return */
+    ctrl->msg_bitmap[type][slot] |= mask;
+#endif
+}
+
 static inline int send_task(ctrl_t *ctrl, int type)
 {
     int exe_type = type;
-    // Check both slots - slot is free if neither slot 0 nor slot 1 has been sent a task
+    // A core is available if both its slots are free.
     uint64_t free_bitmap =
         ctrl->free_bitmap[type][0] &
         ctrl->free_bitmap[type][1];
 #ifdef ESL_PROXY_ONBOARD
     free_bitmap &= (uint64_t)((1ULL << ESL_PROXY_ONBOARD_BLOCK_DIM) - 1);
 #endif
-    int cnt = __builtin_popcountll(free_bitmap);
-    if (cnt <= 0) {
-        WORKER_LOGF("send,free_cnt,%d", cnt);
+    int free_cnt = __builtin_popcountll(free_bitmap);
+    if (free_cnt <= 0) {
+        WORKER_LOGF("send,free_cnt,%d", free_cnt);
         return 0;
     }
-    uint16_t task_ids[AIC_CNT];
-    if (!batch_dequeue(&ctrl->ready_queue[type], task_ids, &cnt)){
-        return 0;
-    }
-    
+
     int sent = 0;
-    for (int i = 0; i < cnt; i++) {
-        uint16_t task_id = task_ids[i];
-        uint64_t idx = (uint64_t)__builtin_ctzll(free_bitmap);
-
-        uint64_t mask = (uint64_t)0x1 << idx;
-        // Determine which slot to use - prefer slot 0 if it's not busy
-        uint64_t fb0 = ctrl->free_bitmap[type][0];
-        int slot = (fb0 & mask) != 0 ? 0 : 1;
-        // Set executor's tasks and duration
-        int core = (int)idx;
-        g_executors[exe_type][core].tasks[slot] = task_id;
-#ifdef ESL_PROXY_ONBOARD
-        esl_onboard_consume_task_slot(task_id);
-#endif
-        // Scale down duration for faster simulation (divide by 10000 to handle large durations)
-        uint32_t raw_duration = g_basic_buf[task_id & RING_MASK].duration;
-        g_executors[exe_type][core].duration[slot] = (raw_duration > 10000) ? (raw_duration / 10000) : 1;
-        g_executors[exe_type][core].idx = slot;  // Point to the slot with the new task
-        
-        if (slot == 1) {
-            ctrl->task_id_map2[type][idx] = task_id;
-        } else {
-            ctrl->task_id_map1[type][idx] = task_id;
+    /* SPMD fan-out: pull one ready task, dispatch min(idle_cores, remaining
+     * blocks) of its subtasks this pass; re-queue it if blocks remain (a later
+     * pass picks it up once cores free). Non-SPMD tasks (count==1) dispatch once,
+     * exactly as before. */
+    while (free_cnt > 0) {
+        uint16_t task_id;
+        uint16_t n = 1;
+        if (!batch_dequeue(&ctrl->ready_queue[type], &task_id, &n) || n == 0) {
+            break;
         }
-        
-        ctrl->free_bitmap[type][slot] &= ~mask;
-#ifdef ESL_PROXY_ONBOARD
-        esl_onboard_publish_atomic_u64(&ctrl->free_bitmap[type][slot]);
-#endif
-
-#ifdef ESL_PROXY_ONBOARD
-        if (g_aicore_bridge != NULL) {
-            aicore_bridge_dispatch_task(g_aicore_bridge, (int)ctrl->tid, task_id, core, slot,
-                                        exe_type);
-        } else {
-            ctrl->msg_bitmap[type][slot] |= mask;
+        uint16_t slot_idx = (uint16_t)(task_id & RING_MASK);
+        uint32_t total = g_basic_buf[slot_idx].count;
+        if (total < 1) {
+            total = 1;
         }
-#else
-        /* Host sim: Fake Return */
-        ctrl->msg_bitmap[type][slot] |= mask;
-#endif
-        WORKER_LOGF("send,task_id,%u,core,%d,slot,%d,type,%d", task_id, core, slot, type);
-        sent++;
-        free_bitmap &= ~mask;
+        int remaining = (int)total - (int)g_spmd_dispatched[slot_idx];
+        int claim = remaining < free_cnt ? remaining : free_cnt;
+        for (int b = 0; b < claim; b++) {
+            uint64_t idx = (uint64_t)__builtin_ctzll(free_bitmap);
+            uint64_t mask = (uint64_t)0x1 << idx;
+            int slot = (ctrl->free_bitmap[type][0] & mask) != 0 ? 0 : 1;
+            send_block(ctrl, type, exe_type, task_id, (int)idx, slot, mask);
+            WORKER_LOGF("send,task_id,%u,core,%d,slot,%d,block,%d/%u", task_id, (int)idx, slot,
+                        (int)g_spmd_dispatched[slot_idx] + b, (unsigned)total);
+            free_bitmap &= ~mask;
+            free_cnt--;
+            sent++;
+        }
+        g_spmd_dispatched[slot_idx] = (uint16_t)((int)g_spmd_dispatched[slot_idx] + claim);
+        if (g_spmd_dispatched[slot_idx] < total) {
+            /* Blocks remain but no idle cores left this pass — re-queue. */
+            uint16_t one = task_id;
+            batch_enqueue(&ctrl->ready_queue[type], &one, 1);
+            break;
+        }
     }
     return sent;
 }
@@ -262,9 +305,12 @@ void dispatch_loop_run(int tid)
         uint64_t pred0 = (first_uncomp >= 0) ? (uint64_t)g_predecessor_cnt[first_uncomp] : 0;
         uint64_t rqc = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_CUBE].cnt;
         uint64_t rqv = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_VECTOR].cnt;
+        /* stats[4] packs commit (low32) | completed_subtask_cnt (high32) so the
+         * host can verify both task-count and subtask-count match. */
         esl_write_stats((uint64_t)end, (uint64_t)g_subtask_cnt,
                         (uint64_t)g_completed_cnt,
-                        (uint64_t)g_commit_task_id,
+                        ((uint64_t)(uint32_t)g_commit_task_id) |
+                            ((uint64_t)(uint32_t)g_completed_subtask_cnt << 32),
                         (uint64_t)n_uncomp, ((uint64_t)(uint32_t)first_uncomp) | (pred0 << 32),
                         (rqc & 0xffffffffULL) | (rqv << 32));
     }

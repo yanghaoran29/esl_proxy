@@ -1085,9 +1085,14 @@ int esl_onboard_run(int argc, char **argv) {
            "wall_ns=%llu\n",
         (unsigned long long)stats[0], (unsigned long long)stats[1],
         (unsigned long long)stats[2], (unsigned long long)stats[3]);
+    /* stats[4] = commit (low32) | completed_subtask_cnt (high32). */
+    unsigned long long commit_lo = (unsigned long long)(stats[4] & 0xffffffffULL);
+    unsigned long long completed_subtask = (unsigned long long)(stats[4] >> 32);
+    printf("esl_proxy onboard: completed_subtask_cnt=%llu (expected subtask_cnt=%llu)\n",
+        completed_subtask, (unsigned long long)stats[1]);
     printf("[diag] commit=%llu n_uncomp=%llu first_uncomp=%u pred_cnt[first]=%u "
            "ready_cube=%u ready_vec=%u\n",
-        (unsigned long long)stats[4], (unsigned long long)stats[5],
+        commit_lo, (unsigned long long)stats[5],
         (unsigned)(stats[6] & 0xffffffffULL), (unsigned)(stats[6] >> 32),
         (unsigned)(stats[7] & 0xffffffffULL), (unsigned)(stats[7] >> 32));
     fflush(stdout);
@@ -1111,8 +1116,18 @@ int esl_onboard_run(int argc, char **argv) {
         aclFinalize();
         _Exit(1);
     }
-    printf("esl_proxy onboard: OK (all %llu tasks completed)\n",
-        (unsigned long long)stats[0]);
+    if (completed_subtask != (unsigned long long)stats[1]) {
+        fprintf(stderr,
+            "esl_proxy onboard: FAIL (completed_subtask %llu != subtask_cnt %llu — "
+            "SPMD subtasks not fully dispatched)\n",
+            completed_subtask, (unsigned long long)stats[1]);
+        fflush(stderr);
+        aclrtResetDevice(device_id);
+        aclFinalize();
+        _Exit(1);
+    }
+    printf("esl_proxy onboard: OK (all %llu tasks / %llu subtasks completed)\n",
+        (unsigned long long)stats[0], completed_subtask);
     fflush(stdout);
     aclrtResetDevice(device_id);
     aclFinalize();
