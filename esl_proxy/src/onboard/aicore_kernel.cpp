@@ -5,6 +5,7 @@
 #include "kernel_args.h"
 #include "esl_runtime.h"
 #include "onboard_config.h"
+#include "onboard_tensor.h"
 
 
 #ifdef __CCE_KT_TEST__
@@ -19,14 +20,38 @@
 #define KERNEL_ENTRY(x) x##_0_mix_aic
 #endif
 
-extern "C" __attribute__((weak)) __aicore__ void fake_kernel(__gm__ int64_t *args)
+extern "C" __attribute__((weak)) __aicore__ void fake_kernel(__gm__ EslFakeDispatchPayload *payload)
 {
-    if (args == nullptr) {
+    if (payload == nullptr) {
         return;
     }
-    uint64_t duration = (uint64_t)args[0];
-    uint64_t mask = (uint64_t)args[1];
-    duration += mask & 0x1Fu;
+
+    const uint16_t task_id = payload->task.id;
+    uint16_t tensor_cnt = payload->task.tensor_cnt;
+    uint16_t scalar_cnt = payload->task.scalar_cnt;
+    if (tensor_cnt > ESL_ONBOARD_MAX_TENSOR_ARGS) {
+        tensor_cnt = ESL_ONBOARD_MAX_TENSOR_ARGS;
+    }
+    if (scalar_cnt > ESL_ONBOARD_MAX_SCALAR_ARGS) {
+        scalar_cnt = ESL_ONBOARD_MAX_SCALAR_ARGS;
+    }
+
+    __gm__ int64_t *args = reinterpret_cast<__gm__ int64_t *>(payload->args);
+
+    uint64_t duration = static_cast<uint64_t>(payload->duration_ticks);
+    duration += static_cast<uint64_t>(task_id & 0x1Fu);
+
+    for (uint16_t i = 0; i < tensor_cnt; ++i) {
+        __gm__ EslOnboardTensor *t = reinterpret_cast<__gm__ EslOnboardTensor *>(args[i]);
+        if (t != nullptr) {
+            dcci(t, SINGLE_CACHE_LINE);
+            duration += static_cast<uint64_t>(t->shapes[0] & 0x3u);
+        }
+    }
+
+    for (uint16_t i = 0; i < scalar_cnt; ++i) {
+        duration += static_cast<uint64_t>(args[tensor_cnt + i]) & 0x7u;
+    }
 
     uint64_t start;
     asm volatile("MOV %0, SYS_CNT\n" : "+l"(start));
@@ -39,6 +64,7 @@ extern "C" __attribute__((weak)) __aicore__ void fake_kernel(__gm__ int64_t *arg
         }
     }
 }
+
 __aicore__ __attribute__((weak)) void aicore_execute(__gm__ EslRuntime *runtime, int block_idx, CoreType worker_core_type)
 {
     __gm__ EslHandshake *my_hank = (__gm__ EslHandshake *)(&runtime->workers[block_idx]);
@@ -64,7 +90,8 @@ __aicore__ __attribute__((weak)) void aicore_execute(__gm__ EslRuntime *runtime,
     my_hank->aicore_done = static_cast<uint32_t>(block_idx + 1);
     dcci(my_hank, SINGLE_CACHE_LINE, CACHELINE_OUT);
 
-    __gm__ EslFakeTaskArgs *payload_base = reinterpret_cast<__gm__ EslFakeTaskArgs *>(my_hank->task);
+    __gm__ EslFakeDispatchPayload *payload_base =
+        reinterpret_cast<__gm__ EslFakeDispatchPayload *>(my_hank->task);
 
     uint32_t reg_val = AICPU_IDLE_TASK_ID;
     uint32_t last_reg_val = AICPU_IDLE_TASK_ID;
@@ -82,12 +109,12 @@ __aicore__ __attribute__((weak)) void aicore_execute(__gm__ EslRuntime *runtime,
         }
 
         uint32_t task_id = reg_val;
-        __gm__ EslFakeTaskArgs *exec_args = payload_base + (task_id & 1u);
-        dcci(exec_args, ENTIRE_DATA_CACHE);
+        __gm__ EslFakeDispatchPayload *exec_payload = payload_base + (task_id & 1u);
+        dcci(exec_payload, ENTIRE_DATA_CACHE);
 
         write_reg(REG_ID_COND, MAKE_ACK_VALUE(task_id));
 
-        fake_kernel(reinterpret_cast<__gm__ int64_t *>(exec_args));
+        fake_kernel(exec_payload);
 
         last_reg_val = reg_val;
         write_reg(REG_ID_COND, MAKE_FIN_VALUE(task_id));

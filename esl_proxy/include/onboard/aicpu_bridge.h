@@ -41,7 +41,7 @@ void esl_shutdown_all_cores(EslRuntime *runtime);
 uint64_t esl_handshake_reg_addr(int core_idx);
 
 void esl_dispatch_payload_init(EslRuntime *runtime);
-void esl_dispatch_payload_prepare(int core, uint16_t task_id, uint32_t raw_duration);
+void esl_dispatch_payload_prepare(int core, uint16_t task_id, const EslOnboardDispatchInput *input);
 
 void set_platform_regs(uint64_t regs);
 uint64_t get_platform_regs(void);

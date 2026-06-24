@@ -26,8 +26,6 @@
 #define ESL_PROXY_KARGS_LOG_LEVEL 1 /* DLOG_INFO */
 #endif
 
-#define ESL_AICPU_INIT_NAME "simpler_aicpu_init"
-#define ESL_AICPU_EXEC_NAME "simpler_aicpu_exec"
 #define kHalMemCtlEacces 13
 #define kHalMemCtlMaxRetries 3
 #define ESL_BOOTSTRAP_CACHE_MAX 32
@@ -268,58 +266,6 @@ static int bootstrap_insert(uint64_t fp, int device_id)
     return 1;
 }
 
-static void make_inner_basename(uint64_t fp, int device_id, char *buf, size_t buf_size)
-{
-    snprintf(buf, buf_size, "simpler_inner_%016lx_%d.so", (unsigned long)fp, device_id);
-}
-
-static void make_op_type(const char *base, uint64_t fp, char *buf, size_t buf_size)
-{
-    snprintf(buf, buf_size, "%s_%016lx", base, (unsigned long)fp);
-}
-
-static int write_json(const char *path, const char *kernel_so, uint64_t fp)
-{
-    FILE *out;
-    char init_op[128];
-    char exec_op[128];
-
-    out = fopen(path, "w");
-    if (out == NULL) {
-        return 0;
-    }
-
-    make_op_type(ESL_AICPU_INIT_NAME, fp, init_op, sizeof(init_op));
-    make_op_type(ESL_AICPU_EXEC_NAME, fp, exec_op, sizeof(exec_op));
-
-    fprintf(out, "{\n");
-    fprintf(out, "  \"%s\": {\n", init_op);
-    fprintf(out, "    \"opInfo\": {\n");
-    fprintf(out, "      \"functionName\": \"%s\",\n", ESL_AICPU_INIT_NAME);
-    fprintf(out, "      \"kernelSo\": \"%s\",\n", kernel_so);
-    fprintf(out, "      \"opKernelLib\": \"AICPUKernel\",\n");
-    fprintf(out, "      \"computeCost\": \"100\",\n");
-    fprintf(out, "      \"engine\": \"DNN_VM_AICPU\",\n");
-    fprintf(out, "      \"flagAsync\": \"False\",\n");
-    fprintf(out, "      \"flagPartial\": \"False\",\n");
-    fprintf(out, "      \"userDefined\": \"False\"\n");
-    fprintf(out, "    }\n  },\n");
-    fprintf(out, "  \"%s\": {\n", exec_op);
-    fprintf(out, "    \"opInfo\": {\n");
-    fprintf(out, "      \"functionName\": \"%s\",\n", ESL_AICPU_EXEC_NAME);
-    fprintf(out, "      \"kernelSo\": \"%s\",\n", kernel_so);
-    fprintf(out, "      \"opKernelLib\": \"AICPUKernel\",\n");
-    fprintf(out, "      \"computeCost\": \"100\",\n");
-    fprintf(out, "      \"engine\": \"DNN_VM_AICPU\",\n");
-    fprintf(out, "      \"flagAsync\": \"False\",\n");
-    fprintf(out, "      \"flagPartial\": \"False\",\n");
-    fprintf(out, "      \"userDefined\": \"False\"\n");
-    fprintf(out, "    }\n  }\n");
-    fprintf(out, "}\n");
-    fclose(out);
-    return 1;
-}
-
 EslAicpuLoader *esl_aicpu_loader_create(void)
 {
     return (EslAicpuLoader *)calloc(1, sizeof(EslAicpuLoader));
@@ -366,7 +312,7 @@ int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader, const void *dispatcher_so
 
     loader->device_id = device_id;
     loader->inner_fp = esl_fingerprint_bytes(inner_so, inner_len);
-    make_inner_basename(loader->inner_fp, device_id, loader->inner_basename, sizeof(loader->inner_basename));
+    esl_make_inner_basename(loader->inner_fp, device_id, loader->inner_basename, sizeof(loader->inner_basename));
 
     pthread_mutex_lock(&g_bootstrap_mu);
     if (bootstrap_seen(loader->inner_fp, device_id)) {
@@ -477,7 +423,7 @@ int esl_aicpu_loader_init(EslAicpuLoader *loader)
 
     snprintf(loader->json_path, sizeof(loader->json_path), "/tmp/esl_proxy_inner_%016lx_%d.json",
              (unsigned long)loader->inner_fp, getpid());
-    if (!write_json(loader->json_path, loader->inner_basename, loader->inner_fp)) {
+    if (!esl_write_aicpu_kernel_json(loader->json_path, loader->inner_basename, loader->inner_fp)) {
         return -1;
     }
 
@@ -494,8 +440,8 @@ int esl_aicpu_loader_init(EslAicpuLoader *loader)
         return (int)rc;
     }
 
-    make_op_type(ESL_AICPU_INIT_NAME, loader->inner_fp, init_op, sizeof(init_op));
-    make_op_type(ESL_AICPU_EXEC_NAME, loader->inner_fp, exec_op, sizeof(exec_op));
+    esl_make_aicpu_op_type(ESL_AICPU_INIT_NAME, loader->inner_fp, init_op, sizeof(init_op));
+    esl_make_aicpu_op_type(ESL_AICPU_EXEC_NAME, loader->inner_fp, exec_op, sizeof(exec_op));
     rc = rtsFuncGetByName(loader->binary_handle, init_op, &loader->init_handle);
     if (rc != RT_ERROR_NONE) {
         return (int)rc;
@@ -821,12 +767,12 @@ int esl_onboard_run(int argc, char **argv)
     ACL_CHECK(devmem_alloc(&dev_runtime, sizeof(EslRuntime)), "runtime GM");
     ACL_CHECK(devmem_alloc(&dev_wall, 8 * sizeof(uint64_t)), "device stats GM");
     ACL_CHECK(devmem_alloc(&dev_k_args, sizeof(EslKernelArgs)), "device KernelArgs GM");
-    payload_bytes = (size_t)ESL_PROXY_FAKE_AICORE_COUNT * 2U * sizeof(EslFakeTaskArgs);
+    payload_bytes = (size_t)ESL_PROXY_FAKE_AICORE_COUNT * 2U * sizeof(EslFakeDispatchPayload);
     ACL_CHECK(devmem_alloc(&dev_payload, payload_bytes), "fake task args GM");
     ACL_CHECK(aclrtMemset(dev_payload.ptr, payload_bytes, 0, payload_bytes), "zero payload GM");
 
     for (i = 0; i < ESL_PROXY_FAKE_AICORE_COUNT; ++i) {
-        uint8_t *base = (uint8_t *)dev_payload.ptr + (size_t)i * 2U * sizeof(EslFakeTaskArgs);
+        uint8_t *base = (uint8_t *)dev_payload.ptr + (size_t)i * 2U * sizeof(EslFakeDispatchPayload);
 
         host_runtime.workers[i].task = (uint64_t)(uintptr_t)base;
     }

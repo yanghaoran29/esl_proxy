@@ -31,7 +31,7 @@
 #include "conf.h"
 
 #ifdef ESL_PROXY_ONBOARD
-#include "onboard_config.h"
+#include "tools.h"
 #else
 static inline uint64_t get_time_ns(void)
 {

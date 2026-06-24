@@ -368,13 +368,16 @@ static int64_t scale_duration_ticks(uint32_t raw)
     return d;
 }
 
-void esl_dispatch_payload_prepare(int core, uint16_t task_id, uint32_t raw_duration)
+void esl_dispatch_payload_prepare(int core, uint16_t task_id, const EslOnboardDispatchInput *input)
 {
-    EslFakeTaskArgs *p;
+    EslFakeDispatchPayload *p;
     uint64_t base;
     int slot;
+    uint16_t tc;
+    uint16_t sc;
+    int i;
 
-    if (g_runtime == NULL || core < 0 || core >= RUNTIME_MAX_WORKER) {
+    if (g_runtime == NULL || core < 0 || core >= RUNTIME_MAX_WORKER || input == NULL) {
         return;
     }
     base = g_runtime->workers[core].task;
@@ -382,10 +385,31 @@ void esl_dispatch_payload_prepare(int core, uint16_t task_id, uint32_t raw_durat
         return;
     }
     slot = (int)(task_id & 1u);
-    p = (EslFakeTaskArgs *)(uintptr_t)(base + (uint64_t)slot * sizeof(EslFakeTaskArgs));
-    p->duration = scale_duration_ticks(raw_duration);
-    p->mask = (int64_t)task_id;
-    cache_flush_range(p, sizeof(EslFakeTaskArgs));
+    p = (EslFakeDispatchPayload *)(uintptr_t)(base + (uint64_t)slot * sizeof(EslFakeDispatchPayload));
+
+    memset(p, 0, sizeof(*p));
+    p->task = input->task;
+    p->duration_ticks = scale_duration_ticks(input->task.duration);
+    p->task_id_mask = (int64_t)task_id;
+
+    tc = input->task.tensor_cnt;
+    sc = input->task.scalar_cnt;
+    if (tc > ESL_ONBOARD_MAX_TENSOR_ARGS) {
+        tc = ESL_ONBOARD_MAX_TENSOR_ARGS;
+    }
+    if (sc > ESL_ONBOARD_MAX_SCALAR_ARGS) {
+        sc = ESL_ONBOARD_MAX_SCALAR_ARGS;
+    }
+
+    for (i = 0; i < (int)tc; ++i) {
+        p->tensors[i].buffer_addr = input->tensor_addrs[i];
+        p->args[i] = (uint64_t)(uintptr_t)&p->tensors[i];
+    }
+    for (i = 0; i < (int)sc; ++i) {
+        p->args[tc + (uint16_t)i] = (uint64_t)input->scalars[i];
+    }
+
+    cache_flush_range(p, sizeof(EslFakeDispatchPayload));
 }
 
 static int wait_handshake_field(volatile uint32_t *field, uint32_t expect)

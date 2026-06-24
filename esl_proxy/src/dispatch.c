@@ -6,27 +6,21 @@
  */
 
 #include "dispatch.h"
+#include "cutter.h"
+#include "executor.h"
 #include "log.h"
 #include "ring_buf.h"
 
 #include <stdint.h>
 
 #ifdef ESL_PROXY_ONBOARD
-#include "aicpu_bridge.h"
+#include "aicpu_runtime.h"
 static AicoreBridge *g_aicore_bridge;
 void dispatch_set_aicore_bridge(void *bridge)
 {
     g_aicore_bridge = (AicoreBridge *)bridge;
 }
 #endif
-
-extern atomic_int g_task_id;
-extern atomic_bool g_orch_is_done;
-extern atomic_int g_completed_cnt;
-extern atomic_bool g_is_done;
-extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
-extern struct task_desc g_basic_buf[RING_SIZE];
-extern executor_t g_executors[EXE_TYPE_CNT][AIC_CNT];
 
 static inline void get_free_exe(int tid)
 {
@@ -160,7 +154,9 @@ void dispatch_loop_run(int tid)
     int prev = g_completed_cnt;
     int count = 10000;
     while (atomic_load(&g_completed_cnt) < atomic_load(&g_task_id)) {
+#ifdef ESL_PROXY_ONBOARD
         esl_onboard_invalidate_shared_before_worker();
+#endif
         total_sent += dispatch(tid);
 #ifdef ESL_PROXY_ONBOARD
         if (g_aicore_bridge != NULL) {

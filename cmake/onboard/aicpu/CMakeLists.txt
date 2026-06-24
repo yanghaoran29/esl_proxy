@@ -79,6 +79,7 @@ set_target_properties(aicpu_kernel PROPERTIES OUTPUT_NAME aicpu_kernel)
 
 set(AICPU_DISPATCHER_SOURCES
     "${ESL_ONBOARD_DIR}/aicpu_dispatcher.c"
+    "${ESL_ONBOARD_DIR}/tools.c"
 )
 add_library(aicpu_dispatcher SHARED ${AICPU_DISPATCHER_SOURCES})
 

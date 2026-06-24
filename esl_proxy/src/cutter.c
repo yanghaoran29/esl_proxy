@@ -2,7 +2,7 @@
 #include "log.h"
 #include "ring_buf.h"
 #ifdef ESL_PROXY_ONBOARD
-#include "aicpu_bridge.h"
+#include "aicpu_runtime.h"
 #endif
 #include <stdint.h>
 #include <stdlib.h>
@@ -208,7 +208,9 @@ void cutter_loop_run(void)
     int stall = 0;
     uint16_t prev_commit = g_commit_task_id;
     while (g_commit_task_id < atomic_load(&g_task_id)) {
+#ifdef ESL_PROXY_ONBOARD
         esl_onboard_invalidate_shared_before_worker();
+#endif
         cutter_loop_once();
         if (g_commit_task_id != prev_commit) {
             prev_commit = g_commit_task_id;

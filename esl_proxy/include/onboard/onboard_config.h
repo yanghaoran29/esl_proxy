@@ -6,6 +6,8 @@
 
 #include <stdint.h>
 
+#include "onboard_tensor.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -33,11 +35,6 @@ extern "C" {
 #define PLATFORM_PROF_SYS_CNT_FREQ 50000000ULL
 #define ESL_ONBOARD_SYS_CNT_FREQ PLATFORM_PROF_SYS_CNT_FREQ
 
-static inline double cycles_to_us(uint64_t cycles)
-{
-    return ((double)cycles / (double)PLATFORM_PROF_SYS_CNT_FREQ) * 1000000.0;
-}
-
 #define REG_SPR_DATA_MAIN_BASE_OFFSET 0xA0U
 #define REG_SPR_COND_OFFSET 0x4C8U
 #define REG_SPR_FAST_PATH_ENABLE_OFFSET 0x18U
@@ -45,26 +42,6 @@ static inline double cycles_to_us(uint64_t cycles)
 #define REG_SPR_FAST_PATH_CLOSE 0xFU
 #define AICORE_EXIT_SIGNAL 0x7FFFFFF0U
 #define AICORE_COREID_MASK 0x0FFFU
-
-typedef enum {
-    REG_ID_DATA_MAIN_BASE = 0,
-    REG_ID_COND = 1,
-    REG_ID_FAST_PATH_ENABLE = 2,
-} RegId;
-
-static inline uint32_t reg_offset(RegId reg)
-{
-    switch (reg) {
-    case REG_ID_DATA_MAIN_BASE:
-        return REG_SPR_DATA_MAIN_BASE_OFFSET;
-    case REG_ID_COND:
-        return REG_SPR_COND_OFFSET;
-    case REG_ID_FAST_PATH_ENABLE:
-        return REG_SPR_FAST_PATH_ENABLE_OFFSET;
-    default:
-        return 0U;
-    }
-}
 
 #define SIM_REG_BLOCK_SIZE 0x500U
 #define PLATFORM_SUB_CORES_PER_AICORE PLATFORM_CORES_PER_BLOCKDIM
@@ -91,24 +68,43 @@ static inline uint32_t reg_offset(RegId reg)
 /* --- host HAL register query --- */
 #define PLATFORM_AICORE_MAP_BUFF_LEN 2U
 
-/* --- host-side sys counter (core log / sim) --- */
-static inline uint64_t esl_onboard_sys_cnt(void)
-{
-    uint64_t ticks;
-    __asm__ __volatile__("mrs %0, cntvct_el0" : "=r"(ticks));
-    return ticks;
-}
+/* --- fake_kernel GM payload (dual-buffer per core, task_id & 1) --- */
+#define ESL_ONBOARD_MAX_TENSOR_ARGS 16
+#define ESL_ONBOARD_MAX_SCALAR_ARGS 32
+#define ESL_ONBOARD_MAX_KERNEL_ARGS (ESL_ONBOARD_MAX_TENSOR_ARGS + ESL_ONBOARD_MAX_SCALAR_ARGS)
 
-static inline uint64_t get_time_ns(void)
-{
-    return esl_onboard_sys_cnt() * 1000000000ULL / PLATFORM_PROF_SYS_CNT_FREQ;
-}
+typedef enum {
+    REG_ID_DATA_MAIN_BASE = 0,
+    REG_ID_COND = 1,
+    REG_ID_FAST_PATH_ENABLE = 2,
+} RegId;
 
-/* --- fake_kernel GM payload --- */
-typedef struct EslFakeTaskArgs {
-    int64_t duration;
-    int64_t mask;
-} EslFakeTaskArgs;
+typedef struct EslOnboardTaskDesc {
+    uint16_t id;
+    uint16_t type;
+    uint16_t mode;
+    uint16_t tensor_cnt;
+    uint16_t scalar_cnt;
+    uint16_t duration;
+    uint16_t _pad;
+    uint32_t index;
+    uint32_t count;
+    uint64_t kernel;
+} EslOnboardTaskDesc;
+
+typedef struct EslOnboardDispatchInput {
+    EslOnboardTaskDesc task;
+    uint64_t tensor_addrs[ESL_ONBOARD_MAX_TENSOR_ARGS];
+    int64_t scalars[ESL_ONBOARD_MAX_SCALAR_ARGS];
+} EslOnboardDispatchInput;
+
+typedef struct EslFakeDispatchPayload {
+    EslOnboardTaskDesc task;
+    int64_t duration_ticks;
+    int64_t task_id_mask;
+    uint64_t args[ESL_ONBOARD_MAX_KERNEL_ARGS];
+    EslOnboardTensor tensors[ESL_ONBOARD_MAX_TENSOR_ARGS];
+} __attribute__((aligned(64))) EslFakeDispatchPayload;
 
 #ifdef __cplusplus
 }

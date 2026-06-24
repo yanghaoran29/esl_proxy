@@ -248,6 +248,30 @@ int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid)
     return 0;
 }
 
+static void esl_pack_dispatch_input(EslOnboardDispatchInput *in, uint16_t task_id)
+{
+    const struct task_desc *td = &g_basic_buf[task_id & RING_MASK];
+    uint16_t i;
+
+    memset(in, 0, sizeof(*in));
+    in->task.id = td->id;
+    in->task.type = (uint16_t)td->type;
+    in->task.mode = (uint16_t)td->mode;
+    in->task.tensor_cnt = td->tensor_cnt;
+    in->task.scalar_cnt = td->scalar_cnt;
+    in->task.duration = (uint16_t)td->duration;
+    in->task.index = td->index;
+    in->task.count = td->count;
+    in->task.kernel = (uint64_t)(uintptr_t)td->kernel;
+
+    for (i = 0; i < td->tensor_cnt && i < ESL_ONBOARD_MAX_TENSOR_ARGS; ++i) {
+        in->tensor_addrs[i] = td->data[i];
+    }
+    for (i = 0; i < td->scalar_cnt && i < ESL_ONBOARD_MAX_SCALAR_ARGS; ++i) {
+        in->scalars[i] = td->scalar[i];
+    }
+}
+
 int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t task_id, int core, int slot,
                                 int exe_type)
 {
@@ -260,8 +284,10 @@ int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t
         g_ctrl_t[0].msg_bitmap[exe_type][slot] |= ((uint64_t)1 << core);
         return 0;
     }
-    const uint32_t raw = g_basic_buf[task_id & RING_MASK].duration;
-    esl_dispatch_payload_prepare(phys, task_id, raw);
+    EslOnboardDispatchInput din;
+
+    esl_pack_dispatch_input(&din, task_id);
+    esl_dispatch_payload_prepare(phys, task_id, &din);
     const uint64_t reg_addr = core_reg_addr(phys);
     if (reg_addr == 0) {
         return -1;

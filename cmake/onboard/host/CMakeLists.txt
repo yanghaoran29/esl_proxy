@@ -24,6 +24,7 @@ set(ESL_SRC "${ESL_CORE}/src")
 add_executable(esl_onboard_runner
     "${ESL_SRC}/main.c"
     "${ONBOARD_SRC}/host_onboard.c"
+    "${ONBOARD_SRC}/tools.c"
 )
 
 target_compile_definitions(esl_onboard_runner PRIVATE ESL_PROXY_ONBOARD_HOST=1)
