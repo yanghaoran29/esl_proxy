@@ -246,7 +246,7 @@ void dispatch_loop_run(int tid)
 #ifdef ESL_PROXY_ONBOARD
     {
         extern task_state *g_state_buf;
-        extern _Atomic uint16_t g_predecessor_cnt[];
+        extern uint16_t g_predecessor_cnt[];
         extern int g_subtask_cnt;
         int end = atomic_load_explicit(&g_task_id, memory_order_acquire);
         int first_uncomp = -1;
@@ -259,10 +259,7 @@ void dispatch_loop_run(int tid)
                 n_uncomp++;
             }
         }
-        uint64_t pred0 = (first_uncomp >= 0)
-                             ? (uint64_t)atomic_load_explicit(&g_predecessor_cnt[first_uncomp],
-                                                              memory_order_acquire)
-                             : 0;
+        uint64_t pred0 = (first_uncomp >= 0) ? (uint64_t)g_predecessor_cnt[first_uncomp] : 0;
         uint64_t rqc = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_CUBE].cnt;
         uint64_t rqv = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_VECTOR].cnt;
         esl_write_stats((uint64_t)end, (uint64_t)g_subtask_cnt,

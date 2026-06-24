@@ -43,7 +43,7 @@ void init_predecessors(void);
 
 extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
 extern task_state *g_state_buf;
-extern _Atomic uint16_t g_predecessor_cnt[RING_SIZE];
+extern uint16_t g_predecessor_cnt[RING_SIZE];
 extern _Atomic uint16_t g_commit_task_id;
 extern atomic_int g_completed_cnt;
 extern atomic_bool g_orch_is_done;

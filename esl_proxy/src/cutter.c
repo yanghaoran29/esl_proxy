@@ -34,7 +34,10 @@ extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
 extern _Atomic bool g_orch_is_done;
 extern _Atomic bool g_is_done;
 
-_Atomic uint16_t g_predecessor_cnt[RING_SIZE];
+/* Written only by the cutter thread (add_successors sets it, resolve_dep
+ * decrements it); cross-core visibility for the dispatch diag read is via
+ * esl_onboard_publish_predecessor_cnt / invalidate. Single-writer → no atomic. */
+uint16_t g_predecessor_cnt[RING_SIZE];
 _Atomic uint16_t g_commit_task_id = 0;
 uint16_t g_completed_task_cnt = 0;
 
@@ -113,7 +116,7 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) 
             ptr->cnt--;
             ptr->exp++;
         }
-        atomic_store_explicit(&g_predecessor_cnt[task_idx], predecessor_cnt, memory_order_release);
+        g_predecessor_cnt[task_idx] = predecessor_cnt;
 #ifdef ESL_PROXY_ONBOARD
         esl_onboard_publish_predecessor_cnt(task_idx);
 #endif
@@ -157,8 +160,7 @@ void resolve_dep(uint16_t cnt, uint16_t* cq_buf, uint16_t rq_buf[][LOCAL_BUFFER_
         WORKER_LOGF("completed,task_id,%u,type,%u, successor_cnt,%u", task_id, g_basic_buf[idx].type, succ_cnt);
         for (uint16_t k = 0; k < succ_cnt; k++) {
             succ_id = g_successor_buf[idx].node[k];
-            uint16_t pred_left =
-                atomic_fetch_sub_explicit(&g_predecessor_cnt[succ_id & RING_MASK], 1U, memory_order_acq_rel) - 1U;
+            uint16_t pred_left = (uint16_t)(--g_predecessor_cnt[succ_id & RING_MASK]);
 #ifdef ESL_PROXY_ONBOARD
             esl_onboard_publish_predecessor_cnt(succ_id);
 #endif
