@@ -64,11 +64,6 @@ void cache_flush_range(const void *addr, size_t size);
 
 void esl_onboard_invalidate_runtime(void *runtime);
 void esl_onboard_flush_shared_after_orch(void);
-void esl_onboard_invalidate_shared_before_worker(void);
-void esl_onboard_flush_after_cutter(void);
-void esl_onboard_flush_after_dispatch(void);
-void esl_onboard_flush_after_poll(void);
-void esl_onboard_invalidate_before_poll(void);
 
 #ifdef __cplusplus
 }

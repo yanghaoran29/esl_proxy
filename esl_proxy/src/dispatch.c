@@ -138,9 +138,6 @@ int dispatch(int tid)
     push_2_completed_queue(tid);
     total_sent += send_task(&g_ctrl_t[tid], TASK_TYPE_VECTOR);
     total_sent += send_task(&g_ctrl_t[tid], TASK_TYPE_CUBE);
-#ifdef ESL_PROXY_ONBOARD
-    esl_onboard_flush_after_dispatch();
-#endif
     return total_sent;
 }
 
@@ -150,13 +147,7 @@ void dispatch_loop_run(int tid)
     int total_sent = 0;
     uint64_t start_ns = get_time_ns();
 
-#ifdef ESL_PROXY_ONBOARD
-    esl_onboard_invalidate_shared_before_worker();
-#endif
     while (!atomic_load(&g_orch_is_done)) {
-#ifdef ESL_PROXY_ONBOARD
-        esl_onboard_invalidate_shared_before_worker();
-#endif
         total_sent += dispatch(tid);
 #ifdef ESL_PROXY_ONBOARD
         if (g_aicore_bridge != NULL) {
@@ -168,9 +159,6 @@ void dispatch_loop_run(int tid)
     int count = 10000;
     while (atomic_load_explicit(&g_completed_cnt, memory_order_acquire) <
            atomic_load_explicit(&g_task_id, memory_order_acquire)) {
-#ifdef ESL_PROXY_ONBOARD
-        esl_onboard_invalidate_shared_before_worker();
-#endif
         total_sent += dispatch(tid);
 #ifdef ESL_PROXY_ONBOARD
         if (g_aicore_bridge != NULL) {

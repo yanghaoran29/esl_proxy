@@ -30,7 +30,6 @@ extern atomic_int g_min_uncomplete_task;
 extern atomic_int g_completed_cnt;
 extern atomic_bool g_orch_is_done;
 extern atomic_bool g_is_done;
-extern atomic_flag g_lock_buf[RING_SIZE];
 extern struct task_desc g_basic_buf[RING_SIZE];
 extern struct predecessor_list g_predecessors[RING_SIZE];
 extern struct ring_buf g_predecessor_ring;
@@ -85,18 +84,6 @@ static inline void add_scalar(uint16_t task_id, int64_t t)
 {
     int idx = g_basic_buf[task_id & RING_MASK].scalar_cnt++;
     g_basic_buf[task_id & RING_MASK].scalar[idx] = t;
-}
-
-static inline void lock(int slotIdx)
-{
-    while (atomic_flag_test_and_set_explicit(&g_lock_buf[slotIdx], memory_order_acquire)) {
-        spin_wait();
-    }
-}
-
-static inline void unlock(int slotIdx)
-{
-    atomic_flag_clear_explicit(&g_lock_buf[slotIdx], memory_order_release);
 }
 
 static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uint16_t start)

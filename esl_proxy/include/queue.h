@@ -99,14 +99,22 @@ static inline bool enqueue(queue_t *queue, uint16_t item)
 
 static inline void lock_q(queue_t *queue)
 {
+#ifdef ESL_PROXY_ONBOARD
+    (void)queue;
+#else
     while (atomic_flag_test_and_set_explicit(&queue->lock, memory_order_acquire)) {
         spin_wait();
     }
+#endif
 }
 
 static inline void unlock_q(queue_t *queue)
 {
+#ifdef ESL_PROXY_ONBOARD
+    (void)queue;
+#else
     atomic_flag_clear_explicit(&queue->lock, memory_order_release);
+#endif
 }
 
 #endif

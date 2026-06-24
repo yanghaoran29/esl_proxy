@@ -269,7 +269,6 @@ int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid)
     if (bridge == NULL || !bridge->initialized) {
         return 0;
     }
-    esl_onboard_invalidate_before_poll();
     const int n_workers = bridge->runtime->worker_count;
     const int n_cores = ESL_PROXY_ONBOARD_BLOCK_DIM;
     for (int exe_type = 0; exe_type < EXE_TYPE_CNT; exe_type++) {
@@ -308,7 +307,6 @@ int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid)
             }
         }
     }
-    esl_onboard_flush_after_poll();
     return 0;
 }
 
@@ -393,49 +391,6 @@ void esl_onboard_flush_shared_after_orch(void)
     cache_flush_range(g_predecessor_cnt, sizeof(g_predecessor_cnt));
     cache_flush_range(g_state_buf, sizeof(task_state) * RING_SIZE);
     cache_flush_range(&g_commit_task_id, sizeof(g_commit_task_id));
-}
-
-void esl_onboard_invalidate_shared_before_worker(void)
-{
-    cache_invalidate_range(&g_task_id, sizeof(g_task_id));
-    cache_invalidate_range(&g_orch_is_done, sizeof(g_orch_is_done));
-    cache_invalidate_range(&g_completed_cnt, sizeof(g_completed_cnt));
-    cache_invalidate_range(&g_is_done, sizeof(g_is_done));
-    cache_invalidate_range(g_basic_buf, sizeof(g_basic_buf));
-    cache_invalidate_range(g_predecessors, sizeof(g_predecessors));
-    cache_invalidate_range(g_successor_buf, sizeof(g_successor_buf));
-    cache_invalidate_range(g_predecessor_cnt, sizeof(g_predecessor_cnt));
-    cache_invalidate_range(g_state_buf, sizeof(task_state) * RING_SIZE);
-    cache_invalidate_range(&g_commit_task_id, sizeof(g_commit_task_id));
-    cache_invalidate_range(g_ctrl_t, sizeof(g_ctrl_t));
-    cache_invalidate_range(g_executors, sizeof(g_executors));
-}
-
-void esl_onboard_invalidate_before_poll(void)
-{
-    cache_invalidate_range(g_executors, sizeof(g_executors));
-    cache_invalidate_range(g_ctrl_t, sizeof(g_ctrl_t));
-}
-
-void esl_onboard_flush_after_cutter(void)
-{
-    cache_flush_range(g_ctrl_t, sizeof(g_ctrl_t));
-    cache_flush_range(g_predecessor_cnt, sizeof(g_predecessor_cnt));
-    cache_flush_range(g_state_buf, sizeof(task_state) * RING_SIZE);
-    cache_flush_range(&g_completed_cnt, sizeof(g_completed_cnt));
-}
-
-void esl_onboard_flush_after_dispatch(void)
-{
-    cache_flush_range(g_ctrl_t, sizeof(g_ctrl_t));
-    cache_flush_range(g_executors, sizeof(g_executors));
-    cache_flush_range(&g_completed_cnt, sizeof(g_completed_cnt));
-}
-
-void esl_onboard_flush_after_poll(void)
-{
-    cache_flush_range(g_ctrl_t, sizeof(g_ctrl_t));
-    cache_flush_range(g_executors, sizeof(g_executors));
 }
 
 /* ========================================================================== */

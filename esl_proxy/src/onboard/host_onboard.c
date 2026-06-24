@@ -13,7 +13,6 @@
 #include <ascend_hal.h>
 #include <dlfcn.h>
 #include <errno.h>
-#include <pthread.h>
 #include <runtime/rt.h>
 #include <runtime/runtime/rts/rts_kernel.h>
 #include <stddef.h>
@@ -38,6 +37,22 @@
         aclError _rc = (call);                                             \
         if (_rc != ACL_SUCCESS) {                                          \
             fprintf(stderr, "%s failed: %d (%s)\n", #call, (int)_rc, msg); \
+            return 1;                                                      \
+        }                                                                  \
+    } while (0)
+#define ESL_HOST_SYNC_STREAM(stream, label)                                \
+    do {                                                                   \
+        aclError _rc = aclrtSynchronizeStreamWithTimeout(                  \
+            (stream), PLATFORM_STREAM_SYNC_TIMEOUT_MS);                    \
+        if (_rc == ACL_ERROR_RT_STREAM_SYNC_TIMEOUT) {                     \
+            fprintf(stderr,                                               \
+                "[esl_proxy] %s: TIMEOUT after %d ms\n", (label),          \
+                PLATFORM_STREAM_SYNC_TIMEOUT_MS);                          \
+            return 1;                                                      \
+        }                                                                  \
+        if (_rc != ACL_SUCCESS) {                                          \
+            fprintf(stderr, "[esl_proxy] %s failed: %d\n", (label),        \
+                (int)_rc);                                                 \
             return 1;                                                      \
         }                                                                  \
     } while (0)
@@ -236,7 +251,6 @@ typedef struct {
 
 static BootstrapKey g_bootstrapped[ESL_BOOTSTRAP_CACHE_MAX];
 static size_t g_bootstrapped_count;
-static pthread_mutex_t g_bootstrap_mu = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct {
     void *ptr;
@@ -324,16 +338,13 @@ int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader,
     esl_make_inner_basename(loader->inner_fp, device_id, loader->inner_basename,
         sizeof(loader->inner_basename));
 
-    pthread_mutex_lock(&g_bootstrap_mu);
     if (bootstrap_seen(loader->inner_fp, device_id)) {
-        pthread_mutex_unlock(&g_bootstrap_mu);
         fprintf(
             stderr,
             "[esl_proxy] AICPU inner SO already bootstrapped fp=%016lx dev=%d\n",
             (unsigned long)loader->inner_fp, device_id);
         return 0;
     }
-    pthread_mutex_unlock(&g_bootstrap_mu);
 
     rc = devbuf_alloc(&dev_dispatcher, dispatcher_len);
     if (rc != ACL_SUCCESS) {
@@ -411,7 +422,7 @@ int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader,
         devbuf_free(&dev_dispatcher);
         return (int)rrc;
     }
-    rc = aclrtSynchronizeStream(stream);
+    rc = aclrtSynchronizeStreamWithTimeout(stream, PLATFORM_STREAM_SYNC_TIMEOUT_MS);
     devbuf_free(&dev_args);
     devbuf_free(&dev_inner);
     devbuf_free(&dev_dispatcher);
@@ -419,9 +430,7 @@ int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader,
         return (int)rc;
     }
 
-    pthread_mutex_lock(&g_bootstrap_mu);
     bootstrap_insert(loader->inner_fp, device_id);
-    pthread_mutex_unlock(&g_bootstrap_mu);
     fprintf(stderr, "[esl_proxy] bootstrapped inner SO %s\n",
         loader->inner_basename);
     return 0;
@@ -893,7 +902,7 @@ int esl_onboard_run(int argc, char **argv) {
         return 1;
     }
     fprintf(stderr, "[esl_proxy] aicpu init sync\n");
-    ACL_CHECK(aclrtSynchronizeStream(stream_aicpu), "sync after aicpu init");
+    ESL_HOST_SYNC_STREAM(stream_aicpu, "sync after aicpu init");
 
     ESL_SWIMLANE_HOST_ONBOARD_SYNC_CORE_TYPES(swimlane_level, dev_runtime.ptr);
 
@@ -943,7 +952,7 @@ int esl_onboard_run(int argc, char **argv) {
     }
 
     fprintf(stderr, "[esl_proxy] aicpu exec sync\n");
-    ACL_CHECK(aclrtSynchronizeStream(stream_aicpu), "sync after aicpu exec");
+    ESL_HOST_SYNC_STREAM(stream_aicpu, "sync after aicpu exec");
     ESL_SWIMLANE_HOST_STOP_EXPORT();
     ESL_SWIMLANE_HOST_FINALIZE();
     fprintf(stderr, "[esl_proxy] done (aicore stream left to device reset)\n");

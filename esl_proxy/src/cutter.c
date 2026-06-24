@@ -180,38 +180,21 @@ void deal_completed_queue() {
 /* Host-sim pthread path only (main.c). Onboard uses esl_singlethread_drive instead. */
 void cutter_loop_once(void)
 {
-#ifdef ESL_PROXY_ONBOARD
-    esl_onboard_invalidate_shared_before_worker();
-#endif
     deal_completed_queue();
-#ifdef ESL_PROXY_ONBOARD
-    esl_onboard_flush_after_cutter();
-#endif
 }
 
 void cutter_loop_run(void)
 {
-#ifdef ESL_PROXY_ONBOARD
-    /* worker_enter called from executor.cpp */
-#else
+#ifndef ESL_PROXY_ONBOARD
     init_state_buf();
 #endif
-#ifdef ESL_PROXY_ONBOARD
-    esl_onboard_invalidate_shared_before_worker();
-#endif
     while (!atomic_load(&g_is_done)) {
-#ifdef ESL_PROXY_ONBOARD
-        esl_onboard_invalidate_shared_before_worker();
-#endif
         cutter_loop_once();
     }
     int stall = 0;
     uint16_t prev_commit = atomic_load_explicit(&g_commit_task_id, memory_order_acquire);
     while (atomic_load_explicit(&g_commit_task_id, memory_order_acquire) <
            atomic_load_explicit(&g_task_id, memory_order_acquire)) {
-#ifdef ESL_PROXY_ONBOARD
-        esl_onboard_invalidate_shared_before_worker();
-#endif
         cutter_loop_once();
         uint16_t cur_commit = atomic_load_explicit(&g_commit_task_id, memory_order_acquire);
         if (cur_commit != prev_commit) {
