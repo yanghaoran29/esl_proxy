@@ -334,7 +334,7 @@ int32_t platform_aicpu_affinity_thread_idx(void)
 /* HW dispatch & AICore handshake                                             */
 /* ========================================================================== */
 
-int esl_hw_poll_fin(uint64_t reg_addr, uint16_t task_id)
+int esl_hw_poll_fin(uint64_t reg_addr, uint32_t reg_task_id)
 {
     uint64_t cond;
 
@@ -342,13 +342,16 @@ int esl_hw_poll_fin(uint64_t reg_addr, uint16_t task_id)
         return 0;
     }
     cond = read_reg(reg_addr, REG_ID_COND);
-    return (EXTRACT_TASK_STATE(cond) == TASK_FIN_STATE && EXTRACT_TASK_ID(cond) == (int)task_id) ? 1 : 0;
+#ifdef __aarch64__
+    __asm__ __volatile__("dmb ishld" ::: "memory");
+#endif
+    return (EXTRACT_TASK_STATE(cond) == TASK_FIN_STATE && EXTRACT_TASK_ID(cond) == (int)reg_task_id) ? 1 : 0;
 }
 
-void esl_hw_dispatch_reg(uint64_t reg_addr, uint16_t task_id)
+void esl_hw_dispatch_reg(uint64_t reg_addr, uint32_t reg_task_id)
 {
     if (reg_addr != 0) {
-        write_reg(reg_addr, REG_ID_DATA_MAIN_BASE, task_id);
+        write_reg(reg_addr, REG_ID_DATA_MAIN_BASE, reg_task_id);
     }
 }
 

@@ -11,6 +11,7 @@
 #include "dispatch.h"
 
 #ifdef ESL_PROXY_ONBOARD
+#include "onboard_config.h"
 #include "aicpu_bridge.h"
 #endif
 
@@ -48,20 +49,26 @@ void init_predecessors(void)
 
 void init_ctrl_t(void)
 {
+    uint64_t free_init = (uint64_t)((1ULL << AIC_CNT) - 1);
+#ifdef ESL_PROXY_ONBOARD
+    /* Only block_dim logical cores exist on HW; wider bitmap lets ctz pick
+     * core>=block_dim and dispatch CUBE to AIV workers (hang / lost FIN). */
+    free_init = (uint64_t)((1ULL << ESL_PROXY_ONBOARD_BLOCK_DIM) - 1);
+#endif
     for (int tid = 0; tid < DISPATCH_THREAD_CNT; tid++) {
         g_ctrl_t[tid].tid = (uint16_t)tid;
 
         // Initialize free_bitmap for TASK_TYPE
         for (int i = 0; i < TASK_TYPE_CNT; i++) {
             for (int j = 0; j < AIC_OSTD; j++) {
-                g_ctrl_t[tid].free_bitmap[i][j] = (uint64_t)((1ULL << AIC_CNT) - 1);
+                atomic_store_explicit(&g_ctrl_t[tid].free_bitmap[i][j], free_init, memory_order_relaxed);
             }
         }
         // set_mix(tid);
         // Initialize msg_bitmap for EXE_TYPE
         for (int i = 0; i < EXE_TYPE_CNT; i++) {
             for (int j = 0; j < AIC_OSTD; j++) {
-                g_ctrl_t[tid].msg_bitmap[i][j] = 0x0;
+                atomic_store_explicit(&g_ctrl_t[tid].msg_bitmap[i][j], 0, memory_order_relaxed);
             }
         }
         

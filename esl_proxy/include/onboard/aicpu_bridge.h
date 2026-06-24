@@ -30,11 +30,19 @@ int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t
 
 static inline int esl_phys_worker(int core, int exe_type)
 {
+#ifdef ESL_PROXY_ONBOARD
+    /* Default mapping (lane 0). Dispatch path stores actual phys in block_idx. */
+    if (exe_type == 0) {
+        return core;
+    }
+    return ESL_PROXY_ONBOARD_BLOCK_DIM + core * PLATFORM_AIV_CORES_PER_BLOCKDIM;
+#else
     return core * EXE_TYPE_CNT + exe_type;
+#endif
 }
 
-int esl_hw_poll_fin(uint64_t reg_addr, uint16_t task_id);
-void esl_hw_dispatch_reg(uint64_t reg_addr, uint16_t task_id);
+int esl_hw_poll_fin(uint64_t reg_addr, uint32_t reg_task_id);
+void esl_hw_dispatch_reg(uint64_t reg_addr, uint32_t reg_task_id);
 
 int esl_handshake_all_cores(EslRuntime *runtime);
 void esl_shutdown_all_cores(EslRuntime *runtime);
@@ -59,6 +67,8 @@ void esl_onboard_flush_shared_after_orch(void);
 void esl_onboard_invalidate_shared_before_worker(void);
 void esl_onboard_flush_after_cutter(void);
 void esl_onboard_flush_after_dispatch(void);
+void esl_onboard_flush_after_poll(void);
+void esl_onboard_invalidate_before_poll(void);
 
 bool platform_aicpu_affinity_gate(int32_t logical_count, int32_t total_launched);
 bool platform_aicpu_affinity_gate_filter(const int32_t *allowed_cpus, int32_t allowed_count, int32_t total_launched);

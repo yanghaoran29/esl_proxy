@@ -13,8 +13,11 @@
 
 #include <stdint.h>
 
+#include <stdatomic.h>
+
 #ifdef ESL_PROXY_ONBOARD
 #include "aicpu_runtime.h"
+#include "onboard_config.h"
 static AicoreBridge *g_aicore_bridge;
 void dispatch_set_aicore_bridge(void *bridge)
 {
@@ -26,22 +29,26 @@ static inline void get_free_exe(int tid)
 {
     for (int i = 0; i < EXE_TYPE_CNT; i++) {
         for (int j = 0; j < AIC_OSTD; j++) {
-            g_ctrl_t[tid].free_bitmap[i][j] |= g_ctrl_t[tid].msg_bitmap[i][j];
+            uint64_t msg =
+                atomic_load_explicit(&g_ctrl_t[tid].msg_bitmap[i][j], memory_order_acquire);
+            (void)atomic_fetch_or_explicit(&g_ctrl_t[tid].free_bitmap[i][j], msg, memory_order_release);
         }
     }
 }
 
-static inline void get_completed(uint64_t* bitmap, uint16_t task_id[], int *complete_cnt,
+static inline void get_completed(_Atomic uint64_t *bitmap, uint16_t task_id[], int *complete_cnt,
                                  const uint16_t task_id_map[])
 {
-    int cnt = __builtin_popcountll(*bitmap);
+    uint64_t b = atomic_exchange_explicit(bitmap, 0, memory_order_acq_rel);
+    int cnt = __builtin_popcountll(b);
     while (cnt > 0) {
-        uint64_t idx = (uint64_t)__builtin_ctzll(*bitmap);
+        uint64_t idx = (uint64_t)__builtin_ctzll(b);
         task_id[(*complete_cnt)] = task_id_map[idx];
-        WORKER_LOGF("completed,complete_cnt,%d,task_id,%u,core,%d,bitmap,%u",*complete_cnt, task_id_map[idx], idx, *bitmap);
+        WORKER_LOGF("completed,complete_cnt,%d,task_id,%u,core,%d,bitmap,%u", *complete_cnt,
+                    task_id_map[idx], (int)idx, (unsigned)b);
         (*complete_cnt)++;
         cnt--;
-        *bitmap &= (*bitmap - 1);
+        b &= (b - 1);
     }
 }
 
@@ -65,7 +72,12 @@ static inline int send_task(ctrl_t *ctrl, int type)
 {
     int exe_type = type;
     // Check both slots - slot is free if neither slot 0 nor slot 1 has been sent a task
-    uint64_t free_bitmap = ctrl->free_bitmap[type][0] & ctrl->free_bitmap[type][1];
+    uint64_t free_bitmap =
+        atomic_load_explicit(&ctrl->free_bitmap[type][0], memory_order_acquire) &
+        atomic_load_explicit(&ctrl->free_bitmap[type][1], memory_order_acquire);
+#ifdef ESL_PROXY_ONBOARD
+    free_bitmap &= (uint64_t)((1ULL << ESL_PROXY_ONBOARD_BLOCK_DIM) - 1);
+#endif
     int cnt = __builtin_popcountll(free_bitmap);
     if (cnt <= 0) {
         WORKER_LOGF("send,free_cnt,%d", cnt);
@@ -83,7 +95,8 @@ static inline int send_task(ctrl_t *ctrl, int type)
 
         uint64_t mask = (uint64_t)0x1 << idx;
         // Determine which slot to use - prefer slot 0 if it's not busy
-        int slot = (ctrl->free_bitmap[type][0] & mask) != 0 ? 0 : 1;
+        uint64_t fb0 = atomic_load_explicit(&ctrl->free_bitmap[type][0], memory_order_acquire);
+        int slot = (fb0 & mask) != 0 ? 0 : 1;
         // Set executor's tasks and duration
         int core = (int)idx;
         g_executors[exe_type][core].tasks[slot] = task_id;
@@ -98,18 +111,18 @@ static inline int send_task(ctrl_t *ctrl, int type)
             ctrl->task_id_map1[type][idx] = task_id;
         }
         
-        ctrl->free_bitmap[type][slot] &= ~mask;
+        (void)atomic_fetch_and_explicit(&ctrl->free_bitmap[type][slot], ~mask, memory_order_release);
 
 #ifdef ESL_PROXY_ONBOARD
         if (g_aicore_bridge != NULL) {
             aicore_bridge_dispatch_task(g_aicore_bridge, (int)ctrl->tid, task_id, core, slot,
                                         exe_type);
         } else {
-            ctrl->msg_bitmap[type][slot] |= mask;
+            (void)atomic_fetch_or_explicit(&ctrl->msg_bitmap[type][slot], mask, memory_order_release);
         }
 #else
         /* Host sim: Fake Return */
-        ctrl->msg_bitmap[type][slot] |= mask;
+        (void)atomic_fetch_or_explicit(&ctrl->msg_bitmap[type][slot], mask, memory_order_release);
 #endif
         WORKER_LOGF("send,task_id,%u,core,%d,slot,%d,type,%d", task_id, core, slot, type);
         sent++;
@@ -151,9 +164,10 @@ void dispatch_loop_run(int tid)
         }
 #endif
     }
-    int prev = g_completed_cnt;
+    int prev = atomic_load_explicit(&g_completed_cnt, memory_order_acquire);
     int count = 10000;
-    while (atomic_load(&g_completed_cnt) < atomic_load(&g_task_id)) {
+    while (atomic_load_explicit(&g_completed_cnt, memory_order_acquire) <
+           atomic_load_explicit(&g_task_id, memory_order_acquire)) {
 #ifdef ESL_PROXY_ONBOARD
         esl_onboard_invalidate_shared_before_worker();
 #endif
@@ -163,7 +177,7 @@ void dispatch_loop_run(int tid)
             aicore_bridge_poll_completions(g_aicore_bridge, tid);
         }
 #endif
-        if (prev == g_completed_cnt) {
+        if (prev == atomic_load_explicit(&g_completed_cnt, memory_order_acquire)) {
             count--;
             if (count < 0) {
                 MAIN_LOGF("[scheduler] stall timeout: completed_cnt=%u task_id=%u",
@@ -173,7 +187,7 @@ void dispatch_loop_run(int tid)
         } else {
             count = 10000;
         }
-        prev = g_completed_cnt;
+        prev = atomic_load_explicit(&g_completed_cnt, memory_order_acquire);
     }
 
     atomic_store(&g_is_done, true);
@@ -181,9 +195,10 @@ void dispatch_loop_run(int tid)
     uint64_t end_ns = get_time_ns();
     uint64_t elapsed_ns = end_ns - start_ns;
 
-    MAIN_LOGF("[scheduler] task_cnt = %u", g_completed_cnt);
+    MAIN_LOGF("[scheduler] task_cnt = %u", (unsigned)atomic_load_explicit(&g_completed_cnt, memory_order_acquire));
     MAIN_LOGF("[scheduler] duration = %llu ns", (unsigned long long)elapsed_ns);
-    MAIN_LOGF("[scheduler] task_tp = %f MTasks/s", (float)(g_completed_cnt * 1000.0 / elapsed_ns));
+    MAIN_LOGF("[scheduler] task_tp = %f MTasks/s",
+              (float)(atomic_load_explicit(&g_completed_cnt, memory_order_acquire) * 1000.0 / elapsed_ns));
 }
 
 void *dispatch_worker(void *arg)
@@ -206,7 +221,7 @@ void esl_singlethread_drive(void)
 {
     extern void deal_completed_queue(void);
     extern int g_subtask_cnt;
-    extern uint16_t g_commit_task_id;
+    extern _Atomic uint16_t g_commit_task_id;
     extern atomic_int g_min_uncomplete_task;
     extern void esl_write_stats(uint64_t task_cnt, uint64_t subtask_cnt, uint64_t completed_cnt,
                                 uint64_t commit, uint64_t ready_cube, uint64_t ready_vec,
@@ -226,7 +241,7 @@ void esl_singlethread_drive(void)
 
         int cc = atomic_load(&g_completed_cnt);
         if (cc == prev) {
-            if (++stall > 2000000) {
+            if (++stall > 10000000) {
                 break;  /* avoid AICPU watchdog hang if a task never completes */
             }
         } else {
@@ -238,7 +253,7 @@ void esl_singlethread_drive(void)
     /* Diagnostic: find the first uncompleted task and whether it is ready
      * (predecessor_cnt==0 => readied-but-lost; >0 => predecessor never completed). */
     extern task_state *g_state_buf;
-    extern uint16_t g_predecessor_cnt[];
+    extern _Atomic uint16_t g_predecessor_cnt[];
     int end = atomic_load(&g_task_id);
     int first_uncomp = -1, second_uncomp = -1, n_uncomp = 0;
     for (int i = 0; i < end; i++) {
@@ -248,11 +263,14 @@ void esl_singlethread_drive(void)
             n_uncomp++;
         }
     }
-    uint64_t pred0 = (first_uncomp >= 0) ? (uint64_t)g_predecessor_cnt[first_uncomp] : 0;
+    uint64_t pred0 = (first_uncomp >= 0)
+                         ? (uint64_t)atomic_load_explicit(&g_predecessor_cnt[first_uncomp], memory_order_acquire)
+                         : 0;
     uint64_t rqc = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_CUBE].cnt;
     uint64_t rqv = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_VECTOR].cnt;
     esl_write_stats((uint64_t)end, (uint64_t)g_subtask_cnt,
-                    (uint64_t)atomic_load(&g_completed_cnt), (uint64_t)g_commit_task_id,
+                    (uint64_t)atomic_load(&g_completed_cnt),
+                    (uint64_t)atomic_load_explicit(&g_commit_task_id, memory_order_acquire),
                     (uint64_t)n_uncomp, ((uint64_t)(uint32_t)first_uncomp) | (pred0 << 32),
                     (rqc & 0xffffffffULL) | (rqv << 32));
 }

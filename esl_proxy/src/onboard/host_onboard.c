@@ -707,8 +707,9 @@ int esl_onboard_run(int argc, char **argv)
         return 1;
     }
 
-    fprintf(stderr, "[esl_proxy] onboard runner device=%d cores=%d aicpu_threads=%d launch_threads=%d\n", device_id,
-            ESL_PROXY_FAKE_AICORE_COUNT, ESL_PROXY_AICPU_THREAD_NUM, ESL_PROXY_CANN_AICPU_LAUNCH_THREADS);
+    fprintf(stderr, "[esl_proxy] onboard runner device=%d block_dim=%d workers=%d(aic=%d+aiv=%d) aicpu_threads=%d launch_threads=%d\n",
+            device_id, ESL_PROXY_ONBOARD_BLOCK_DIM, ESL_PROXY_ONBOARD_WORKER_COUNT, ESL_PROXY_ONBOARD_AIC_COUNT,
+            ESL_PROXY_ONBOARD_AIV_COUNT, ESL_PROXY_AICPU_THREAD_NUM, ESL_PROXY_CANN_AICPU_LAUNCH_THREADS);
     fprintf(stderr, "[esl_proxy] dispatcher=%s aicpu=%s aicore=%s\n", dispatcher_path, aicpu_path, aicore_path);
 
     ACL_CHECK(aclInit(NULL), "aclInit");
@@ -761,20 +762,21 @@ int esl_onboard_run(int argc, char **argv)
     }
 
     memset(&host_runtime, 0, sizeof(host_runtime));
-    host_runtime.worker_count = ESL_PROXY_FAKE_AICORE_COUNT;
+    host_runtime.worker_count = ESL_PROXY_ONBOARD_WORKER_COUNT;
     host_runtime.aicpu_thread_num = ESL_PROXY_AICPU_THREAD_NUM;
 
     ACL_CHECK(devmem_alloc(&dev_runtime, sizeof(EslRuntime)), "runtime GM");
     ACL_CHECK(devmem_alloc(&dev_wall, 8 * sizeof(uint64_t)), "device stats GM");
     ACL_CHECK(devmem_alloc(&dev_k_args, sizeof(EslKernelArgs)), "device KernelArgs GM");
-    payload_bytes = (size_t)ESL_PROXY_FAKE_AICORE_COUNT * 2U * sizeof(EslFakeDispatchPayload);
+    payload_bytes = (size_t)ESL_PROXY_ONBOARD_WORKER_COUNT * 2U * sizeof(EslFakeDispatchPayload);
     ACL_CHECK(devmem_alloc(&dev_payload, payload_bytes), "fake task args GM");
     ACL_CHECK(aclrtMemset(dev_payload.ptr, payload_bytes, 0, payload_bytes), "zero payload GM");
 
-    for (i = 0; i < ESL_PROXY_FAKE_AICORE_COUNT; ++i) {
+    for (i = 0; i < ESL_PROXY_ONBOARD_WORKER_COUNT; ++i) {
         uint8_t *base = (uint8_t *)dev_payload.ptr + (size_t)i * 2U * sizeof(EslFakeDispatchPayload);
 
         host_runtime.workers[i].task = (uint64_t)(uintptr_t)base;
+        host_runtime.workers[i].core_type = (i < ESL_PROXY_ONBOARD_BLOCK_DIM) ? 0 : 1;
     }
 
     ACL_CHECK(aclrtMemcpy(dev_runtime.ptr, sizeof(EslRuntime), &host_runtime, sizeof(EslRuntime), ACL_MEMCPY_HOST_TO_DEVICE),
@@ -811,7 +813,8 @@ int esl_onboard_run(int argc, char **argv)
         return 1;
     }
 
-    fprintf(stderr, "[esl_proxy] launching AICore kernel block_dim=%d\n", ESL_PROXY_FAKE_AICORE_COUNT);
+    fprintf(stderr, "[esl_proxy] launching AICore kernel block_dim=%d (workers=%d)\n", ESL_PROXY_ONBOARD_BLOCK_DIM,
+            ESL_PROXY_ONBOARD_WORKER_COUNT);
     fprintf(stderr, "[esl_proxy] aicpu init launch\n");
     rc = esl_aicpu_loader_launch(loader, stream_aicpu, &k_args, 1, ESL_AICPU_INIT_NAME);
     if (rc != 0) {
@@ -834,8 +837,8 @@ int esl_onboard_run(int argc, char **argv)
     ACL_CHECK(aclrtSynchronizeStream(stream_aicpu), "sync after aicpu init");
 
     fprintf(stderr, "[esl_proxy] aicore launch block_dim=%d (stream_aicore, concurrent with exec)\n",
-            ESL_PROXY_FAKE_AICORE_COUNT);
-    rc = esl_aicore_launcher_launch(aicore, stream_aicore, dev_k_args.ptr, ESL_PROXY_FAKE_AICORE_COUNT);
+            ESL_PROXY_ONBOARD_BLOCK_DIM);
+    rc = esl_aicore_launcher_launch(aicore, stream_aicore, dev_k_args.ptr, ESL_PROXY_ONBOARD_BLOCK_DIM);
     if (rc != 0) {
         esl_aicore_launcher_destroy(aicore);
         esl_aicpu_loader_destroy(loader);

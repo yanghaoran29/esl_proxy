@@ -40,6 +40,8 @@ void init_predecessors(void);
 
 extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
 extern task_state *g_state_buf;
+extern _Atomic uint16_t g_predecessor_cnt[RING_SIZE];
+extern _Atomic uint16_t g_commit_task_id;
 extern atomic_int g_completed_cnt;
 extern atomic_bool g_orch_is_done;
 extern atomic_bool g_is_done;
@@ -51,6 +53,8 @@ static atomic_bool g_init_failed;
 static atomic_flag g_once = ATOMIC_FLAG_INIT;
 static AicoreBridge g_bridge;
 static uint64_t g_device_start_cycle;
+static uint32_t g_core_dispatch_seq[RUNTIME_MAX_WORKER];
+static _Atomic uint32_t g_aiv_lane_pick[PLATFORM_MAX_BLOCKDIM];
 static when2free_entry_t g_onboard_when2free[ONBOARD_WHEN2FREE_CAP];
 volatile uint64_t *g_esl_stats_base;
 
@@ -194,6 +198,33 @@ static uint64_t core_reg_addr(int core)
     return ((uint64_t *)table)[core];
 }
 
+static int esl_pick_phys_worker(int core, int exe_type)
+{
+    if (exe_type == 0) {
+        return core;
+    }
+    uint32_t lane = atomic_fetch_add_explicit(&g_aiv_lane_pick[core], 1U, memory_order_relaxed) %
+                    (uint32_t)PLATFORM_AIV_CORES_PER_BLOCKDIM;
+    return ESL_PROXY_ONBOARD_BLOCK_DIM + core * PLATFORM_AIV_CORES_PER_BLOCKDIM + (int)lane;
+}
+
+static uint32_t esl_next_reg_task_id(int phys)
+{
+    uint32_t seq;
+    uint32_t reg_id;
+
+    if (phys < 0 || phys >= RUNTIME_MAX_WORKER) {
+        return 0;
+    }
+    seq = ++g_core_dispatch_seq[phys];
+    reg_id = seq & (uint32_t)TASK_ID_MASK;
+    if (reg_id >= (uint32_t)AICORE_EXIT_SIGNAL) {
+        g_core_dispatch_seq[phys] = seq + ((uint32_t)AICORE_EXIT_SIGNAL - reg_id);
+        reg_id = (uint32_t)(g_core_dispatch_seq[phys] & (uint32_t)TASK_ID_MASK);
+    }
+    return reg_id;
+}
+
 int aicore_bridge_init(AicoreBridge *bridge, EslRuntime *runtime, uint64_t fake_kernel_addr)
 {
     if (bridge == NULL || runtime == NULL) {
@@ -221,30 +252,41 @@ int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid)
     if (bridge == NULL || !bridge->initialized) {
         return 0;
     }
-    const int n = bridge->runtime->worker_count;
+    esl_onboard_invalidate_before_poll();
+    const int n_workers = bridge->runtime->worker_count;
+    const int n_cores = ESL_PROXY_ONBOARD_BLOCK_DIM;
     for (int exe_type = 0; exe_type < EXE_TYPE_CNT; exe_type++) {
         for (int slot = 0; slot < AIC_OSTD; slot++) {
-            for (int core = 0; core < n && core < AIC_CNT; core++) {
+            for (int core = 0; core < n_cores && core < AIC_CNT; core++) {
                 uint16_t task_id = g_executors[exe_type][core].tasks[slot];
 
                 if (task_id == EXEC_SLOT_EMPTY) {
                     continue;
                 }
-                if (g_ctrl_t[0].msg_bitmap[exe_type][slot] & ((uint64_t)1 << core)) {
+                uint64_t mask = (uint64_t)1 << core;
+                if (atomic_load_explicit(&g_ctrl_t[0].msg_bitmap[exe_type][slot],
+                                         memory_order_acquire) &
+                    mask) {
                     continue;
                 }
-                const int phys = esl_phys_worker(core, exe_type);
-                if (phys >= n) {
+                const int phys = (int)g_executors[exe_type][core].block_idx[slot];
+                if (phys < 0 || phys >= n_workers) {
                     continue;
                 }
-                if (esl_hw_poll_fin(core_reg_addr(phys), task_id)) {
-                    g_ctrl_t[0].msg_bitmap[exe_type][slot] |= ((uint64_t)1 << core);
+                const uint32_t reg_task = (uint32_t)g_executors[exe_type][core].base[slot];
+                if (reg_task == 0U) {
+                    continue;
+                }
+                if (esl_hw_poll_fin(core_reg_addr(phys), reg_task)) {
+                    (void)atomic_fetch_or_explicit(&g_ctrl_t[0].msg_bitmap[exe_type][slot], mask,
+                                                   memory_order_release);
                     g_executors[exe_type][core].idx = (uint8_t)AIC_OSTD;
                     g_executors[exe_type][core].tasks[slot] = EXEC_SLOT_EMPTY;
                 }
             }
         }
     }
+    esl_onboard_flush_after_poll();
     return 0;
 }
 
@@ -279,9 +321,12 @@ int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t
     g_executors[exe_type][core].tasks[slot] = task_id;
     g_executors[exe_type][core].duration[slot] = g_basic_buf[task_id & RING_MASK].duration;
     g_executors[exe_type][core].idx = (uint8_t)slot;
-    const int phys = esl_phys_worker(core, exe_type);
+    const int phys = esl_pick_phys_worker(core, exe_type);
+    g_executors[exe_type][core].block_idx[slot] = (uint16_t)phys;
     if (bridge != NULL && bridge->runtime != NULL && phys >= bridge->runtime->worker_count) {
-        g_ctrl_t[0].msg_bitmap[exe_type][slot] |= ((uint64_t)1 << core);
+        (void)atomic_fetch_or_explicit(&g_ctrl_t[0].msg_bitmap[exe_type][slot],
+                                       (uint64_t)1 << core, memory_order_release);
+        g_executors[exe_type][core].base[slot] = 0;
         return 0;
     }
     EslOnboardDispatchInput din;
@@ -292,7 +337,11 @@ int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t
     if (reg_addr == 0) {
         return -1;
     }
-    esl_hw_dispatch_reg(reg_addr, task_id);
+    {
+        const uint32_t reg_task = esl_next_reg_task_id(phys);
+        g_executors[exe_type][core].base[slot] = reg_task;
+        esl_hw_dispatch_reg(reg_addr, reg_task);
+    }
     return 0;
 }
 
@@ -311,9 +360,12 @@ void esl_onboard_flush_shared_after_orch(void)
 {
     cache_flush_range(&g_task_id, sizeof(g_task_id));
     cache_flush_range(&g_orch_is_done, sizeof(g_orch_is_done));
-    cache_flush_range(g_basic_buf, sizeof(g_basic_buf[0]) * 8);
-    cache_flush_range(g_predecessors, sizeof(g_predecessors[0]) * 8);
-    cache_flush_range(g_successor_buf, sizeof(g_successor_buf[0]) * 8);
+    cache_flush_range(g_basic_buf, sizeof(g_basic_buf));
+    cache_flush_range(g_predecessors, sizeof(g_predecessors));
+    cache_flush_range(g_successor_buf, sizeof(g_successor_buf));
+    cache_flush_range(g_predecessor_cnt, sizeof(g_predecessor_cnt));
+    cache_flush_range(g_state_buf, sizeof(task_state) * RING_SIZE);
+    cache_flush_range(&g_commit_task_id, sizeof(g_commit_task_id));
 }
 
 void esl_onboard_invalidate_shared_before_worker(void)
@@ -322,22 +374,41 @@ void esl_onboard_invalidate_shared_before_worker(void)
     cache_invalidate_range(&g_orch_is_done, sizeof(g_orch_is_done));
     cache_invalidate_range(&g_completed_cnt, sizeof(g_completed_cnt));
     cache_invalidate_range(&g_is_done, sizeof(g_is_done));
-    cache_invalidate_range(g_basic_buf, sizeof(g_basic_buf[0]) * 8);
-    cache_invalidate_range(g_predecessors, sizeof(g_predecessors[0]) * 8);
-    cache_invalidate_range(g_successor_buf, sizeof(g_successor_buf[0]) * 8);
+    cache_invalidate_range(g_basic_buf, sizeof(g_basic_buf));
+    cache_invalidate_range(g_predecessors, sizeof(g_predecessors));
+    cache_invalidate_range(g_successor_buf, sizeof(g_successor_buf));
+    cache_invalidate_range(g_predecessor_cnt, sizeof(g_predecessor_cnt));
+    cache_invalidate_range(g_state_buf, sizeof(task_state) * RING_SIZE);
+    cache_invalidate_range(&g_commit_task_id, sizeof(g_commit_task_id));
+    cache_invalidate_range(g_ctrl_t, sizeof(g_ctrl_t));
+    cache_invalidate_range(g_executors, sizeof(g_executors));
+}
+
+void esl_onboard_invalidate_before_poll(void)
+{
+    cache_invalidate_range(g_executors, sizeof(g_executors));
     cache_invalidate_range(g_ctrl_t, sizeof(g_ctrl_t));
 }
 
 void esl_onboard_flush_after_cutter(void)
 {
     cache_flush_range(g_ctrl_t, sizeof(g_ctrl_t));
+    cache_flush_range(g_predecessor_cnt, sizeof(g_predecessor_cnt));
+    cache_flush_range(g_state_buf, sizeof(task_state) * RING_SIZE);
     cache_flush_range(&g_completed_cnt, sizeof(g_completed_cnt));
 }
 
 void esl_onboard_flush_after_dispatch(void)
 {
     cache_flush_range(g_ctrl_t, sizeof(g_ctrl_t));
+    cache_flush_range(g_executors, sizeof(g_executors));
     cache_flush_range(&g_completed_cnt, sizeof(g_completed_cnt));
+}
+
+void esl_onboard_flush_after_poll(void)
+{
+    cache_flush_range(g_ctrl_t, sizeof(g_ctrl_t));
+    cache_flush_range(g_executors, sizeof(g_executors));
 }
 
 /* ========================================================================== */
@@ -361,7 +432,7 @@ int esl_platform_init(EslRuntime *runtime, AicoreBridge *bridge)
     }
     esl_dispatch_payload_init(runtime);
     if (runtime != NULL) {
-        runtime->worker_count = ESL_PROXY_FAKE_AICORE_COUNT;
+        runtime->worker_count = ESL_PROXY_ONBOARD_WORKER_COUNT;
     }
     uint64_t fake_addr = 0;
     if (runtime != NULL) {

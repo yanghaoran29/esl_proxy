@@ -13,6 +13,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdatomic.h>
 
 #include "conf.h"
 #include "task.h"
@@ -20,9 +21,9 @@
 
 
 typedef struct ctrl {
-    // 64CORES
-    uint64_t free_bitmap[TASK_TYPE_CNT][AIC_OSTD];
-    uint64_t msg_bitmap[EXE_TYPE_CNT][AIC_OSTD];
+    /* Per-core slot availability / HW completion bits (onboard: atomic for poll/dispatch). */
+    _Atomic uint64_t free_bitmap[TASK_TYPE_CNT][AIC_OSTD];
+    _Atomic uint64_t msg_bitmap[EXE_TYPE_CNT][AIC_OSTD];
 
     uint16_t task_id_map1[EXE_TYPE_CNT][AIC_CNT];
     uint16_t task_id_map2[EXE_TYPE_CNT][AIC_CNT];
