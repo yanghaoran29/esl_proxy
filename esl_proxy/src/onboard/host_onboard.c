@@ -1,4 +1,7 @@
-/* host_runner.c — merged Host onboard runner (loader + launcher + regs + fingerprint + main) */
+/* host_onboard.c — host-side onboard bring-up (loader + launcher + AICore
+ * register mapping + fingerprint). No main(): entry is src/main.c with
+ * -DESL_PROXY_ONBOARD_HOST.
+ */
 #define _GNU_SOURCE
 #include "kernel_args.h"
 #include "esl_runtime.h"
@@ -681,7 +684,7 @@ static void usage(const char *prog)
             prog);
 }
 
-int main(int argc, char **argv)
+int esl_onboard_run(int argc, char **argv)
 {
     int device_id = 0;
     char dispatcher_path[512] = {0};

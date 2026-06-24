@@ -1,6 +1,6 @@
 /*
  * Shared onboard utilities: file I/O, fingerprinting, dispatcher offsets.
- * AICPU CANN logging lives in onboard_log.h (implementation in aicpu_kernel.c).
+ * AICPU CANN logging lives in onboard_log.h (implementation in onboard_log.c).
  */
 #ifndef ESL_PROXY_ONBOARD_TOOLS_H
 #define ESL_PROXY_ONBOARD_TOOLS_H

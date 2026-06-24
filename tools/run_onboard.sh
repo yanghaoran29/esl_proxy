@@ -29,9 +29,9 @@ if [[ -n "${TASK_DEVICE:-}" ]]; then
 fi
 
 if [[ "$SKIP_BUILD" -eq 0 ]]; then
-  bash platform/cmake/build_aicpu.sh
-  bash platform/cmake/build_aicore.sh
-  bash platform/cmake/build_onboard_host.sh
+  bash cmake/onboard/build_aicpu.sh
+  bash cmake/onboard/build_aicore.sh
+  bash cmake/onboard/build_onboard_host.sh
 fi
 
 RUNNER="${ROOT}/build/onboard/host/esl_onboard_runner"

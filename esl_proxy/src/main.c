@@ -1,3 +1,22 @@
+/*
+ * main.c — single program entry for esl_proxy.
+ *
+ * Two mutually-exclusive build modes, selected by ESL_PROXY_ONBOARD_HOST:
+ *   - undefined (default, Makefile): host CPU simulator
+ *   - defined (cmake host build): onboard host launcher via CANN
+ */
+
+#if ESL_PROXY_ONBOARD_HOST
+
+#include "host_onboard.h"
+
+int main(int argc, char **argv)
+{
+    return esl_onboard_run(argc, argv);
+}
+
+#else /* !ESL_PROXY_ONBOARD_HOST */
+
 #define _POSIX_C_SOURCE 199309L
 
 #include <pthread.h>
@@ -118,3 +137,4 @@ int main(void) {
 
     return 0;
 }
+#endif /* ESL_PROXY_ONBOARD_HOST */
