@@ -50,6 +50,11 @@ extern "C" {
 #define SIM_REG_BLOCK_SIZE 0x500U
 #define PLATFORM_SUB_CORES_PER_AICORE PLATFORM_CORES_PER_BLOCKDIM
 #define DAV_2201_PLATFORM_MAX_PHYSICAL_CORES 25U
+/* HAL flat ctrl-reg table on A3: 25 AIC + 50 AIV subcores = 75 slots (simpler
+ * platform_get_physical_cores_count). Runtime uses 24+48; slot 24 (cluster-24
+ * AIC) and slots 73–74 (cluster-24 AIV) are unused but present in the table. */
+#define ESL_PROXY_PLATFORM_HAL_REG_SLOTS \
+    (DAV_2201_PLATFORM_MAX_PHYSICAL_CORES * PLATFORM_SUB_CORES_PER_AICORE)
 
 #define TASK_ID_MASK 0x7FFFFFFFU
 #define TASK_STATE_MASK 0x80000000U
@@ -89,8 +94,8 @@ typedef struct EslOnboardTaskDesc {
     uint16_t mode;
     uint16_t tensor_cnt;
     uint16_t scalar_cnt;
-    uint16_t duration;
-    uint16_t _pad;
+    uint32_t duration;     /* ns (swimlane measured mean) */
+    uint32_t jitter_mask;  /* fake_kernel jitter mask (§4.2) */
     uint32_t index;
     uint32_t count;
     uint64_t kernel;
@@ -104,11 +109,31 @@ typedef struct EslOnboardDispatchInput {
 
 typedef struct EslFakeDispatchPayload {
     EslOnboardTaskDesc task;
-    int64_t duration_ticks;
-    int64_t task_id_mask;
+    int64_t duration_ticks; /* ns (swimlane measured mean; name kept for layout) */
+    int64_t jitter_mask;    /* jitter amplitude mask in ns (§4.2) */
     uint64_t args[ESL_ONBOARD_MAX_KERNEL_ARGS];
     EslOnboardTensor tensors[ESL_ONBOARD_MAX_TENSOR_ARGS];
 } __attribute__((aligned(64))) EslFakeDispatchPayload;
+
+/* SYS_CNT counter frequency on A3 (50 MHz). */
+static inline uint64_t esl_duration_ns_to_sys_cnt(uint64_t duration_ns)
+{
+    return duration_ns * ESL_ONBOARD_SYS_CNT_FREQ / 1000000000ULL;
+}
+
+/* Map runtime worker slot (0..71) → HAL register-table index (0..74).
+ * AIV workers skip HAL index 24 (unused cluster-24 AIC between the 25 AIC
+ * entries and the 50 AIV entries). Used only when handshake reg lookup fails. */
+static inline int esl_worker_to_hal_reg_index(int worker_id)
+{
+    if (worker_id < 0 || worker_id >= ESL_PROXY_ONBOARD_WORKER_COUNT) {
+        return -1;
+    }
+    if (worker_id < ESL_PROXY_ONBOARD_AIC_COUNT) {
+        return worker_id;
+    }
+    return worker_id + 1;
+}
 
 #ifdef __cplusplus
 }

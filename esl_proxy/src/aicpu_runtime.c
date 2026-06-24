@@ -14,6 +14,7 @@
 #include "task.h"
 #include "cutter.h"
 #include "mem_pool.h"
+#include "l2_swimlane/esl_swimlane_aicpu_c.h"
 
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -55,6 +56,9 @@ static AicoreBridge g_bridge;
 static uint64_t g_device_start_cycle;
 static uint32_t g_core_dispatch_seq[RUNTIME_MAX_WORKER];
 static _Atomic uint32_t g_aiv_lane_pick[PLATFORM_MAX_BLOCKDIM];
+#if ESL_PROXY_ENABLE_L2_SWIMLANE
+static uint64_t g_hw_dispatch_ts[EXE_TYPE_CNT][AIC_CNT][AIC_OSTD];
+#endif
 static when2free_entry_t g_onboard_when2free[ONBOARD_WHEN2FREE_CAP];
 volatile uint64_t *g_esl_stats_base;
 
@@ -141,6 +145,9 @@ __attribute__((visibility("default"))) int simpler_aicpu_init(void *arg)
     if (k_args->device_wall_data_base != 0) {
         *(uint64_t *)(uintptr_t)k_args->device_wall_data_base = 0;
     }
+    ESL_SWIMLANE_AICPU_SET_BASE(k_args->l2_swimlane_data_base);
+    ESL_SWIMLANE_AICPU_SET_ROTATION_TABLE(k_args->l2_swimlane_aicore_rotation_table);
+    ESL_SWIMLANE_AICPU_SET_ENABLED(ESL_SWIMLANE_IS_FLAG_ON(k_args->enable_profiling_flag));
     LOG_INFO_V0("%s", "esl_proxy AICPU Init");
     return 0;
 }
@@ -162,6 +169,9 @@ __attribute__((visibility("default"))) int simpler_aicpu_exec(void *arg)
         LOG_ERROR("%s", "Invalid runtime_args: null pointer");
         return -1;
     }
+    ESL_SWIMLANE_AICPU_SET_BASE(k_args->l2_swimlane_data_base);
+    ESL_SWIMLANE_AICPU_SET_ROTATION_TABLE(k_args->l2_swimlane_aicore_rotation_table);
+    ESL_SWIMLANE_AICPU_SET_ENABLED(ESL_SWIMLANE_IS_FLAG_ON(k_args->enable_profiling_flag));
     set_log_level((int)k_args->log_level);
     set_log_info_v((int)k_args->log_info_v);
     set_platform_regs(k_args->regs);
@@ -183,19 +193,26 @@ __attribute__((visibility("default"))) int simpler_aicpu_exec(void *arg)
 /* AICore bridge (dispatch.c)                                                 */
 /* ========================================================================== */
 
-static uint64_t core_reg_addr(int core)
+static uint64_t core_reg_addr(int worker_id)
 {
-    uint64_t reg_addr = esl_handshake_reg_addr(core);
+    uint64_t reg_addr = esl_handshake_reg_addr(worker_id);
 
     if (reg_addr != 0) {
         return reg_addr;
     }
     const uint64_t table = get_platform_regs();
+    int hal_idx;
 
     if (table == 0) {
         return 0;
     }
-    return ((uint64_t *)table)[core];
+    /* Fallback: worker_id is NOT a HAL table index for AIV (HAL has 25 AIC slots
+     * before the 50 AIV entries; runtime uses 24+48). */
+    hal_idx = esl_worker_to_hal_reg_index(worker_id);
+    if (hal_idx < 0 || hal_idx >= (int)ESL_PROXY_PLATFORM_HAL_REG_SLOTS) {
+        return 0;
+    }
+    return ((uint64_t *)table)[hal_idx];
 }
 
 static int esl_pick_phys_worker(int core, int exe_type)
@@ -278,6 +295,11 @@ int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid)
                     continue;
                 }
                 if (esl_hw_poll_fin(core_reg_addr(phys), reg_task)) {
+#if ESL_PROXY_ENABLE_L2_SWIMLANE
+                    uint64_t finish_ts = esl_onboard_sys_cnt();
+                    ESL_SWIMLANE_AICPU_COMPLETE_TASK(phys, 0, reg_task, g_hw_dispatch_ts[exe_type][core][slot],
+                                                     finish_ts);
+#endif
                     (void)atomic_fetch_or_explicit(&g_ctrl_t[0].msg_bitmap[exe_type][slot], mask,
                                                    memory_order_release);
                     g_executors[exe_type][core].idx = (uint8_t)AIC_OSTD;
@@ -296,12 +318,13 @@ static void esl_pack_dispatch_input(EslOnboardDispatchInput *in, uint16_t task_i
     uint16_t i;
 
     memset(in, 0, sizeof(*in));
-    in->task.id = td->id;
+    in->task.id = task_id;
     in->task.type = (uint16_t)td->type;
     in->task.mode = (uint16_t)td->mode;
     in->task.tensor_cnt = td->tensor_cnt;
     in->task.scalar_cnt = td->scalar_cnt;
-    in->task.duration = (uint16_t)td->duration;
+    in->task.duration = td->duration;
+    in->task.jitter_mask = td->jitter_mask;
     in->task.index = td->index;
     in->task.count = td->count;
     in->task.kernel = (uint64_t)(uintptr_t)td->kernel;
@@ -332,14 +355,18 @@ int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t
     EslOnboardDispatchInput din;
 
     esl_pack_dispatch_input(&din, task_id);
-    esl_dispatch_payload_prepare(phys, task_id, &din);
     const uint64_t reg_addr = core_reg_addr(phys);
     if (reg_addr == 0) {
         return -1;
     }
     {
         const uint32_t reg_task = esl_next_reg_task_id(phys);
+        esl_dispatch_payload_prepare(phys, reg_task, &din);
         g_executors[exe_type][core].base[slot] = reg_task;
+        ESL_SWIMLANE_AICPU_ON_DISPATCH(phys, 0);
+#if ESL_PROXY_ENABLE_L2_SWIMLANE
+        g_hw_dispatch_ts[exe_type][core][slot] = esl_onboard_sys_cnt();
+#endif
         esl_hw_dispatch_reg(reg_addr, reg_task);
     }
     return 0;
@@ -442,11 +469,27 @@ int esl_platform_init(EslRuntime *runtime, AicoreBridge *bridge)
         return -1;
     }
     dispatch_set_aicore_bridge(bridge);
+    ESL_SWIMLANE_AICPU_INIT(ESL_PROXY_ONBOARD_WORKER_COUNT);
     return 0;
 }
 
 void esl_platform_shutdown(AicoreBridge *bridge)
 {
+#if ESL_PROXY_ENABLE_L2_SWIMLANE
+    if (bridge != NULL && bridge->runtime != NULL) {
+        int n = bridge->runtime->worker_count;
+        int cores[RUNTIME_MAX_WORKER];
+        int i;
+
+        if (n > RUNTIME_MAX_WORKER) {
+            n = RUNTIME_MAX_WORKER;
+        }
+        for (i = 0; i < n; ++i) {
+            cores[i] = i;
+        }
+        ESL_SWIMLANE_AICPU_FLUSH(0, cores, n);
+    }
+#endif
     aicore_bridge_shutdown(bridge);
 }
 

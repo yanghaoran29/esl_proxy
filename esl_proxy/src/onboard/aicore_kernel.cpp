@@ -6,7 +6,8 @@
 #include "esl_runtime.h"
 #include "onboard_config.h"
 #include "onboard_tensor.h"
-
+#include "l2_swimlane/esl_swimlane_api.h"
+#include "l2_swimlane/aicore/aicore_profiling_state.h"
 
 #ifdef __CCE_KT_TEST__
 #define __aicore__
@@ -26,46 +27,54 @@ extern "C" __attribute__((weak)) __aicore__ void fake_kernel(__gm__ EslFakeDispa
         return;
     }
 
-    const uint16_t task_id = payload->task.id;
-    uint16_t tensor_cnt = payload->task.tensor_cnt;
-    uint16_t scalar_cnt = payload->task.scalar_cnt;
-    if (tensor_cnt > ESL_ONBOARD_MAX_TENSOR_ARGS) {
-        tensor_cnt = ESL_ONBOARD_MAX_TENSOR_ARGS;
+    /* duration_ticks and jitter are in ns (§4.1); convert to SYS_CNT only for busy-wait. */
+    const uint64_t duration_ns = static_cast<uint64_t>(payload->duration_ticks);
+    const uint64_t mask = static_cast<uint64_t>(payload->jitter_mask);
+    const uint64_t start = get_sys_cnt_aicore();
+    int64_t wait_ns = static_cast<int64_t>(duration_ns);
+
+    if (mask != 0U) {
+        const int64_t jitter_ns =
+            static_cast<int64_t>(start & mask) - static_cast<int64_t>((mask + 1U) / 2U);
+        wait_ns += jitter_ns;
     }
-    if (scalar_cnt > ESL_ONBOARD_MAX_SCALAR_ARGS) {
-        scalar_cnt = ESL_ONBOARD_MAX_SCALAR_ARGS;
+    if (wait_ns < 1) {
+        wait_ns = static_cast<int64_t>(duration_ns);
     }
+    const uint64_t wait_sys_cnt = static_cast<uint64_t>(wait_ns) * ESL_ONBOARD_SYS_CNT_FREQ / 1000000000ULL;
+    const uint64_t end = start + wait_sys_cnt;
 
-    __gm__ int64_t *args = reinterpret_cast<__gm__ int64_t *>(payload->args);
-
-    uint64_t duration = static_cast<uint64_t>(payload->duration_ticks);
-    duration += static_cast<uint64_t>(task_id & 0x1Fu);
-
-    for (uint16_t i = 0; i < tensor_cnt; ++i) {
-        __gm__ EslOnboardTensor *t = reinterpret_cast<__gm__ EslOnboardTensor *>(args[i]);
-        if (t != nullptr) {
-            dcci(t, SINGLE_CACHE_LINE);
-            duration += static_cast<uint64_t>(t->shapes[0] & 0x3u);
-        }
-    }
-
-    for (uint16_t i = 0; i < scalar_cnt; ++i) {
-        duration += static_cast<uint64_t>(args[tensor_cnt + i]) & 0x7u;
-    }
-
-    uint64_t start;
-    asm volatile("MOV %0, SYS_CNT\n" : "+l"(start));
-
-    for (;;) {
-        uint64_t now;
-        asm volatile("MOV %0, SYS_CNT\n" : "+l"(now));
-        if (now - start >= duration) {
-            break;
-        }
+    while (get_sys_cnt_aicore() < end) {
+        SPIN_WAIT_HINT();
     }
 }
 
-__aicore__ __attribute__((weak)) void aicore_execute(__gm__ EslRuntime *runtime, int block_idx, CoreType worker_core_type)
+#if ESL_PROXY_ENABLE_L2_SWIMLANE
+/* Resolve per-worker swimlane head from the rotation table after handshake.
+ * Uses stack locals only — [[block_local]] profiling globals are shared by
+ * both AIV subblocks within a block and must not carry head state. */
+__aicore__ static inline __gm__ L2SwimlaneActiveHead *esl_resolve_swimlane_head(
+    __gm__ uint64_t *rotation_table, int worker_idx, uint32_t profiling_flag)
+{
+    if (!ESL_SWIMLANE_IS_FLAG_ON(profiling_flag) || rotation_table == nullptr) {
+        return nullptr;
+    }
+    if (worker_idx < 0 || worker_idx >= RUNTIME_MAX_WORKER) {
+        return nullptr;
+    }
+    __gm__ uint64_t *slot = &rotation_table[worker_idx];
+    dcci(slot, SINGLE_CACHE_LINE);
+    const uint64_t head_addr = *slot;
+    if (head_addr == 0U) {
+        return nullptr;
+    }
+    return reinterpret_cast<__gm__ L2SwimlaneActiveHead *>(head_addr);
+}
+#endif
+
+__aicore__ __attribute__((weak)) void aicore_execute(
+    __gm__ EslRuntime *runtime, int block_idx, CoreType worker_core_type, __gm__ uint64_t *rotation_table,
+    uint32_t profiling_flag)
 {
     __gm__ EslHandshake *my_hank = (__gm__ EslHandshake *)(&runtime->workers[block_idx]);
 
@@ -95,6 +104,9 @@ __aicore__ __attribute__((weak)) void aicore_execute(__gm__ EslRuntime *runtime,
 
     uint32_t reg_val = AICPU_IDLE_TASK_ID;
     uint32_t last_reg_val = AICPU_IDLE_TASK_ID;
+#if ESL_PROXY_ENABLE_L2_SWIMLANE
+    L2SwimlaneAicoreLocalState swim_local = {nullptr, UINT32_MAX, 0};
+#endif
 
     while (true) {
         reg_val = static_cast<uint32_t>(read_reg(REG_ID_DATA_MAIN_BASE));
@@ -114,7 +126,22 @@ __aicore__ __attribute__((weak)) void aicore_execute(__gm__ EslRuntime *runtime,
 
         write_reg(REG_ID_COND, MAKE_ACK_VALUE(task_id));
 
+#if ESL_PROXY_ENABLE_L2_SWIMLANE
+        uint64_t start_time = get_sys_cnt_aicore();
+#endif
         fake_kernel(exec_payload);
+#if ESL_PROXY_ENABLE_L2_SWIMLANE
+        {
+            __gm__ L2SwimlaneActiveHead *l2_swimlane_head =
+                esl_resolve_swimlane_head(rotation_table, block_idx, profiling_flag);
+            if (l2_swimlane_head != nullptr) {
+                uint64_t task_token =
+                    exec_payload != nullptr ? (uint64_t)exec_payload->task.id : (uint64_t)task_id;
+                ESL_SWIMLANE_AICORE_RECORD_TASK(l2_swimlane_head, &swim_local, task_token, task_id, start_time,
+                                                get_sys_cnt_aicore());
+            }
+        }
+#endif
 
         last_reg_val = reg_val;
         write_reg(REG_ID_COND, MAKE_FIN_VALUE(task_id));
@@ -134,15 +161,25 @@ __aicore__ __attribute__((weak)) void aicore_execute(__gm__ EslRuntime *runtime,
 
 extern "C" __global__ __aicore__ void KERNEL_ENTRY(aicore_kernel)(__gm__ KernelArgs *k_args)
 {
+    const uint32_t profiling_flag = k_args->enable_profiling_flag;
+    __gm__ uint64_t *rotation_table = nullptr;
+
+    set_aicore_profiling_flag(profiling_flag);
+    if (ESL_SWIMLANE_IS_FLAG_ON(profiling_flag) && k_args->l2_swimlane_aicore_rotation_table != 0) {
+        rotation_table = reinterpret_cast<__gm__ uint64_t *>(k_args->l2_swimlane_aicore_rotation_table);
+    }
+
 #ifdef __DAV_VEC__
     block_idx_aiv = get_block_idx() * get_subblockdim() + get_subblockid() + get_block_num();
     core_type_aiv = CoreType::AIV;
     set_ffts_base_addr((uint64_t)k_args->ffts_base_addr);
-    aicore_execute(reinterpret_cast<__gm__ EslRuntime *>(k_args->runtime_args), block_idx_aiv, core_type_aiv);
+    aicore_execute(reinterpret_cast<__gm__ EslRuntime *>(k_args->runtime_args), block_idx_aiv, core_type_aiv,
+                   rotation_table, profiling_flag);
 #else
     block_idx_aic = get_block_idx();
     core_type_aic = CoreType::AIC;
     set_ffts_base_addr((uint64_t)k_args->ffts_base_addr);
-    aicore_execute(reinterpret_cast<__gm__ EslRuntime *>(k_args->runtime_args), block_idx_aic, core_type_aic);
+    aicore_execute(reinterpret_cast<__gm__ EslRuntime *>(k_args->runtime_args), block_idx_aic, core_type_aic,
+                   rotation_table, profiling_flag);
 #endif
 }

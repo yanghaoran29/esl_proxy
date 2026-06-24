@@ -127,7 +127,8 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
     return cnt;
 }
 
-static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uint16_t duration)
+static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uint32_t duration_ns,
+                            uint32_t jitter_mask)
 {
     while ((task_id - atomic_load(&g_min_uncomplete_task)) >= RING_SIZE ) {
         MAIN_LOGF("[orchestration] task_id = %u g_min_uncomplete_task = %u", task_id, g_min_uncomplete_task);
@@ -136,8 +137,10 @@ static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uin
     if (count > 1)
         g_basic_buf[task_id & RING_MASK].mode = ORG_MODE_SPMD_SYNC;
     g_basic_buf[task_id & RING_MASK].type = (task_type_t)type;
-    g_basic_buf[task_id & RING_MASK].count = count; 
-    g_basic_buf[task_id & RING_MASK].duration = duration;
+    g_basic_buf[task_id & RING_MASK].count = count;
+    g_basic_buf[task_id & RING_MASK].id = (uint16_t)task_id;
+    g_basic_buf[task_id & RING_MASK].duration = duration_ns;
+    g_basic_buf[task_id & RING_MASK].jitter_mask = jitter_mask;
     g_subtask_cnt += count;
     WORKER_LOGF("new,task_id,%u,type,%d,subtask_cnt,%d", task_id, type, count);
     return true;

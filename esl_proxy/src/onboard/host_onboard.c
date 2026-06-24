@@ -3,24 +3,25 @@
  * -DESL_PROXY_ONBOARD_HOST.
  */
 #define _GNU_SOURCE
-#include "kernel_args.h"
+#include "dlog_pub.h"
 #include "esl_runtime.h"
+#include "esl_swimlane_host_onboard.h"
+#include "kernel_args.h"
 #include "onboard_config.h"
 #include "tools.h"
-#include <stdint.h>
-#include <string.h>
 #include <acl/acl_rt.h>
-#include <runtime/rt.h>
-#include <runtime/runtime/rts/rts_kernel.h>
 #include <ascend_hal.h>
 #include <dlfcn.h>
+#include <errno.h>
+#include <pthread.h>
+#include <runtime/rt.h>
+#include <runtime/runtime/rts/rts_kernel.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
-#include <stddef.h>
+#include <string.h>
 #include <unistd.h>
-#include <errno.h>
-#include "dlog_pub.h"
 
 #ifndef ESL_PROXY_KARGS_LOG_LEVEL
 #define ESL_PROXY_KARGS_LOG_LEVEL 1 /* DLOG_INFO */
@@ -32,7 +33,14 @@
 #ifndef ESL_PROXY_CANN_AICPU_LAUNCH_THREADS
 #define ESL_PROXY_CANN_AICPU_LAUNCH_THREADS 6
 #endif
-#define ACL_CHECK(call, msg) do { aclError _rc = (call); if (_rc != ACL_SUCCESS) { fprintf(stderr, "%s failed: %d (%s)\n", #call, (int)_rc, msg); return 1; } } while (0)
+#define ACL_CHECK(call, msg)                                               \
+    do {                                                                   \
+        aclError _rc = (call);                                             \
+        if (_rc != ACL_SUCCESS) {                                          \
+            fprintf(stderr, "%s failed: %d (%s)\n", #call, (int)_rc, msg); \
+            return 1;                                                      \
+        }                                                                  \
+    } while (0)
 #define AICORE_CORE_STRIDE (8ULL * 1024ULL * 1024ULL)
 #define AICORE_SUB_CORE_STRIDE 0x100000ULL
 #define AICORE_REG_VALID_FALLBACK 0xFFFFFFFFULL
@@ -40,34 +48,36 @@
 #define ESL_INNER_SO_BASENAME_FMT "simpler_inner_%016lx_%d.so"
 #define ESL_INNER_OP_TYPE_FMT "%s_%016lx"
 
-
 /* ===== host_regs.c ===== */
 
-typedef int (*HalGetDeviceInfoByBuffFn)(uint64_t deviceId, int32_t moduleType, int32_t infoType, void *buf,
-                                        int32_t *size);
-typedef int (*HalMemCtlFn)(int type, void *paramValue, size_t paramValueSize, void *outValue, size_t *outSizeRet);
+typedef int (*HalGetDeviceInfoByBuffFn)(uint64_t deviceId, int32_t moduleType,
+    int32_t infoType, void *buf,
+    int32_t *size);
+typedef int (*HalMemCtlFn)(int type, void *paramValue, size_t paramValueSize,
+    void *outValue, size_t *outSizeRet);
 
-static int get_pg_mask(uint64_t *valid, uint64_t device_id)
-{
+static int get_pg_mask(uint64_t *valid, uint64_t device_id) {
     uint64_t aicore_bitmap[PLATFORM_AICORE_MAP_BUFF_LEN] = {0};
     int32_t size_n = (int32_t)(sizeof(uint64_t) * PLATFORM_AICORE_MAP_BUFF_LEN);
     HalGetDeviceInfoByBuffFn halFuncDevInfo;
 
-    halFuncDevInfo = (HalGetDeviceInfoByBuffFn)dlsym(RTLD_DEFAULT, "halGetDeviceInfoByBuff");
+    halFuncDevInfo =
+        (HalGetDeviceInfoByBuffFn)dlsym(RTLD_DEFAULT, "halGetDeviceInfoByBuff");
     if (halFuncDevInfo == NULL) {
         return 0;
     }
 
-    if (halFuncDevInfo(device_id, MODULE_TYPE_AICORE, INFO_TYPE_OCCUPY, aicore_bitmap, &size_n) != 0) {
+    if (halFuncDevInfo(device_id, MODULE_TYPE_AICORE, INFO_TYPE_OCCUPY,
+            aicore_bitmap, &size_n) != 0) {
         return 0;
     }
     *valid = aicore_bitmap[0];
     return 1;
 }
 
-static int get_aicore_reg_info(int64_t **aic, size_t *aic_len, size_t *aic_cap, int64_t **aiv, size_t *aiv_len,
-                               size_t *aiv_cap, int addr_type, int64_t device_id)
-{
+static int get_aicore_reg_info(int64_t **aic, size_t *aic_len, size_t *aic_cap,
+    int64_t **aiv, size_t *aiv_len, size_t *aiv_cap,
+    int addr_type, int64_t device_id) {
     uint64_t valid = 0;
     HalMemCtlFn halFunc;
     struct AddrMapInPara in_map_para;
@@ -128,8 +138,7 @@ static int get_aicore_reg_info(int64_t **aic, size_t *aic_len, size_t *aic_cap, 
     return 0;
 }
 
-int esl_host_init_aicore_regs(uint64_t device_id, uint64_t *out_dev_regs)
-{
+int esl_host_init_aicore_regs(uint64_t device_id, uint64_t *out_dev_regs) {
     int64_t *aic = NULL;
     size_t aic_len = 0;
     size_t aic_cap = 0;
@@ -150,8 +159,8 @@ int esl_host_init_aicore_regs(uint64_t device_id, uint64_t *out_dev_regs)
     }
     *out_dev_regs = 0;
 
-    rc = get_aicore_reg_info(&aic, &aic_len, &aic_cap, &aiv, &aiv_len, &aiv_cap, ADDR_MAP_TYPE_REG_AIC_CTRL,
-                             (int64_t)device_id);
+    rc = get_aicore_reg_info(&aic, &aic_len, &aic_cap, &aiv, &aiv_len, &aiv_cap,
+        ADDR_MAP_TYPE_REG_AIC_CTRL, (int64_t)device_id);
     if (rc != 0) {
         free(aic);
         free(aiv);
@@ -159,7 +168,8 @@ int esl_host_init_aicore_regs(uint64_t device_id, uint64_t *out_dev_regs)
     }
 
     for (i = 0; i < aic_len; ++i) {
-        if (grow_array(&host_regs, &host_regs_cap, &host_regs_len, aic[i]) == NULL) {
+        if (grow_array(&host_regs, &host_regs_cap, &host_regs_len, aic[i]) ==
+            NULL) {
             free(aic);
             free(aiv);
             free(host_regs);
@@ -167,7 +177,8 @@ int esl_host_init_aicore_regs(uint64_t device_id, uint64_t *out_dev_regs)
         }
     }
     for (i = 0; i < aiv_len; ++i) {
-        if (grow_array(&host_regs, &host_regs_cap, &host_regs_len, aiv[i]) == NULL) {
+        if (grow_array(&host_regs, &host_regs_cap, &host_regs_len, aiv[i]) ==
+            NULL) {
             free(aic);
             free(aiv);
             free(host_regs);
@@ -190,7 +201,8 @@ int esl_host_init_aicore_regs(uint64_t device_id, uint64_t *out_dev_regs)
         free(host_regs);
         return (int)ac;
     }
-    ac = aclrtMemcpy(dev_ptr, regs_size, host_regs, regs_size, ACL_MEMCPY_HOST_TO_DEVICE);
+    ac = aclrtMemcpy(dev_ptr, regs_size, host_regs, regs_size,
+        ACL_MEMCPY_HOST_TO_DEVICE);
     free(host_regs);
     if (ac != ACL_SUCCESS) {
         aclrtFree(dev_ptr);
@@ -198,8 +210,8 @@ int esl_host_init_aicore_regs(uint64_t device_id, uint64_t *out_dev_regs)
     }
 
     *out_dev_regs = (uint64_t)(uintptr_t)dev_ptr;
-    fprintf(stderr, "[esl_proxy] HW AICore regs: %zu addresses H2D -> 0x%lx\n", host_regs_len,
-            (unsigned long)*out_dev_regs);
+    fprintf(stderr, "[esl_proxy] HW AICore regs: %zu addresses H2D -> 0x%lx\n",
+        host_regs_len, (unsigned long)*out_dev_regs);
     return 0;
 }
 
@@ -230,33 +242,30 @@ typedef struct {
     void *ptr;
 } DevBuf;
 
-static aclError devbuf_alloc(DevBuf *buf, size_t n)
-{
+static aclError devbuf_alloc(DevBuf *buf, size_t n) {
     return aclrtMalloc(&buf->ptr, n, ACL_MEM_MALLOC_HUGE_FIRST);
 }
 
-static void devbuf_free(DevBuf *buf)
-{
+static void devbuf_free(DevBuf *buf) {
     if (buf->ptr != NULL) {
         aclrtFree(buf->ptr);
         buf->ptr = NULL;
     }
 }
 
-static int bootstrap_seen(uint64_t fp, int device_id)
-{
+static int bootstrap_seen(uint64_t fp, int device_id) {
     size_t i;
 
     for (i = 0; i < g_bootstrapped_count; ++i) {
-        if (g_bootstrapped[i].fp == fp && g_bootstrapped[i].device_id == device_id) {
+        if (g_bootstrapped[i].fp == fp &&
+            g_bootstrapped[i].device_id == device_id) {
             return 1;
         }
     }
     return 0;
 }
 
-static int bootstrap_insert(uint64_t fp, int device_id)
-{
+static int bootstrap_insert(uint64_t fp, int device_id) {
     if (g_bootstrapped_count >= ESL_BOOTSTRAP_CACHE_MAX) {
         return 0;
     }
@@ -266,13 +275,11 @@ static int bootstrap_insert(uint64_t fp, int device_id)
     return 1;
 }
 
-EslAicpuLoader *esl_aicpu_loader_create(void)
-{
+EslAicpuLoader *esl_aicpu_loader_create(void) {
     return (EslAicpuLoader *)calloc(1, sizeof(EslAicpuLoader));
 }
 
-void esl_aicpu_loader_destroy(EslAicpuLoader *loader)
-{
+void esl_aicpu_loader_destroy(EslAicpuLoader *loader) {
     if (loader == NULL) {
         return;
     }
@@ -285,9 +292,10 @@ void esl_aicpu_loader_destroy(EslAicpuLoader *loader)
     free(loader);
 }
 
-int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader, const void *dispatcher_so, size_t dispatcher_len,
-                               const void *inner_so, size_t inner_len, rtStream_t stream, int device_id)
-{
+int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader,
+    const void *dispatcher_so, size_t dispatcher_len,
+    const void *inner_so, size_t inner_len,
+    rtStream_t stream, int device_id) {
     DevBuf dev_dispatcher = {0};
     DevBuf dev_inner = {0};
     DevBuf dev_args = {0};
@@ -306,19 +314,23 @@ int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader, const void *dispatcher_so
     rtAicpuArgsEx_t rt_args;
     rtError_t rrc;
 
-    if (loader == NULL || dispatcher_so == NULL || dispatcher_len == 0 || inner_so == NULL || inner_len == 0) {
+    if (loader == NULL || dispatcher_so == NULL || dispatcher_len == 0 ||
+        inner_so == NULL || inner_len == 0) {
         return -1;
     }
 
     loader->device_id = device_id;
     loader->inner_fp = esl_fingerprint_bytes(inner_so, inner_len);
-    esl_make_inner_basename(loader->inner_fp, device_id, loader->inner_basename, sizeof(loader->inner_basename));
+    esl_make_inner_basename(loader->inner_fp, device_id, loader->inner_basename,
+        sizeof(loader->inner_basename));
 
     pthread_mutex_lock(&g_bootstrap_mu);
     if (bootstrap_seen(loader->inner_fp, device_id)) {
         pthread_mutex_unlock(&g_bootstrap_mu);
-        fprintf(stderr, "[esl_proxy] AICPU inner SO already bootstrapped fp=%016lx dev=%d\n",
-                (unsigned long)loader->inner_fp, device_id);
+        fprintf(
+            stderr,
+            "[esl_proxy] AICPU inner SO already bootstrapped fp=%016lx dev=%d\n",
+            (unsigned long)loader->inner_fp, device_id);
         return 0;
     }
     pthread_mutex_unlock(&g_bootstrap_mu);
@@ -327,7 +339,8 @@ int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader, const void *dispatcher_so
     if (rc != ACL_SUCCESS) {
         return (int)rc;
     }
-    rc = aclrtMemcpy(dev_dispatcher.ptr, dispatcher_len, dispatcher_so, dispatcher_len, ACL_MEMCPY_HOST_TO_DEVICE);
+    rc = aclrtMemcpy(dev_dispatcher.ptr, dispatcher_len, dispatcher_so,
+        dispatcher_len, ACL_MEMCPY_HOST_TO_DEVICE);
     if (rc != ACL_SUCCESS) {
         devbuf_free(&dev_dispatcher);
         return (int)rc;
@@ -337,7 +350,8 @@ int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader, const void *dispatcher_so
         devbuf_free(&dev_dispatcher);
         return (int)rc;
     }
-    rc = aclrtMemcpy(dev_inner.ptr, inner_len, inner_so, inner_len, ACL_MEMCPY_HOST_TO_DEVICE);
+    rc = aclrtMemcpy(dev_inner.ptr, inner_len, inner_so, inner_len,
+        ACL_MEMCPY_HOST_TO_DEVICE);
     if (rc != ACL_SUCCESS) {
         devbuf_free(&dev_inner);
         devbuf_free(&dev_dispatcher);
@@ -366,8 +380,8 @@ int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader, const void *dispatcher_so
         devbuf_free(&dev_dispatcher);
         return (int)rc;
     }
-    rc = aclrtMemcpy(dev_args.ptr, sizeof(host_dev_args), host_dev_args, sizeof(host_dev_args),
-                     ACL_MEMCPY_HOST_TO_DEVICE);
+    rc = aclrtMemcpy(dev_args.ptr, sizeof(host_dev_args), host_dev_args,
+        sizeof(host_dev_args), ACL_MEMCPY_HOST_TO_DEVICE);
     if (rc != ACL_SUCCESS) {
         devbuf_free(&dev_args);
         devbuf_free(&dev_inner);
@@ -377,7 +391,8 @@ int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader, const void *dispatcher_so
 
     memset(&args, 0, sizeof(args));
     args.k_args.device_args_ptr = (uint64_t)(uintptr_t)dev_args.ptr;
-    strncpy(args.kernel_name, "DynTileFwkKernelServerInit", sizeof(args.kernel_name) - 1);
+    strncpy(args.kernel_name, "DynTileFwkKernelServerInit",
+        sizeof(args.kernel_name) - 1);
     strncpy(args.so_name, "libaicpu_extend_kernels.so", sizeof(args.so_name) - 1);
 
     memset(&rt_args, 0, sizeof(rt_args));
@@ -386,9 +401,11 @@ int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader, const void *dispatcher_so
     rt_args.kernelNameAddrOffset = offsetof(struct Args, kernel_name);
     rt_args.soNameAddrOffset = offsetof(struct Args, so_name);
 
-    rrc = rtAicpuKernelLaunchExWithArgs(KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", 1, &rt_args, NULL, stream, 0);
+    rrc = rtAicpuKernelLaunchExWithArgs(KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", 1,
+        &rt_args, NULL, stream, 0);
     if (rrc != RT_ERROR_NONE) {
-        fprintf(stderr, "rtAicpuKernelLaunchExWithArgs bootstrap failed: %d\n", (int)rrc);
+        fprintf(stderr, "rtAicpuKernelLaunchExWithArgs bootstrap failed: %d\n",
+            (int)rrc);
         devbuf_free(&dev_args);
         devbuf_free(&dev_inner);
         devbuf_free(&dev_dispatcher);
@@ -405,12 +422,12 @@ int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader, const void *dispatcher_so
     pthread_mutex_lock(&g_bootstrap_mu);
     bootstrap_insert(loader->inner_fp, device_id);
     pthread_mutex_unlock(&g_bootstrap_mu);
-    fprintf(stderr, "[esl_proxy] bootstrapped inner SO %s\n", loader->inner_basename);
+    fprintf(stderr, "[esl_proxy] bootstrapped inner SO %s\n",
+        loader->inner_basename);
     return 0;
 }
 
-int esl_aicpu_loader_init(EslAicpuLoader *loader)
-{
+int esl_aicpu_loader_init(EslAicpuLoader *loader) {
     char init_op[128];
     char exec_op[128];
     rtLoadBinaryOption_t option;
@@ -421,9 +438,11 @@ int esl_aicpu_loader_init(EslAicpuLoader *loader)
         return -1;
     }
 
-    snprintf(loader->json_path, sizeof(loader->json_path), "/tmp/esl_proxy_inner_%016lx_%d.json",
-             (unsigned long)loader->inner_fp, getpid());
-    if (!esl_write_aicpu_kernel_json(loader->json_path, loader->inner_basename, loader->inner_fp)) {
+    snprintf(loader->json_path, sizeof(loader->json_path),
+        "/tmp/esl_proxy_inner_%016lx_%d.json",
+        (unsigned long)loader->inner_fp, getpid());
+    if (!esl_write_aicpu_kernel_json(loader->json_path, loader->inner_basename,
+            loader->inner_fp)) {
         return -1;
     }
 
@@ -434,14 +453,17 @@ int esl_aicpu_loader_init(EslAicpuLoader *loader)
     load_config.options = &option;
     load_config.numOpt = 1;
 
-    rc = rtsBinaryLoadFromFile(loader->json_path, &load_config, &loader->binary_handle);
+    rc = rtsBinaryLoadFromFile(loader->json_path, &load_config,
+        &loader->binary_handle);
     if (rc != RT_ERROR_NONE) {
         fprintf(stderr, "rtsBinaryLoadFromFile failed: %d\n", (int)rc);
         return (int)rc;
     }
 
-    esl_make_aicpu_op_type(ESL_AICPU_INIT_NAME, loader->inner_fp, init_op, sizeof(init_op));
-    esl_make_aicpu_op_type(ESL_AICPU_EXEC_NAME, loader->inner_fp, exec_op, sizeof(exec_op));
+    esl_make_aicpu_op_type(ESL_AICPU_INIT_NAME, loader->inner_fp, init_op,
+        sizeof(init_op));
+    esl_make_aicpu_op_type(ESL_AICPU_EXEC_NAME, loader->inner_fp, exec_op,
+        sizeof(exec_op));
     rc = rtsFuncGetByName(loader->binary_handle, init_op, &loader->init_handle);
     if (rc != RT_ERROR_NONE) {
         return (int)rc;
@@ -453,9 +475,9 @@ int esl_aicpu_loader_init(EslAicpuLoader *loader)
     return 0;
 }
 
-int esl_aicpu_loader_launch(EslAicpuLoader *loader, rtStream_t stream, EslKernelArgs *k_args, int aicpu_num,
-                            const char *symbol_name)
-{
+int esl_aicpu_loader_launch(EslAicpuLoader *loader, rtStream_t stream,
+    EslKernelArgs *k_args, int aicpu_num,
+    const char *symbol_name) {
     rtFuncHandle handle;
     rtCpuKernelArgs_t cpu_args;
     rtLaunchKernelAttr_t attr;
@@ -483,7 +505,8 @@ int esl_aicpu_loader_launch(EslAicpuLoader *loader, rtStream_t stream, EslKernel
 
     rc = rtsLaunchCpuKernel(handle, (uint32_t)aicpu_num, stream, &cfg, &cpu_args);
     if (rc != RT_ERROR_NONE) {
-        fprintf(stderr, "rtsLaunchCpuKernel(%s) failed: %d\n", symbol_name, (int)rc);
+        fprintf(stderr, "rtsLaunchCpuKernel(%s) failed: %d\n", symbol_name,
+            (int)rc);
         return (int)rc;
     }
     return 0;
@@ -499,13 +522,11 @@ struct EslAicoreLauncher {
 
 typedef struct EslAicoreLauncher EslAicoreLauncher;
 
-EslAicoreLauncher *esl_aicore_launcher_create(void)
-{
+EslAicoreLauncher *esl_aicore_launcher_create(void) {
     return (EslAicoreLauncher *)calloc(1, sizeof(EslAicoreLauncher));
 }
 
-void esl_aicore_launcher_destroy(EslAicoreLauncher *launcher)
-{
+void esl_aicore_launcher_destroy(EslAicoreLauncher *launcher) {
     if (launcher == NULL) {
         return;
     }
@@ -513,8 +534,8 @@ void esl_aicore_launcher_destroy(EslAicoreLauncher *launcher)
     free(launcher);
 }
 
-int esl_aicore_launcher_load(EslAicoreLauncher *launcher, const void *elf_data, size_t elf_len)
-{
+int esl_aicore_launcher_load(EslAicoreLauncher *launcher, const void *elf_data,
+    size_t elf_len) {
     char *copy;
 
     if (launcher == NULL || elf_data == NULL || elf_len == 0) {
@@ -532,8 +553,8 @@ int esl_aicore_launcher_load(EslAicoreLauncher *launcher, const void *elf_data, 
     return 0;
 }
 
-int esl_aicore_launcher_launch(EslAicoreLauncher *launcher, rtStream_t stream, void *k_args_dev, int block_dim)
-{
+int esl_aicore_launcher_launch(EslAicoreLauncher *launcher, rtStream_t stream,
+    void *k_args_dev, int block_dim) {
     rtDevBinary_t binary;
     rtArgsEx_t rt_args;
     rtTaskCfgInfo_t cfg;
@@ -568,7 +589,8 @@ int esl_aicore_launcher_launch(EslAicoreLauncher *launcher, rtStream_t stream, v
     memset(&cfg, 0, sizeof(cfg));
     cfg.schemMode = RT_SCHEM_MODE_BATCH;
 
-    rc = rtKernelLaunchWithHandleV2(launcher->bin_handle, 0, (uint32_t)block_dim, &rt_args, NULL, stream, &cfg);
+    rc = rtKernelLaunchWithHandleV2(launcher->bin_handle, 0, (uint32_t)block_dim,
+        &rt_args, NULL, stream, &cfg);
     if (rc != RT_ERROR_NONE) {
         fprintf(stderr, "rtKernelLaunchWithHandleV2 failed: %d\n", (int)rc);
         return (int)rc;
@@ -582,21 +604,18 @@ typedef struct {
     void *ptr;
 } DevMem;
 
-static void devmem_free(DevMem *mem)
-{
+static void devmem_free(DevMem *mem) {
     if (mem->ptr != NULL) {
         aclrtFree(mem->ptr);
         mem->ptr = NULL;
     }
 }
 
-static aclError devmem_alloc(DevMem *mem, size_t n)
-{
+static aclError devmem_alloc(DevMem *mem, size_t n) {
     return aclrtMalloc(&mem->ptr, n, ACL_MEM_MALLOC_HUGE_FIRST);
 }
 
-static void esl_host_sync_cann_log_level(int level)
-{
+static void esl_host_sync_cann_log_level(int level) {
     if (getenv("ASCEND_GLOBAL_LOG_LEVEL") != NULL) {
         return;
     }
@@ -609,8 +628,7 @@ static void esl_host_sync_cann_log_level(int level)
     dlog_setlevel(-1, level, 0);
 }
 
-static int resolve_device_id(int cli_dev)
-{
+static int resolve_device_id(int cli_dev) {
     const char *env = getenv("TASK_DEVICE");
 
     if (env != NULL && env[0] != '\0') {
@@ -619,19 +637,19 @@ static int resolve_device_id(int cli_dev)
     return cli_dev;
 }
 
-static void usage(const char *prog)
-{
-    fprintf(stderr,
-            "usage: %s [-d device_id] [--dispatcher PATH] [--aicpu PATH] [--aicore PATH]\n"
-            "  defaults:\n"
-            "    dispatcher = build/onboard/aicpu/libsimpler_aicpu_dispatcher.so\n"
-            "    aicpu      = build/onboard/aicpu/libaicpu_kernel.so\n"
-            "    aicore     = build/onboard/aicore/aicore_kernel.o\n",
-            prog);
+static void usage(const char *prog) {
+    fprintf(
+        stderr,
+        "usage: %s [-d device_id] [--dispatcher PATH] [--aicpu PATH] [--aicore "
+        "PATH]\n"
+        "  defaults:\n"
+        "    dispatcher = build/onboard/aicpu/libsimpler_aicpu_dispatcher.so\n"
+        "    aicpu      = build/onboard/aicpu/libaicpu_kernel.so\n"
+        "    aicore     = build/onboard/aicore/aicore_kernel.o\n",
+        prog);
 }
 
-int esl_onboard_run(int argc, char **argv)
-{
+int esl_onboard_run(int argc, char **argv) {
     int device_id = 0;
     char dispatcher_path[512] = {0};
     char aicpu_path[512] = {0};
@@ -659,6 +677,7 @@ int esl_onboard_run(int argc, char **argv)
     uint64_t stats[8];
     aclError stats_rc;
     const char *env;
+    int swimlane_level = 0;
 
     for (i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
@@ -682,16 +701,19 @@ int esl_onboard_run(int argc, char **argv)
 
     if (dispatcher_path[0] == '\0') {
         env = getenv("ESL_PROXY_DISPATCHER_SO");
-        strncpy(dispatcher_path, env ? env : "build/onboard/aicpu/libsimpler_aicpu_dispatcher.so",
-                sizeof(dispatcher_path) - 1);
+        strncpy(dispatcher_path,
+            env ? env : "build/onboard/aicpu/libsimpler_aicpu_dispatcher.so",
+            sizeof(dispatcher_path) - 1);
     }
     if (aicpu_path[0] == '\0') {
         env = getenv("ESL_PROXY_AICPU_SO");
-        strncpy(aicpu_path, env ? env : "build/onboard/aicpu/libaicpu_kernel.so", sizeof(aicpu_path) - 1);
+        strncpy(aicpu_path, env ? env : "build/onboard/aicpu/libaicpu_kernel.so",
+            sizeof(aicpu_path) - 1);
     }
     if (aicore_path[0] == '\0') {
         env = getenv("ESL_PROXY_AICORE_ELF");
-        strncpy(aicore_path, env ? env : "build/onboard/aicore/aicore_kernel.o", sizeof(aicore_path) - 1);
+        strncpy(aicore_path, env ? env : "build/onboard/aicore/aicore_kernel.o",
+            sizeof(aicore_path) - 1);
     }
 
     if (!read_file(dispatcher_path, &dispatcher_bytes, &dispatcher_len)) {
@@ -707,20 +729,27 @@ int esl_onboard_run(int argc, char **argv)
         return 1;
     }
 
-    fprintf(stderr, "[esl_proxy] onboard runner device=%d block_dim=%d workers=%d(aic=%d+aiv=%d) aicpu_threads=%d launch_threads=%d\n",
-            device_id, ESL_PROXY_ONBOARD_BLOCK_DIM, ESL_PROXY_ONBOARD_WORKER_COUNT, ESL_PROXY_ONBOARD_AIC_COUNT,
-            ESL_PROXY_ONBOARD_AIV_COUNT, ESL_PROXY_AICPU_THREAD_NUM, ESL_PROXY_CANN_AICPU_LAUNCH_THREADS);
-    fprintf(stderr, "[esl_proxy] dispatcher=%s aicpu=%s aicore=%s\n", dispatcher_path, aicpu_path, aicore_path);
+    fprintf(stderr,
+        "[esl_proxy] onboard runner device=%d block_dim=%d "
+        "workers=%d(aic=%d+aiv=%d) aicpu_threads=%d launch_threads=%d\n",
+        device_id, ESL_PROXY_ONBOARD_BLOCK_DIM,
+        ESL_PROXY_ONBOARD_WORKER_COUNT, ESL_PROXY_ONBOARD_AIC_COUNT,
+        ESL_PROXY_ONBOARD_AIV_COUNT, ESL_PROXY_AICPU_THREAD_NUM,
+        ESL_PROXY_CANN_AICPU_LAUNCH_THREADS);
+    fprintf(stderr, "[esl_proxy] dispatcher=%s aicpu=%s aicore=%s\n",
+        dispatcher_path, aicpu_path, aicore_path);
 
     ACL_CHECK(aclInit(NULL), "aclInit");
     esl_host_sync_cann_log_level(ESL_PROXY_KARGS_LOG_LEVEL);
     ACL_CHECK(aclrtSetDevice(device_id), "aclrtSetDevice");
+    ESL_SWIMLANE_HOST_ONBOARD_PARSE_ENV(swimlane_level);
     ACL_CHECK(aclrtCreateStream(&stream_aicpu), "aclrtCreateStream aicpu");
     ACL_CHECK(aclrtCreateStream(&stream_aicore), "aclrtCreateStream aicore");
 
     loader = esl_aicpu_loader_create();
-    rc = esl_aicpu_loader_bootstrap(loader, dispatcher_bytes, dispatcher_len, aicpu_bytes, aicpu_len, stream_aicpu,
-                                    device_id);
+    rc = esl_aicpu_loader_bootstrap(loader, dispatcher_bytes, dispatcher_len,
+        aicpu_bytes, aicpu_len, stream_aicpu,
+        device_id);
     if (rc != 0) {
         fprintf(stderr, "bootstrap failed: %d\n", rc);
         esl_aicpu_loader_destroy(loader);
@@ -767,21 +796,46 @@ int esl_onboard_run(int argc, char **argv)
 
     ACL_CHECK(devmem_alloc(&dev_runtime, sizeof(EslRuntime)), "runtime GM");
     ACL_CHECK(devmem_alloc(&dev_wall, 8 * sizeof(uint64_t)), "device stats GM");
-    ACL_CHECK(devmem_alloc(&dev_k_args, sizeof(EslKernelArgs)), "device KernelArgs GM");
-    payload_bytes = (size_t)ESL_PROXY_ONBOARD_WORKER_COUNT * 2U * sizeof(EslFakeDispatchPayload);
+    ACL_CHECK(devmem_alloc(&dev_k_args, sizeof(EslKernelArgs)),
+        "device KernelArgs GM");
+    payload_bytes = (size_t)ESL_PROXY_ONBOARD_WORKER_COUNT * 2U *
+                    sizeof(EslFakeDispatchPayload);
     ACL_CHECK(devmem_alloc(&dev_payload, payload_bytes), "fake task args GM");
-    ACL_CHECK(aclrtMemset(dev_payload.ptr, payload_bytes, 0, payload_bytes), "zero payload GM");
+    ACL_CHECK(aclrtMemset(dev_payload.ptr, payload_bytes, 0, payload_bytes),
+        "zero payload GM");
 
     for (i = 0; i < ESL_PROXY_ONBOARD_WORKER_COUNT; ++i) {
-        uint8_t *base = (uint8_t *)dev_payload.ptr + (size_t)i * 2U * sizeof(EslFakeDispatchPayload);
+        uint8_t *base = (uint8_t *)dev_payload.ptr +
+                        (size_t)i * 2U * sizeof(EslFakeDispatchPayload);
 
         host_runtime.workers[i].task = (uint64_t)(uintptr_t)base;
-        host_runtime.workers[i].core_type = (i < ESL_PROXY_ONBOARD_BLOCK_DIM) ? 0 : 1;
+        host_runtime.workers[i].core_type =
+            (i < ESL_PROXY_ONBOARD_BLOCK_DIM) ? 0 : 1;
     }
 
-    ACL_CHECK(aclrtMemcpy(dev_runtime.ptr, sizeof(EslRuntime), &host_runtime, sizeof(EslRuntime), ACL_MEMCPY_HOST_TO_DEVICE),
-              "H2D runtime");
-    ACL_CHECK(aclrtMemset(dev_wall.ptr, 8 * sizeof(uint64_t), 0, 8 * sizeof(uint64_t)), "zero stats");
+    ACL_CHECK(aclrtMemcpy(dev_runtime.ptr, sizeof(EslRuntime), &host_runtime,
+                  sizeof(EslRuntime), ACL_MEMCPY_HOST_TO_DEVICE),
+        "H2D runtime");
+    ACL_CHECK(
+        aclrtMemset(dev_wall.ptr, 8 * sizeof(uint64_t), 0, 8 * sizeof(uint64_t)),
+        "zero stats");
+
+    ESL_SWIMLANE_HOST_ONBOARD_INIT_OR(
+        swimlane_level, device_id, &rc, do {
+            esl_aicpu_loader_destroy(loader);
+            devmem_free(&dev_payload);
+            devmem_free(&dev_k_args);
+            devmem_free(&dev_wall);
+            devmem_free(&dev_runtime);
+            aclrtDestroyStream(stream_aicore);
+            aclrtDestroyStream(stream_aicpu);
+            aclrtResetDevice(device_id);
+            aclFinalize();
+            free(dispatcher_bytes);
+            free(aicpu_bytes);
+            free(aicore_bytes);
+            return 1;
+        } while (0));
 
     memset(&k_args, 0, sizeof(k_args));
     k_args.runtime_args = (struct EslRuntime *)dev_runtime.ptr;
@@ -790,8 +844,10 @@ int esl_onboard_run(int argc, char **argv)
     k_args.log_info_v = 5;
     k_args.device_wall_data_base = (uint64_t)(uintptr_t)dev_wall.ptr;
     k_args.device_id = (uint32_t)device_id;
-    ACL_CHECK(aclrtMemcpy(dev_k_args.ptr, sizeof(EslKernelArgs), &k_args, sizeof(EslKernelArgs), ACL_MEMCPY_HOST_TO_DEVICE),
-              "H2D KernelArgs");
+    ESL_SWIMLANE_HOST_ONBOARD_FILL_KARGS(&k_args, swimlane_level);
+    ACL_CHECK(aclrtMemcpy(dev_k_args.ptr, sizeof(EslKernelArgs), &k_args,
+                  sizeof(EslKernelArgs), ACL_MEMCPY_HOST_TO_DEVICE),
+        "H2D KernelArgs");
 
     aicore = esl_aicore_launcher_create();
     rc = esl_aicore_launcher_load(aicore, aicore_bytes, aicore_len);
@@ -813,10 +869,13 @@ int esl_onboard_run(int argc, char **argv)
         return 1;
     }
 
-    fprintf(stderr, "[esl_proxy] launching AICore kernel block_dim=%d (workers=%d)\n", ESL_PROXY_ONBOARD_BLOCK_DIM,
-            ESL_PROXY_ONBOARD_WORKER_COUNT);
+    fprintf(stderr,
+        "[esl_proxy] launching AICore kernel block_dim=%d (workers=%d)\n",
+        ESL_PROXY_ONBOARD_BLOCK_DIM, ESL_PROXY_ONBOARD_WORKER_COUNT);
     fprintf(stderr, "[esl_proxy] aicpu init launch\n");
-    rc = esl_aicpu_loader_launch(loader, stream_aicpu, &k_args, 1, ESL_AICPU_INIT_NAME);
+    ESL_SWIMLANE_HOST_START();
+    rc = esl_aicpu_loader_launch(loader, stream_aicpu, &k_args, 1,
+        ESL_AICPU_INIT_NAME);
     if (rc != 0) {
         esl_aicore_launcher_destroy(aicore);
         esl_aicpu_loader_destroy(loader);
@@ -836,9 +895,13 @@ int esl_onboard_run(int argc, char **argv)
     fprintf(stderr, "[esl_proxy] aicpu init sync\n");
     ACL_CHECK(aclrtSynchronizeStream(stream_aicpu), "sync after aicpu init");
 
-    fprintf(stderr, "[esl_proxy] aicore launch block_dim=%d (stream_aicore, concurrent with exec)\n",
-            ESL_PROXY_ONBOARD_BLOCK_DIM);
-    rc = esl_aicore_launcher_launch(aicore, stream_aicore, dev_k_args.ptr, ESL_PROXY_ONBOARD_BLOCK_DIM);
+    ESL_SWIMLANE_HOST_ONBOARD_SYNC_CORE_TYPES(swimlane_level, dev_runtime.ptr);
+
+    fprintf(stderr, "[esl_proxy] aicpu exec launch (before aicore — swimlane "
+                    "init runs in exec init_once)\n");
+    rc = esl_aicpu_loader_launch(loader, stream_aicpu, &k_args,
+        ESL_PROXY_CANN_AICPU_LAUNCH_THREADS,
+        ESL_AICPU_EXEC_NAME);
     if (rc != 0) {
         esl_aicore_launcher_destroy(aicore);
         esl_aicpu_loader_destroy(loader);
@@ -856,8 +919,12 @@ int esl_onboard_run(int argc, char **argv)
         return 1;
     }
 
-    fprintf(stderr, "[esl_proxy] aicpu exec launch\n");
-    rc = esl_aicpu_loader_launch(loader, stream_aicpu, &k_args, ESL_PROXY_CANN_AICPU_LAUNCH_THREADS, ESL_AICPU_EXEC_NAME);
+    fprintf(stderr,
+        "[esl_proxy] aicore launch block_dim=%d (stream_aicore, after exec "
+        "kickoff)\n",
+        ESL_PROXY_ONBOARD_BLOCK_DIM);
+    rc = esl_aicore_launcher_launch(aicore, stream_aicore, dev_k_args.ptr,
+        ESL_PROXY_ONBOARD_BLOCK_DIM);
     if (rc != 0) {
         esl_aicore_launcher_destroy(aicore);
         esl_aicpu_loader_destroy(loader);
@@ -877,21 +944,27 @@ int esl_onboard_run(int argc, char **argv)
 
     fprintf(stderr, "[esl_proxy] aicpu exec sync\n");
     ACL_CHECK(aclrtSynchronizeStream(stream_aicpu), "sync after aicpu exec");
+    ESL_SWIMLANE_HOST_STOP_EXPORT();
+    ESL_SWIMLANE_HOST_FINALIZE();
     fprintf(stderr, "[esl_proxy] done (aicore stream left to device reset)\n");
     fflush(stderr);
 
     memset(stats, 0, sizeof(stats));
-    stats_rc = aclrtMemcpy(stats, sizeof(stats), dev_wall.ptr, sizeof(stats), ACL_MEMCPY_DEVICE_TO_HOST);
+    stats_rc = aclrtMemcpy(stats, sizeof(stats), dev_wall.ptr, sizeof(stats),
+        ACL_MEMCPY_DEVICE_TO_HOST);
     if (stats_rc != ACL_SUCCESS) {
         fprintf(stderr, "D2H stats failed: %d\n", (int)stats_rc);
     }
 
-    printf("esl_proxy onboard: task_cnt=%llu subtask_cnt=%llu completed_cnt=%llu wall_ns=%llu\n",
-           (unsigned long long)stats[0], (unsigned long long)stats[1], (unsigned long long)stats[2],
-           (unsigned long long)stats[3]);
-    printf("[diag] commit=%llu n_uncomp=%llu first_uncomp=%u pred_cnt[first]=%u ready_cube=%u ready_vec=%u\n",
-           (unsigned long long)stats[4], (unsigned long long)stats[5], (unsigned)(stats[6] & 0xffffffffULL),
-           (unsigned)(stats[6] >> 32), (unsigned)(stats[7] & 0xffffffffULL), (unsigned)(stats[7] >> 32));
+    printf("esl_proxy onboard: task_cnt=%llu subtask_cnt=%llu completed_cnt=%llu "
+           "wall_ns=%llu\n",
+        (unsigned long long)stats[0], (unsigned long long)stats[1],
+        (unsigned long long)stats[2], (unsigned long long)stats[3]);
+    printf("[diag] commit=%llu n_uncomp=%llu first_uncomp=%u pred_cnt[first]=%u "
+           "ready_cube=%u ready_vec=%u\n",
+        (unsigned long long)stats[4], (unsigned long long)stats[5],
+        (unsigned)(stats[6] & 0xffffffffULL), (unsigned)(stats[6] >> 32),
+        (unsigned)(stats[7] & 0xffffffffULL), (unsigned)(stats[7] >> 32));
     fflush(stdout);
 
     free(dispatcher_bytes);
@@ -899,12 +972,15 @@ int esl_onboard_run(int argc, char **argv)
     free(aicore_bytes);
 
     if (stats[0] == 0 || stats[2] != stats[0]) {
-        fprintf(stderr, "esl_proxy onboard: FAIL (completed %llu != task_cnt %llu — DAG not fully scheduled)\n",
-                (unsigned long long)stats[2], (unsigned long long)stats[0]);
+        fprintf(stderr,
+            "esl_proxy onboard: FAIL (completed %llu != task_cnt %llu — DAG "
+            "not fully scheduled)\n",
+            (unsigned long long)stats[2], (unsigned long long)stats[0]);
         fflush(stderr);
         _Exit(1);
     }
-    printf("esl_proxy onboard: OK (all %llu tasks completed)\n", (unsigned long long)stats[0]);
+    printf("esl_proxy onboard: OK (all %llu tasks completed)\n",
+        (unsigned long long)stats[0]);
     fflush(stdout);
     _Exit(0);
 }

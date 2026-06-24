@@ -14,11 +14,16 @@ else()
     message(FATAL_ERROR "MUST set CUSTOM_INCLUDE_DIRS")
 endif()
 
+if(NOT DEFINED ESL_PROXY_ENABLE_L2_SWIMLANE)
+    set(ESL_PROXY_ENABLE_L2_SWIMLANE 0)
+endif()
+
 set(ALL_SOURCES "")
 if(DEFINED CUSTOM_SOURCE_DIRS)
     foreach(SRC_DIR ${CUSTOM_SOURCE_DIRS})
         list(APPEND ALL_SOURCES
             "${SRC_DIR}/aicore_kernel.cpp"
+            "${SRC_DIR}/l2_swimlane/aicore_profiling_state.cpp"
         )
     endforeach()
 else()
@@ -40,6 +45,7 @@ set(AICORE_FLAGS
     "-c -O3 -g -x cce -Wall -std=c++17 \
     --cce-aicore-only \
     -DESL_PROXY_AICORE_FAKE_FIN \
+    -DESL_PROXY_ENABLE_L2_SWIMLANE=${ESL_PROXY_ENABLE_L2_SWIMLANE} \
     -mllvm -cce-aicore-stack-size=0x8000 \
     -mllvm -cce-aicore-function-stack-size=0x8000 \
     -mllvm -cce-aicore-record-overflow=false \

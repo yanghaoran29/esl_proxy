@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.16.3)
-project(esl_onboard_runner LANGUAGES C)
+
+if(NOT DEFINED ESL_PROXY_ENABLE_L2_SWIMLANE)
+    set(ESL_PROXY_ENABLE_L2_SWIMLANE 0)
+endif()
+
+if(ESL_PROXY_ENABLE_L2_SWIMLANE)
+    project(esl_onboard_runner LANGUAGES C CXX)
+else()
+    project(esl_onboard_runner LANGUAGES C)
+endif()
 
 if(NOT DEFINED ASCEND_HOME_PATH)
     if(DEFINED ENV{ASCEND_HOME_PATH})
@@ -21,19 +30,37 @@ set(ROOT "${REPO}")
 set(ESL_CORE "${REPO}/esl_proxy")
 set(ESL_SRC "${ESL_CORE}/src")
 
-add_executable(esl_onboard_runner
+set(ESL_ONBOARD_RUNNER_SOURCES
     "${ESL_SRC}/main.c"
     "${ONBOARD_SRC}/host_onboard.c"
     "${ONBOARD_SRC}/tools.c"
 )
+if(ESL_PROXY_ENABLE_L2_SWIMLANE)
+    list(APPEND ESL_ONBOARD_RUNNER_SOURCES
+        "${ONBOARD_SRC}/l2_swimlane/esl_swimlane_host.cpp"
+        "${ONBOARD_SRC}/l2_swimlane/l2_swimlane_collector.cpp"
+        "${ONBOARD_SRC}/onboard_log.c"
+    )
+endif()
 
-target_compile_definitions(esl_onboard_runner PRIVATE ESL_PROXY_ONBOARD_HOST=1)
+add_executable(esl_onboard_runner ${ESL_ONBOARD_RUNNER_SOURCES})
 
-target_compile_options(esl_onboard_runner PRIVATE -Wall -Wextra -O2 -g -std=c11)
+target_compile_definitions(esl_onboard_runner PRIVATE
+    ESL_PROXY_ONBOARD_HOST=1
+    ESL_PROXY_ENABLE_L2_SWIMLANE=${ESL_PROXY_ENABLE_L2_SWIMLANE}
+)
+
+target_compile_options(esl_onboard_runner PRIVATE
+    -Wall -Wextra -O2 -g
+    $<$<COMPILE_LANGUAGE:C>:-std=c11>
+    $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++17>
+)
 
 target_include_directories(esl_onboard_runner
     PRIVATE
         "${ONBOARD_INC}"
+        "${ONBOARD_INC}/l2_swimlane"
+        "${ONBOARD_SRC}/l2_swimlane"
         "${ESL_CORE}/include"
         "${ASCEND_HOME_PATH}/include"
         "${ASCEND_HOME_PATH}/pkg_inc"

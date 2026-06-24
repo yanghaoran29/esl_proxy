@@ -61,7 +61,8 @@ struct task_desc {
     int64_t        scalar[32];  /* scalar kernel arguments */
     uint16_t       tensor_cnt;  /* number of valid data[] entries */
     uint16_t       scalar_cnt;  /* number of valid scalar[] entries */
-    uint16_t       duration;    /* estimated kernel cycles (low 16 bits) */
+    uint32_t       duration;    /* fake-kernel busy-wait duration (ns, swimlane measured) */
+    uint32_t       jitter_mask; /* fake-kernel jitter mask (§4.2); 0 = no jitter */
 };
 
 struct predecessor_list {

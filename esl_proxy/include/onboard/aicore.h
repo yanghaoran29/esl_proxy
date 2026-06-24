@@ -23,6 +23,7 @@
 #include <cstring>
 
 #include "onboard_config.h"
+#include "core_type.h"
 
 #ifndef __gm__
 #define __gm__
@@ -77,34 +78,5 @@ __aicore__ inline void write_reg(RegId reg, uint64_t value) {
 __aicore__ inline uint32_t get_physical_core_id() { return static_cast<uint32_t>(get_coreid()) & AICORE_COREID_MASK; }
 
 __aicore__ __attribute__((always_inline)) inline uint64_t get_sys_cnt_aicore() { return get_sys_cnt(); }
-
-enum class CoreType : int32_t {
-    AIC = 0,
-    AIV = 1
-};
-
-inline CoreType core_type_from_string(const char *type_str) {
-    if (type_str == nullptr) {
-        return CoreType::AIC;
-    }
-    if (strcmp(type_str, "aic") == 0 || strcmp(type_str, "AIC") == 0) {
-        return CoreType::AIC;
-    }
-    if (strcmp(type_str, "aiv") == 0 || strcmp(type_str, "AIV") == 0) {
-        return CoreType::AIV;
-    }
-    return CoreType::AIC;
-}
-
-inline const char *core_type_to_string(CoreType core_type) {
-    switch (core_type) {
-    case CoreType::AIC:
-        return "AIC";
-    case CoreType::AIV:
-        return "AIV";
-    default:
-        return "UNKNOWN";
-    }
-}
 
 #endif  // SRC_COMMON_PLATFORM_INCLUDE_AICORE_AICORE_H_

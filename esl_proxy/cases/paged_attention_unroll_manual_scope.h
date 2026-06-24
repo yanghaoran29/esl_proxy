@@ -23,10 +23,15 @@
 
 extern atomic_int g_task_id;
 
-#define DUR_QK_MATMUL 51630
-#define DUR_SOFTMAX_PREP 58820
-#define DUR_PV_MATMUL 52610
-#define DUR_ONLINE_UPDATE 2560
+/* fake kernel设计文档.md §5.2.2/§5.2.3 实测均值 (ns) + §5.2.4 mask */
+#define DUR_PA_QK_MATMUL 51340U
+#define DUR_PA_SOFTMAX_PREP 59130U
+#define DUR_PA_PV_MATMUL 52600U
+#define DUR_PA_ONLINE_UPDATE 2550U
+#define MASK_PA_QK_MATMUL 8191U
+#define MASK_PA_SOFTMAX_PREP 8191U
+#define MASK_PA_PV_MATMUL 16383U
+#define MASK_PA_ONLINE_UPDATE 2047U
 
 int g_subtask_cnt = 0;
 
@@ -54,7 +59,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
                 Tensor sij_buf = alloc_tensors((uint32_t[2]){16, 8192}, 2, FLOAT32); // q_tile=16, n_unroll*block_size=64*128
 
                 /* task 0: qk_matmul */
-                new_task(g_task_id, TASK_TYPE_CUBE, 1, DUR_QK_MATMUL);
+                new_task(g_task_id, TASK_TYPE_CUBE, 1, DUR_PA_QK_MATMUL, MASK_PA_QK_MATMUL);
                 add_input(g_task_id, ext_query);
                 add_input(g_task_id, ext_key_cache);
                 add_input(g_task_id, ext_block_table);
@@ -68,7 +73,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
                 Tensor li = alloc_tensors((uint32_t[2]){1, 16}, 2, FLOAT32); // q_tile=16
 
                 /* task 1: softmax_prep */
-                new_task(g_task_id, TASK_TYPE_VECTOR, 1, DUR_SOFTMAX_PREP);
+                new_task(g_task_id, TASK_TYPE_VECTOR, 1, DUR_PA_SOFTMAX_PREP, MASK_PA_SOFTMAX_PREP);
                 add_input(g_task_id, sij_buf);
                 add_output(g_task_id, pij_buf);
                 add_output(g_task_id, mi);
@@ -83,7 +88,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
                 Tensor oi_new = alloc_tensors((uint32_t[2]){16, 128}, 2, FLOAT32); // q_tile=16, head_dim=128
 
                 /* task 2: pv_matmul */
-                new_task(g_task_id, TASK_TYPE_CUBE, 1, DUR_PV_MATMUL);
+                new_task(g_task_id, TASK_TYPE_CUBE, 1, DUR_PA_PV_MATMUL, MASK_PA_PV_MATMUL);
                 add_input(g_task_id, pij_buf);
                 add_input(g_task_id, ext_value_cache);
                 add_input(g_task_id, ext_block_table);
@@ -96,7 +101,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
                 g_task_id++;
 
                 /* task 3: online_update */
-                new_task(g_task_id, TASK_TYPE_VECTOR, 1, DUR_ONLINE_UPDATE);
+                new_task(g_task_id, TASK_TYPE_VECTOR, 1, DUR_PA_ONLINE_UPDATE, MASK_PA_ONLINE_UPDATE);
                 add_input(g_task_id, mi);
                 add_input(g_task_id, li);
                 add_input(g_task_id, oi_new);

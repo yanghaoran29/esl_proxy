@@ -45,8 +45,13 @@ fi
 # real paged-attention manual-scope case (1920 tasks).
 ORCH_CASE="${ORCH_CASE:-paged_attention_unroll_manual_scope.h}"
 QWEN3_SPMD_TIER="${QWEN3_SPMD_TIER:-2}"
+ESL_PROXY_ENABLE_L2_SWIMLANE="${ESL_PROXY_ENABLE_L2_SWIMLANE:-0}"
 
-CUSTOM_INCLUDES="${ONBOARD_INC};${ESL_CORE}/include;${ESL_CORE}/cases"
+CUSTOM_INCLUDES="${ONBOARD_INC};${ESL_CORE}/include;${ESL_CORE}/cases;${ONBOARD_INC}/l2_swimlane"
+SWIMLANE_FLAGS=""
+if [[ "$ESL_PROXY_ENABLE_L2_SWIMLANE" != "0" ]]; then
+  SWIMLANE_FLAGS="-DESL_PROXY_ENABLE_L2_SWIMLANE=1"
+fi
 
 # Sources are flat in src/onboard. Build the AICPU kernel file list = everything
 # in src/onboard EXCEPT the aicore / host / dispatcher sources, plus the core
@@ -61,6 +66,9 @@ for f in "$ONBOARD_SRC"/*.c "$ONBOARD_SRC"/*.cpp; do
   [[ $skip -eq 0 ]] && SRC_FILES="${SRC_FILES:+$SRC_FILES;}$f"
 done
 for f in aicpu_runtime cutter dispatch shm; do SRC_FILES="${SRC_FILES};${ESL_CORE}/src/${f}.c"; done
+if [[ "$ESL_PROXY_ENABLE_L2_SWIMLANE" != "0" ]]; then
+  SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/l2_swimlane/l2_swimlane_collector_aicpu.cpp;${ONBOARD_SRC}/l2_swimlane/device_time_aicpu.c"
+fi
 
 export SIMPLER_DISABLE_WARNINGS_AS_ERRORS=1
 ONBOARD_LOG_FLAGS="-DWORKER_LOG=0 -DMAIN_LOG=0"
@@ -68,8 +76,8 @@ ONBOARD_LOG_FLAGS="-DWORKER_LOG=0 -DMAIN_LOG=0"
 cmake -B "$BUILD_DIR" -S "${ROOT}/cmake/onboard/aicpu" \
   -DCMAKE_CXX_COMPILER="$CROSS_CXX" \
   -DCMAKE_C_COMPILER="$CROSS_CC" \
-  -DCMAKE_C_FLAGS="-DESL_PROXY_ONBOARD -DORCH_CASE=${ORCH_CASE} -DQWEN3_SPMD_TIER=${QWEN3_SPMD_TIER} ${ONBOARD_LOG_FLAGS} -Wno-error -w" \
-  -DCMAKE_CXX_FLAGS="-DESL_PROXY_ONBOARD -DORCH_CASE=${ORCH_CASE} -DQWEN3_SPMD_TIER=${QWEN3_SPMD_TIER} ${ONBOARD_LOG_FLAGS} -Wno-error -w" \
+  -DCMAKE_C_FLAGS="-DESL_PROXY_ONBOARD -DORCH_CASE=${ORCH_CASE} -DQWEN3_SPMD_TIER=${QWEN3_SPMD_TIER} ${ONBOARD_LOG_FLAGS} ${SWIMLANE_FLAGS} -Wno-error -w" \
+  -DCMAKE_CXX_FLAGS="-DESL_PROXY_ONBOARD -DORCH_CASE=${ORCH_CASE} -DQWEN3_SPMD_TIER=${QWEN3_SPMD_TIER} ${ONBOARD_LOG_FLAGS} ${SWIMLANE_FLAGS} -Wno-error -w" \
   -DESL_ONBOARD_DIR="$ONBOARD_SRC" \
   -DCUSTOM_INCLUDE_DIRS="${CUSTOM_INCLUDES}" \
   -DCUSTOM_SOURCE_FILES="${SRC_FILES}" \

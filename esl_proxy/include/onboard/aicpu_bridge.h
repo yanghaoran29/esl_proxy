@@ -1,5 +1,5 @@
 /*
- * AICPU platform glue: AICore bridge, register access, shm sync, affinity gate.
+ * AICPU platform glue: AICore bridge, register access, shm sync.
  */
 #ifndef ESL_PROXY_AICPU_BRIDGE_H
 #define ESL_PROXY_AICPU_BRIDGE_H
@@ -49,7 +49,7 @@ void esl_shutdown_all_cores(EslRuntime *runtime);
 uint64_t esl_handshake_reg_addr(int core_idx);
 
 void esl_dispatch_payload_init(EslRuntime *runtime);
-void esl_dispatch_payload_prepare(int core, uint16_t task_id, const EslOnboardDispatchInput *input);
+void esl_dispatch_payload_prepare(int core, uint32_t reg_task_id, const EslOnboardDispatchInput *input);
 
 void set_platform_regs(uint64_t regs);
 uint64_t get_platform_regs(void);
@@ -69,10 +69,6 @@ void esl_onboard_flush_after_cutter(void);
 void esl_onboard_flush_after_dispatch(void);
 void esl_onboard_flush_after_poll(void);
 void esl_onboard_invalidate_before_poll(void);
-
-bool platform_aicpu_affinity_gate(int32_t logical_count, int32_t total_launched);
-bool platform_aicpu_affinity_gate_filter(const int32_t *allowed_cpus, int32_t allowed_count, int32_t total_launched);
-int32_t platform_aicpu_affinity_thread_idx(void);
 
 #ifdef __cplusplus
 }

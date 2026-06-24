@@ -28,10 +28,14 @@ struct KernelArgs {
     uint64_t regs;
     uint64_t ffts_base_addr;
     uint64_t dump_data_base;
+    uint64_t l2_swimlane_data_base;
+    uint64_t pmu_data_base;       /* reserved (swimlane-only build: always 0) */
+    uint64_t pmu_reg_addrs;       /* reserved (swimlane-only build: always 0) */
     uint64_t dep_gen_data_base;
     uint64_t scope_stats_data_base;
-    uint32_t log_level;   /* DLOG_DEBUG(0)..DLOG_ERROR(3), see CANN log_types.h */
-    uint32_t log_info_v;  /* min sub-level for LOG_INFO_V1..V9 (DLOG_INFO); V0 uses DLOG_DEBUG */
+    uint64_t l2_swimlane_aicore_rotation_table;
+    uint32_t log_level;
+    uint32_t log_info_v;
     uint32_t enable_profiling_flag;
     uint32_t _pad;
     uint64_t device_wall_data_base;

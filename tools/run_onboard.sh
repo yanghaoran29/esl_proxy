@@ -4,6 +4,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+export ESL_PROXY_ROOT="$ROOT"
+if [[ -d "${ROOT}/../simpler/simpler_setup" ]]; then
+  export SIMPLER_ROOT="$(cd "${ROOT}/../simpler" && pwd)"
+fi
 
 if [[ -z "${ASCEND_HOME_PATH:-}" ]]; then
   echo "ASCEND_HOME_PATH must be set" >&2
@@ -29,6 +33,10 @@ if [[ -n "${TASK_DEVICE:-}" ]]; then
 fi
 
 if [[ "$SKIP_BUILD" -eq 0 ]]; then
+  SWIMLANE_LEVEL="${ESL_PROXY_L2_SWIMLANE_LEVEL:-0}"
+  if [[ "$SWIMLANE_LEVEL" != "0" ]]; then
+    export ESL_PROXY_ENABLE_L2_SWIMLANE=1
+  fi
   bash cmake/onboard/build_aicpu.sh
   bash cmake/onboard/build_aicore.sh
   bash cmake/onboard/build_onboard_host.sh
@@ -46,7 +54,16 @@ for f in "$RUNNER" "$DISPATCHER" "$AICPU" "$AICORE"; do
   fi
 done
 
-exec "$RUNNER" -d "$DEVICE_ID" \
+"$RUNNER" -d "$DEVICE_ID" \
   --dispatcher "$DISPATCHER" \
   --aicpu "$AICPU" \
   --aicore "$AICORE"
+
+# Raw l2_swimlane_records.json is not Perfetto format; runner also emits trace JSON
+# when swimlane export succeeds. Re-run conversion here if the runner skipped it.
+SWIMLANE_LEVEL="${ESL_PROXY_L2_SWIMLANE_LEVEL:-0}"
+RAW_SWIMLANE="${ROOT}/l2_swimlane_records.json"
+TRACE_SWIMLANE="${ROOT}/l2_swimlane_trace.json"
+if [[ "$SWIMLANE_LEVEL" != "0" && -f "$RAW_SWIMLANE" && ! -f "$TRACE_SWIMLANE" ]]; then
+  python3 "${ROOT}/tools/swimlane_to_perfetto.py" "$RAW_SWIMLANE" -o "$TRACE_SWIMLANE" || true
+fi

@@ -27,11 +27,11 @@ static inline void smoke_orch_run(const uint64_t orch_args)
     (void)orch_args;
 
     uint16_t t0 = (uint16_t)atomic_load(&g_task_id);
-    new_task(t0, TASK_TYPE_CUBE, 1, DUR_SMOKE_A);
+    new_task(t0, TASK_TYPE_CUBE, 1, DUR_SMOKE_A, 0U);
     atomic_fetch_add(&g_task_id, 1);
 
     uint16_t t1 = (uint16_t)atomic_load(&g_task_id);
-    new_task(t1, TASK_TYPE_VECTOR, 1, DUR_SMOKE_B);
+    new_task(t1, TASK_TYPE_VECTOR, 1, DUR_SMOKE_B, 0U);
     {
         uint16_t pred[] = {t0};
         add_predecessors(t1, pred, 1, 0);
@@ -39,7 +39,7 @@ static inline void smoke_orch_run(const uint64_t orch_args)
     atomic_fetch_add(&g_task_id, 1);
 
     uint16_t t2 = (uint16_t)atomic_load(&g_task_id);
-    new_task(t2, TASK_TYPE_CUBE, 1, DUR_SMOKE_C);
+    new_task(t2, TASK_TYPE_CUBE, 1, DUR_SMOKE_C, 0U);
     {
         uint16_t pred[] = {t1};
         add_predecessors(t2, pred, 1, 0);
@@ -47,7 +47,7 @@ static inline void smoke_orch_run(const uint64_t orch_args)
     atomic_fetch_add(&g_task_id, 1);
 
     uint16_t t3 = (uint16_t)atomic_load(&g_task_id);
-    new_task(t3, TASK_TYPE_VECTOR, 1, DUR_SMOKE_D);
+    new_task(t3, TASK_TYPE_VECTOR, 1, DUR_SMOKE_D, 0U);
     {
         uint16_t pred[] = {t2};
         add_predecessors(t3, pred, 1, 0);
