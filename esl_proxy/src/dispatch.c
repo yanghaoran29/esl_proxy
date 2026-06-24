@@ -75,7 +75,7 @@ static inline void push_2_completed_queue(int tid)
                       g_ctrl_t[tid].task_id_map2[i]);
     }
     batch_enqueue(&g_ctrl_t[tid].completed_queue, task_id, (uint16_t)complete_cnt);
-    atomic_fetch_add_explicit(&g_completed_cnt, complete_cnt, memory_order_acquire);
+    g_completed_cnt += complete_cnt;
 #ifdef ESL_PROXY_ONBOARD
     esl_onboard_publish_counters();
 #endif
@@ -178,7 +178,7 @@ void dispatch_loop_run(int tid)
 #ifdef ESL_PROXY_ONBOARD
         if ((phase1_iter & 0x3FFFFU) == 0) {
             esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE1, phase1_iter,
-                              (uint64_t)atomic_load_explicit(&g_completed_cnt, memory_order_acquire),
+                              (uint64_t)g_completed_cnt,
                               (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire));
         }
         phase1_iter++;
@@ -195,11 +195,11 @@ void dispatch_loop_run(int tid)
 #endif
     }
     esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE2,
-                      (uint64_t)atomic_load_explicit(&g_completed_cnt, memory_order_acquire),
+                      (uint64_t)g_completed_cnt,
                       (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire), 0);
-    int prev = atomic_load_explicit(&g_completed_cnt, memory_order_acquire);
+    int prev = g_completed_cnt;
     int count = 10000;
-    while (atomic_load_explicit(&g_completed_cnt, memory_order_acquire) <
+    while (g_completed_cnt <
            atomic_load_explicit(&g_task_id, memory_order_acquire)) {
 #ifdef ESL_PROXY_ONBOARD
         if ((phase2_iter & 0x3FFFFU) == 0) {
@@ -218,7 +218,7 @@ void dispatch_loop_run(int tid)
         }
         spin_wait();
 #endif
-        if (prev == atomic_load_explicit(&g_completed_cnt, memory_order_acquire)) {
+        if (prev == g_completed_cnt) {
             count--;
             if (count < 0) {
                 LOG_ERROR("[scheduler] stall timeout: completed_cnt=%u task_id=%u",
@@ -230,7 +230,7 @@ void dispatch_loop_run(int tid)
         } else {
             count = 10000;
         }
-        prev = atomic_load_explicit(&g_completed_cnt, memory_order_acquire);
+        prev = g_completed_cnt;
     }
 
     atomic_store(&g_is_done, true);
@@ -238,10 +238,10 @@ void dispatch_loop_run(int tid)
     uint64_t end_ns = get_time_ns();
     uint64_t elapsed_ns = end_ns - start_ns;
 
-    MAIN_LOGF("[scheduler] task_cnt = %u", (unsigned)atomic_load_explicit(&g_completed_cnt, memory_order_acquire));
+    MAIN_LOGF("[scheduler] task_cnt = %u", (unsigned)g_completed_cnt);
     MAIN_LOGF("[scheduler] duration = %llu ns", (unsigned long long)elapsed_ns);
     MAIN_LOGF("[scheduler] task_tp = %f MTasks/s",
-              (float)(atomic_load_explicit(&g_completed_cnt, memory_order_acquire) * 1000.0 / elapsed_ns));
+              (float)(g_completed_cnt * 1000.0 / elapsed_ns));
 
 #ifdef ESL_PROXY_ONBOARD
     {
@@ -263,7 +263,7 @@ void dispatch_loop_run(int tid)
         uint64_t rqc = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_CUBE].cnt;
         uint64_t rqv = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_VECTOR].cnt;
         esl_write_stats((uint64_t)end, (uint64_t)g_subtask_cnt,
-                        (uint64_t)atomic_load_explicit(&g_completed_cnt, memory_order_acquire),
+                        (uint64_t)g_completed_cnt,
                         (uint64_t)g_commit_task_id,
                         (uint64_t)n_uncomp, ((uint64_t)(uint32_t)first_uncomp) | (pred0 << 32),
                         (rqc & 0xffffffffULL) | (rqv << 32));

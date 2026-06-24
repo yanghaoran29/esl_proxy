@@ -45,7 +45,7 @@ extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
 extern task_state *g_state_buf;
 extern uint16_t g_predecessor_cnt[RING_SIZE];
 extern uint16_t g_commit_task_id;
-extern atomic_int g_completed_cnt;
+extern int g_completed_cnt;
 extern atomic_bool g_orch_is_done;
 extern atomic_bool g_is_done;
 extern executor_t g_executors[EXE_TYPE_CNT][AIC_CNT];
@@ -145,7 +145,7 @@ int32_t esl_aicpu_execute(EslRuntime *runtime)
         esl_onboard_trace(idx, ESL_TRACE_DISPATCH_PRE_CALL, 0, 0, 0);
         dispatch_loop_run(0);
         esl_onboard_trace(idx, ESL_TRACE_DISPATCH_DONE,
-                          (uint64_t)atomic_load_explicit(&g_completed_cnt, memory_order_acquire),
+                          (uint64_t)g_completed_cnt,
                           (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire), 0);
         break;
     case ESL_AICPU_ROLE_ORCH:
