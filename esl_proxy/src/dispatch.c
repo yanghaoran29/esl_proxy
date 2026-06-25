@@ -10,11 +10,14 @@
 #include "executor.h"
 #include "log.h"
 #include "ring_buf.h"
-
-#ifdef ESL_PROXY_ONBOARD
 #include "spin.h"
+
+#ifndef ESL_PROXY_ONBOARD
+#include "fake_aicore_host.h"
+#include "worker_map.h"
 #endif
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include <stdatomic.h>
@@ -57,31 +60,44 @@ static inline void get_free_exe(int tid)
     }
 }
 
-static inline void get_completed(uint64_t *bitmap, uint16_t task_id[], int *complete_cnt,
-                                 const uint16_t task_id_map[])
+static inline void process_subtask_fin(uint16_t tid, int exe_type, int core, int ostd_slot,
+                                       uint64_t mask, uint16_t task_id[], int *complete_cnt)
 {
-    uint64_t b = *bitmap; *bitmap = 0;
+    uint16_t ring_slot = (uint16_t)(tid & RING_MASK);
+    uint32_t total = g_basic_buf[ring_slot].count;
+    if (total < 1) {
+        total = 1;
+    }
+    g_completed_subtask_cnt++;
+    g_spmd_completed[ring_slot]++;
+    if (g_spmd_completed[ring_slot] >= total) {
+        task_id[(*complete_cnt)] = tid;
+        (*complete_cnt)++;
+        g_spmd_completed[ring_slot] = 0;
+        g_spmd_dispatched[ring_slot] = 0;
+    }
+#ifndef ESL_PROXY_ONBOARD
+    g_ctrl_t[0].free_bitmap[exe_type][ostd_slot] |= mask;
+    g_executors[exe_type][core].tasks[ostd_slot] = EXEC_SLOT_EMPTY;
+    if (g_executors[exe_type][core].idx == (uint8_t)ostd_slot) {
+        g_executors[exe_type][core].idx = (uint8_t)AIC_OSTD;
+    }
+#endif
+    WORKER_LOGF("completed,complete_cnt,%d,task_id,%u,core,%d,subtask,%u/%u", *complete_cnt, tid,
+                core, (unsigned)g_spmd_completed[ring_slot], (unsigned)total);
+}
+
+static inline void get_completed(uint64_t *bitmap, uint16_t task_id[], int *complete_cnt,
+                                 const uint16_t task_id_map[], int exe_type, int ostd_slot)
+{
+    uint64_t b = *bitmap;
+    *bitmap = 0;
     int cnt = __builtin_popcountll(b);
     while (cnt > 0) {
         uint64_t idx = (uint64_t)__builtin_ctzll(b);
         uint16_t tid = task_id_map[idx];
-        uint16_t slot = (uint16_t)(tid & RING_MASK);
-        uint32_t total = g_basic_buf[slot].count;
-        if (total < 1) {
-            total = 1;
-        }
-        /* Each FIN is one subtask of `tid`. The task is only reported complete to
-         * the cutter once all `total` of its blocks have FINed (SPMD aggregation). */
-        g_completed_subtask_cnt++;
-        g_spmd_completed[slot]++;
-        if (g_spmd_completed[slot] >= total) {
-            task_id[(*complete_cnt)] = tid;
-            (*complete_cnt)++;
-            g_spmd_completed[slot] = 0;
-            g_spmd_dispatched[slot] = 0;
-        }
-        WORKER_LOGF("completed,complete_cnt,%d,task_id,%u,core,%d,subtask,%u/%u", *complete_cnt,
-                    tid, (int)idx, (unsigned)g_spmd_completed[slot], (unsigned)total);
+        process_subtask_fin(tid, exe_type, (int)idx, ostd_slot, (uint64_t)0x1 << idx, task_id,
+                            complete_cnt);
         cnt--;
         b &= (b - 1);
     }
@@ -92,12 +108,20 @@ static inline void push_2_completed_queue(int tid)
 {
     uint16_t task_id[DISPATCH_COMPLETE_BATCH];
     int complete_cnt = 0;
+#ifndef ESL_PROXY_ONBOARD
+    HostFakeFin fin;
+    while (host_fake_fin_pop(&fin) == 0) {
+        process_subtask_fin(fin.task_id, (int)fin.exe_type, (int)fin.core, (int)fin.slot,
+                            fin.mask, task_id, &complete_cnt);
+    }
+#else
     for (int i = 0; i < EXE_TYPE_CNT; i++) {
         get_completed(&g_ctrl_t[tid].msg_bitmap[i][0], task_id, &complete_cnt,
-                      g_ctrl_t[tid].task_id_map1[i]);
+                      g_ctrl_t[tid].task_id_map1[i], i, 0);
         get_completed(&g_ctrl_t[tid].msg_bitmap[i][1], task_id, &complete_cnt,
-                      g_ctrl_t[tid].task_id_map2[i]);
+                      g_ctrl_t[tid].task_id_map2[i], i, 1);
     }
+#endif
     batch_enqueue(&g_ctrl_t[tid].completed_queue, task_id, (uint16_t)complete_cnt);
     g_completed_cnt += complete_cnt;
 #ifdef ESL_PROXY_ONBOARD
@@ -106,16 +130,21 @@ static inline void push_2_completed_queue(int tid)
 }
 
 // TODO: Work Stealing
-/* Dispatch one block (subtask) of `task_id` to (core, slot). */
-static inline void send_block(ctrl_t *ctrl, int type, int exe_type, uint16_t task_id, int core,
-                              int slot, uint64_t mask)
+/* Dispatch one block (subtask) of `task_id` to (core, slot). Returns 0 on success. */
+static inline int send_block(ctrl_t *ctrl, int type, int exe_type, uint16_t task_id, int core,
+                             int slot, uint64_t mask)
 {
     g_executors[exe_type][core].tasks[slot] = task_id;
 #ifdef ESL_PROXY_ONBOARD
     esl_onboard_consume_task_slot(task_id);
 #endif
     uint32_t raw_duration = g_basic_buf[task_id & RING_MASK].duration;
+    uint32_t jitter_mask = g_basic_buf[task_id & RING_MASK].jitter_mask;
+#ifdef ESL_PROXY_ONBOARD
     g_executors[exe_type][core].duration[slot] = (raw_duration > 10000) ? (raw_duration / 10000) : 1;
+#else
+    g_executors[exe_type][core].duration[slot] = raw_duration;
+#endif
     g_executors[exe_type][core].idx = slot;
 
     if (slot == 1) {
@@ -128,13 +157,27 @@ static inline void send_block(ctrl_t *ctrl, int type, int exe_type, uint16_t tas
 #ifdef ESL_PROXY_ONBOARD
     esl_onboard_publish_atomic_u64(&ctrl->free_bitmap[type][slot]);
     if (g_aicore_bridge != NULL) {
-        aicore_bridge_dispatch_task(g_aicore_bridge, (int)ctrl->tid, task_id, core, slot, exe_type);
+        aicore_bridge_dispatch_task(g_aicore_bridge, (int)ctrl->tid, task_id, core, slot, exe_type,
+                                    g_spmd_dispatched[task_id & RING_MASK]);
     } else {
         ctrl->msg_bitmap[type][slot] |= mask;
     }
+    return 0;
 #else
-    /* Host sim: Fake Return */
-    ctrl->msg_bitmap[type][slot] |= mask;
+    {
+        const int phys = esl_pick_phys_worker(core, exe_type);
+        g_executors[exe_type][core].block_idx[slot] = (uint16_t)phys;
+        if (phys < 0) {
+            ctrl->free_bitmap[type][slot] |= mask;
+            return -1;
+        }
+        if (host_fake_aicore_submit(phys, task_id, exe_type, core, slot, mask, raw_duration,
+                                    jitter_mask) != 0) {
+            ctrl->free_bitmap[type][slot] |= mask;
+            return -1;
+        }
+    }
+    return 0;
 #endif
 }
 
@@ -145,8 +188,10 @@ static inline int send_task(ctrl_t *ctrl, int type)
     uint64_t free_bitmap =
         ctrl->free_bitmap[type][0] &
         ctrl->free_bitmap[type][1];
-#ifdef ESL_PROXY_ONBOARD
+#if defined(ESL_PROXY_ONBOARD)
     free_bitmap &= (uint64_t)((1ULL << ESL_PROXY_ONBOARD_BLOCK_DIM) - 1);
+#else
+    free_bitmap &= (uint64_t)((1ULL << ESL_PROXY_WORKER_BLOCK_DIM) - 1);
 #endif
     int free_cnt = __builtin_popcountll(free_bitmap);
     if (free_cnt <= 0) {
@@ -172,22 +217,31 @@ static inline int send_task(ctrl_t *ctrl, int type)
         }
         int remaining = (int)total - (int)g_spmd_dispatched[slot_idx];
         int claim = remaining < free_cnt ? remaining : free_cnt;
+        bool requeued = false;
         for (int b = 0; b < claim; b++) {
             uint64_t idx = (uint64_t)__builtin_ctzll(free_bitmap);
             uint64_t mask = (uint64_t)0x1 << idx;
             int slot = (ctrl->free_bitmap[type][0] & mask) != 0 ? 0 : 1;
-            send_block(ctrl, type, exe_type, task_id, (int)idx, slot, mask);
+            if (send_block(ctrl, type, exe_type, task_id, (int)idx, slot, mask) != 0) {
+                uint16_t one = task_id;
+                batch_enqueue(&ctrl->ready_queue[type], &one, 1);
+                requeued = true;
+                break;
+            }
+            g_spmd_dispatched[slot_idx]++;
             WORKER_LOGF("send,task_id,%u,core,%d,slot,%d,block,%d/%u", task_id, (int)idx, slot,
-                        (int)g_spmd_dispatched[slot_idx] + b, (unsigned)total);
+                        (int)g_spmd_dispatched[slot_idx], (unsigned)total);
             free_bitmap &= ~mask;
             free_cnt--;
             sent++;
         }
-        g_spmd_dispatched[slot_idx] = (uint16_t)((int)g_spmd_dispatched[slot_idx] + claim);
-        if (g_spmd_dispatched[slot_idx] < total) {
+        if (!requeued && g_spmd_dispatched[slot_idx] < total) {
             /* Blocks remain but no idle cores left this pass — re-queue. */
             uint16_t one = task_id;
             batch_enqueue(&ctrl->ready_queue[type], &one, 1);
+            break;
+        }
+        if (requeued) {
             break;
         }
     }
@@ -210,13 +264,15 @@ int dispatch(int tid)
 /* Cutter / dispatch / orchestrator run on separate AICPU threads when onboard. */
 void dispatch_loop_run(int tid)
 {
-    esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_LOOP_ENTER, (uint64_t)tid, 0, 0);
     int total_sent = 0;
     uint64_t start_ns = get_time_ns();
+#ifdef ESL_PROXY_ONBOARD
     uint32_t phase1_iter = 0;
     uint32_t phase2_iter = 0;
 
+    esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_LOOP_ENTER, (uint64_t)tid, 0, 0);
     esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE1, start_ns, 0, 0);
+#endif
     while (!g_orch_is_done) {
 #ifdef ESL_PROXY_ONBOARD
         if ((phase1_iter & 0x3FFFFU) == 0) {
@@ -225,8 +281,6 @@ void dispatch_loop_run(int tid)
                               (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire));
         }
         phase1_iter++;
-#endif
-#ifdef ESL_PROXY_ONBOARD
         esl_onboard_invalidate_sched_snapshot();
 #endif
         total_sent += dispatch(tid);
@@ -235,13 +289,20 @@ void dispatch_loop_run(int tid)
             aicore_bridge_poll_completions(g_aicore_bridge, tid);
         }
         spin_wait();
+#else
+        spin_wait();
 #endif
     }
+#ifdef ESL_PROXY_ONBOARD
     esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE2,
                       (uint64_t)g_completed_cnt,
                       (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire), 0);
+#endif
     int prev = g_completed_cnt;
     int count = 10000;
+#ifndef ESL_PROXY_ONBOARD
+    count = 50000000;
+#endif
     while (g_completed_cnt <
            atomic_load_explicit(&g_task_id, memory_order_acquire)) {
 #ifdef ESL_PROXY_ONBOARD
@@ -260,18 +321,28 @@ void dispatch_loop_run(int tid)
             aicore_bridge_poll_completions(g_aicore_bridge, tid);
         }
         spin_wait();
+#else
+        spin_wait();
 #endif
         if (prev == g_completed_cnt) {
             count--;
             if (count < 0) {
+#ifdef ESL_PROXY_ONBOARD
                 LOG_ERROR("[scheduler] stall timeout: completed_cnt=%u task_id=%u",
                           (unsigned)g_completed_cnt, (unsigned)g_task_id);
                 esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_STALL,
                                   (uint64_t)g_completed_cnt, (uint64_t)g_task_id, (uint64_t)prev);
+#else
+                MAIN_LOGF("[scheduler] stall timeout: completed_cnt=%u task_id=%u",
+                          (unsigned)g_completed_cnt, (unsigned)g_task_id);
+#endif
                 break;
             }
         } else {
             count = 10000;
+#ifndef ESL_PROXY_ONBOARD
+            count = 50000000;
+#endif
         }
         prev = g_completed_cnt;
     }

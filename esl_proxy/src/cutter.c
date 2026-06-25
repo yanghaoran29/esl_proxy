@@ -249,11 +249,16 @@ void cutter_loop_run(void)
         } else {
             stall++;
             if (stall > 10000) {
+#ifdef ESL_PROXY_ONBOARD
                 LOG_ERROR("cutter stall timeout: commit=%u task_id=%u", (unsigned)cur_commit,
                           (unsigned)atomic_load(&g_task_id));
                 esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_DRAIN, (uint64_t)cur_commit,
                                   (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire),
                                   0xDEADBEEFULL);
+#else
+                MAIN_LOGF("cutter stall timeout: commit=%u task_id=%u", (unsigned)cur_commit,
+                          (unsigned)atomic_load(&g_task_id));
+#endif
                 break;
             }
         }

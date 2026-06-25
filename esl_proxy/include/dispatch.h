@@ -42,4 +42,6 @@ void dispatch_loop_run(int tid);
 void dispatch_set_aicore_bridge(void *bridge);
 #endif
 
+extern int g_completed_subtask_cnt;
+
 #endif /* DISPATCH_H */

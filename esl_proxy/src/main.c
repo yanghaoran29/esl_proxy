@@ -30,10 +30,11 @@ int main(int argc, char **argv)
 #include "conf.h"
 #include "cutter.h"
 #include "dispatch.h"
-#include "executor.h"
+#include "fake_aicore_host.h"
 #include "log.h"
 #include "manager.h"
 #include "mem_pool.h"
+#include "worker_map.h"
 
 /* Orchestration case header. Override at build time, e.g.
  *   make CASE=qwen3_dynamic_tensormap.h
@@ -61,7 +62,6 @@ extern volatile bool g_orch_is_done;
 int main(void) {
     pthread_t dispatch_threads[DISPATCH_THREAD_CNT];
     pthread_t cutter_threads[CUTTER_THREAD_CNT];
-    pthread_t executor_threads[EXECUTOR_THREAD_CNT];
 #if ORCHESTRATION_TIME
     uint64_t total_start_ns = get_time_ns();
 #endif
@@ -79,16 +79,8 @@ int main(void) {
     ring_buf_init();
     init_predecessors();
     init_ctrl_t();
-    
-    // executor_init();
 
-    // pthread_create(&manager_thread, NULL, manager_worker, &g_mem_pool);
-
-    // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
-    //     pthread_create(&executor_threads[i], NULL, executor_worker, (void *)(intptr_t)i);
-    // }
-
-
+    host_fake_aicore_start(ESL_PROXY_HOST_WORKER_COUNT);
 
 #if !ORCH_ONLY
     for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
@@ -129,7 +121,19 @@ int main(void) {
         pthread_join(dispatch_threads[i], NULL);
     }
 #endif
-    // pthread_join(manager_thread, NULL);
+    host_fake_aicore_stop();
+
+    if (g_completed_cnt != (int)g_task_id) {
+        MAIN_LOGF("[host] FAIL: completed_cnt=%d task_id=%u",
+                  g_completed_cnt, (unsigned)g_task_id);
+        return 1;
+    }
+    if (g_completed_subtask_cnt != g_subtask_cnt) {
+        MAIN_LOGF("[host] FAIL: completed_subtask_cnt=%d subtask_cnt=%d",
+                  g_completed_subtask_cnt, g_subtask_cnt);
+        return 1;
+    }
+    MAIN_LOGF("[host] PASS: task_cnt=%u subtask_cnt=%d", (unsigned)g_task_id, g_subtask_cnt);
 
 #if WORKER_LOG
     log_close();
