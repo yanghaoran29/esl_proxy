@@ -10,7 +10,7 @@
  */
 
 /**
- * @file l2_swimlane_collector.h
+ * @file swimlane_collector.h
  * @brief Platform-agnostic performance data collector with dynamic memory management.
  *
  * Architecture:
@@ -23,8 +23,8 @@
  * Memory operations are injected through callbacks for sim/onboard portability.
  */
 
-#ifndef SRC_A2A3_PLATFORM_INCLUDE_HOST_L2_SWIMLANE_COLLECTOR_H_
-#define SRC_A2A3_PLATFORM_INCLUDE_HOST_L2_SWIMLANE_COLLECTOR_H_
+#ifndef SRC_A2A3_PLATFORM_INCLUDE_HOST_SWIMLANE_COLLECTOR_H_
+#define SRC_A2A3_PLATFORM_INCLUDE_HOST_SWIMLANE_COLLECTOR_H_
 
 #include <atomic>
 #include <cstdint>
@@ -33,37 +33,20 @@
 #include <thread>
 #include <vector>
 
-#include "common/core_type.h"
-#include "common/l2_swimlane_profiling.h"
-#include "common/memory_barrier.h"
-#include "common/platform_config.h"
-#include "common/unified_log.h"
-#include "host/profiler_base.h"
+#include "core_type.h"
+#include "swimlane/swimlane_types.h"
+#include "swimlane/memory_barrier.h"
+#include "onboard_log.h"
+#include "swimlane/swimlane_collector_base.h"
 
 // ---------------------------------------------------------------------------
 // L2 Perf profiling Module (drives BufferPoolManager<L2SwimlaneModule>)
 // ---------------------------------------------------------------------------
 
-/**
- * L2 Perf has four distinct buffer kinds going through one ready queue per
- * AICPU thread:
- *   - kind 0: per-core    L2SwimlaneAicpuTaskBuffer      (task records)
- *   - kind 1: per-thread  L2SwimlaneAicpuSchedPhaseBuffer (scheduler phase records)
- *   - kind 2: per-thread  L2SwimlaneAicpuOrchPhaseBuffer  (orchestrator phase records)
- *   - kind 3: per-core    L2SwimlaneAicoreTaskBuffer     (AICore-written records)
- * The ReadyQueueEntry::kind flag picks among them.
- */
+/** Level 1 only: per-core L2SwimlaneAicoreTaskBuffer records via ready queue. */
 
-/**
- * Buffer kind discriminator carried in ReadyBufferInfo and used to index the
- * per-kind recycled pool inside BufferPoolManager. Values match
- * L2SwimlaneBufferKind 1:1.
- */
 enum class ProfBufferType {
-    AICPU_TASK = 0,
-    AICPU_SCHED_PHASE = 1,
-    AICPU_ORCH_PHASE = 2,
-    AICORE_TASK = 3,
+    AICORE_TASK = 0,
 };
 
 /**
@@ -82,163 +65,56 @@ struct L2SwimlaneModule {
     using DataHeader = L2SwimlaneDataHeader;
     using ReadyEntry = ReadyQueueEntry;
     using ReadyBufferInfo = ::ReadyBufferInfo;
-    using FreeQueue = L2SwimlaneFreeQueue;  // all pool types share the same free_queue layout
+    using FreeQueue = L2SwimlaneFreeQueue;
 
-    static constexpr int kBufferKinds = 4;
+    static constexpr int kBufferKinds = 1;
     static constexpr uint32_t kReadyQueueSize = PLATFORM_PROF_READYQUEUE_SIZE;
     static constexpr uint32_t kSlotCount = PLATFORM_PROF_SLOT_COUNT;
     static constexpr const char *kSubsystemName = "L2SwimlaneModule";
 
-    /**
-     * batch_size for proactive_replenish's alloc fallback. Sized so that a
-     * fully empty recycled pool refills to the configured per-instance
-     * ceiling in one tick. Sched and orch phase pools share the per-thread
-     * batch sizing.
-     */
-    static constexpr int batch_size(int kind) {
-        constexpr int kPerfBatch = PLATFORM_PROF_BUFFERS_PER_CORE - PLATFORM_PROF_SLOT_COUNT;
-        constexpr int kPhaseBatch = PLATFORM_PROF_BUFFERS_PER_THREAD - PLATFORM_PROF_SLOT_COUNT;
+    static constexpr int batch_size(int /*kind*/) {
         constexpr int kAicoreBatch = PLATFORM_AICORE_BUFFERS_PER_CORE - PLATFORM_PROF_SLOT_COUNT;
-        int b = kPerfBatch;
-        switch (static_cast<L2SwimlaneBufferKind>(kind)) {
-        case L2SwimlaneBufferKind::AicpuTask:
-            b = kPerfBatch;
-            break;
-        case L2SwimlaneBufferKind::AicpuSchedPhase:
-            b = kPhaseBatch;
-            break;
-        case L2SwimlaneBufferKind::AicpuOrchPhase:
-            b = kPhaseBatch;
-            break;
-        case L2SwimlaneBufferKind::AicoreTask:
-            b = kAicoreBatch;
-            break;
-        }
-        return b < 1 ? 1 : b;
+        return kAicoreBatch < 1 ? 1 : kAicoreBatch;
     }
 
     static int kind_of(const ReadyBufferInfo &info) { return static_cast<int>(info.type); }
 
     static DataHeader *header_from_shm(void *shm) { return get_l2_swimlane_header(shm); }
 
-    /**
-     * Branch on entry.kind to pick the per-core task state, per-thread sched-
-     * or orch-phase state, or per-core AICore state. Returns nullopt for
-     * out-of-range kind or core_index.
-     */
     static std::optional<profiling_common::EntrySite<L2SwimlaneModule>>
     resolve_entry(void *shm, DataHeader *header, int /*q*/, const ReadyEntry &entry) {
         const int num_cores = static_cast<int>(header->num_cores);
-        const L2SwimlaneBufferKind kind = entry.kind;
-
-        // Validate kind first — out-of-range silently falling into the wrong
-        // branch reads a wrong-typed pool.
-        if (kind != L2SwimlaneBufferKind::AicpuTask && kind != L2SwimlaneBufferKind::AicpuSchedPhase &&
-            kind != L2SwimlaneBufferKind::AicpuOrchPhase && kind != L2SwimlaneBufferKind::AicoreTask) {
-            LOG_ERROR("L2SwimlaneModule: invalid entry kind=%u", static_cast<uint32_t>(kind));
+        if (entry.kind != L2SwimlaneBufferKind::AicoreTask) {
+            LOG_ERROR("L2SwimlaneModule: invalid entry kind=%u", static_cast<uint32_t>(entry.kind));
+            return std::nullopt;
+        }
+        if (entry.core_index >= static_cast<uint32_t>(num_cores)) {
+            LOG_ERROR("L2SwimlaneModule: invalid AICore entry: core=%u", entry.core_index);
             return std::nullopt;
         }
 
-        // Sched/orch phase entries are indexed by thread_idx; task/aicore by core_index.
-        const bool is_phase =
-            (kind == L2SwimlaneBufferKind::AicpuSchedPhase) || (kind == L2SwimlaneBufferKind::AicpuOrchPhase);
-        if (is_phase) {
-            if (entry.core_index >= static_cast<uint32_t>(PLATFORM_MAX_AICPU_THREADS)) {
-                LOG_ERROR("L2SwimlaneModule: invalid phase entry: thread=%u", entry.core_index);
-                return std::nullopt;
-            }
-        } else {
-            if (entry.core_index >= static_cast<uint32_t>(num_cores)) {
-                LOG_ERROR(
-                    "L2SwimlaneModule: invalid task entry: core=%u kind=%u", entry.core_index,
-                    static_cast<uint32_t>(kind)
-                );
-                return std::nullopt;
-            }
-        }
-
         profiling_common::EntrySite<L2SwimlaneModule> site;
-        site.kind = static_cast<int>(kind);
+        site.kind = static_cast<int>(L2SwimlaneBufferKind::AicoreTask);
         site.info.index = entry.core_index;
         site.info.slot_idx = 0;
         site.info.dev_buffer_ptr = reinterpret_cast<void *>(entry.buffer_ptr);
-        site.info.host_buffer_ptr = nullptr;  // filled by ProfilerAlgorithms
+        site.info.host_buffer_ptr = nullptr;
         site.info.buffer_seq = entry.buffer_seq;
 
-        switch (kind) {
-        case L2SwimlaneBufferKind::AicpuTask: {
-            auto *state = get_perf_buffer_state(shm, static_cast<int>(entry.core_index));
-            site.free_queue = &state->free_queue;
-            site.buffer_size = sizeof(L2SwimlaneAicpuTaskBuffer);
-            site.info.type = ProfBufferType::AICPU_TASK;
-            break;
-        }
-        case L2SwimlaneBufferKind::AicpuSchedPhase: {
-            auto *state = get_sched_phase_buffer_state(shm, num_cores, static_cast<int>(entry.core_index));
-            site.free_queue = &state->free_queue;
-            site.buffer_size = sizeof(L2SwimlaneAicpuSchedPhaseBuffer);
-            site.info.type = ProfBufferType::AICPU_SCHED_PHASE;
-            break;
-        }
-        case L2SwimlaneBufferKind::AicpuOrchPhase: {
-            auto *state = get_orch_phase_buffer_state(shm, num_cores, static_cast<int>(entry.core_index));
-            site.free_queue = &state->free_queue;
-            site.buffer_size = sizeof(L2SwimlaneAicpuOrchPhaseBuffer);
-            site.info.type = ProfBufferType::AICPU_ORCH_PHASE;
-            break;
-        }
-        case L2SwimlaneBufferKind::AicoreTask: {
-            auto *ac_state = get_aicore_buffer_state(shm, num_cores, static_cast<int>(entry.core_index));
-            site.free_queue = &ac_state->free_queue;
-            site.buffer_size = sizeof(L2SwimlaneAicoreTaskBuffer);
-            site.info.type = ProfBufferType::AICORE_TASK;
-            break;
-        }
-        }
+        auto *ac_state = get_aicore_buffer_state(shm, num_cores, static_cast<int>(entry.core_index));
+        site.free_queue = &ac_state->free_queue;
+        site.buffer_size = sizeof(L2SwimlaneAicoreTaskBuffer);
+        site.info.type = ProfBufferType::AICORE_TASK;
         return site;
     }
 
     template <typename Cb>
     static void for_each_instance(void *shm, DataHeader *header, Cb &&cb) {
         const int num_cores = static_cast<int>(header->num_cores);
-
-        // AicpuTask: per-core (kind 0)
-        for (int i = 0; i < num_cores; i++) {
-            auto *state = get_perf_buffer_state(shm, i);
-            cb(/*kind=*/static_cast<int>(L2SwimlaneBufferKind::AicpuTask), &state->free_queue,
-               sizeof(L2SwimlaneAicpuTaskBuffer));
-        }
-
-        // AicoreTask: per-core (kind 3)
         for (int i = 0; i < num_cores; i++) {
             auto *ac_state = get_aicore_buffer_state(shm, num_cores, i);
-            cb(/*kind=*/static_cast<int>(L2SwimlaneBufferKind::AicoreTask), &ac_state->free_queue,
+            cb(static_cast<int>(L2SwimlaneBufferKind::AicoreTask), &ac_state->free_queue,
                sizeof(L2SwimlaneAicoreTaskBuffer));
-        }
-
-        // AicpuSchedPhase: per-thread (kind 1) — gated on the header's
-        // sched-phase thread count (zero when phase init never ran).
-        // Bounds-clamp against PLATFORM_MAX_AICPU_THREADS so a corrupted
-        // device-shared value can't walk off the pool array.
-        int num_sched_phase_threads = static_cast<int>(header->num_sched_phase_threads);
-        if (num_sched_phase_threads > PLATFORM_MAX_AICPU_THREADS) {
-            num_sched_phase_threads = 0;
-        }
-        for (int t = 0; t < num_sched_phase_threads; t++) {
-            auto *state = get_sched_phase_buffer_state(shm, num_cores, t);
-            cb(/*kind=*/static_cast<int>(L2SwimlaneBufferKind::AicpuSchedPhase), &state->free_queue,
-               sizeof(L2SwimlaneAicpuSchedPhaseBuffer));
-        }
-
-        // AicpuOrchPhase: per-thread (kind 2) — same bounds clamp.
-        int num_orch_phase_threads = static_cast<int>(header->num_orch_phase_threads);
-        if (num_orch_phase_threads > PLATFORM_MAX_AICPU_THREADS) {
-            num_orch_phase_threads = 0;
-        }
-        for (int t = 0; t < num_orch_phase_threads; t++) {
-            auto *state = get_orch_phase_buffer_state(shm, num_cores, t);
-            cb(/*kind=*/static_cast<int>(L2SwimlaneBufferKind::AicpuOrchPhase), &state->free_queue,
-               sizeof(L2SwimlaneAicpuOrchPhaseBuffer));
         }
     }
 };
@@ -270,12 +146,8 @@ using L2SwimlaneFreeCallback = profiling_common::ProfFreeCallback;
  *   4. stop()                      — joins both threads in the correct order
  *                                    (mgmt first so its final-drain entries
  *                                    have a consumer).
- *   5. read_phase_header_metadata() — single-shot read of the core→thread
- *                                    mapping from L2SwimlaneDataHeader.
- *   6. reconcile_counters()        — device-side three-bucket accounting for
- *                                    both PERF and PHASE pools (total /
- *                                    collected / dropped).
- *   7. export_swimlane_json() / finalize().
+ *   5. reconcile_counters()        — device-side accounting for AICore pools.
+ *   6. export_swimlane_json() / finalize().
  *
  * Host never reads from device-side `current_buf_ptr` to recover records:
  * device flush is the only data path. Any non-zero `current_buf_ptr` after
@@ -297,20 +169,13 @@ public:
      * Initialize performance profiling.
      *
      * Allocates the shared-memory region (header + per-core / per-thread
-     * BufferStates), pre-allocates initial L2SwimlaneAicpuTaskBuffers and PhaseBuffers,
+     * BufferStates), pre-allocates initial L2SwimlaneAicoreTaskBuffers,
      * and seeds the per-pool free_queues + the framework's recycled pools.
      *
      * @param num_aicore               Number of AICore instances
      * @param device_id                Device ID (forwarded to register_cb)
-     * @param l2_swimlane_level   Collection granularity (DISABLED / AICORE_TIMING
-     *                                 / AICPU_TIMING / SCHED_PHASES / ORCH_PHASES).
-     *                                 Written into
-     *                                 `L2SwimlaneDataHeader::l2_swimlane_level`
-     *                                 so AICPU can promote it in
-     *                                 `l2_swimlane_aicpu_init`, AND cached on the
-     *                                 collector so `export_swimlane_json()`
-     *                                 can gate phase sections and stamp the
-     *                                 JSON `version`.
+     * @param l2_swimlane_level   DISABLED (0) or AICORE_TIMING (1). Values >1 are
+     *                                 clamped to 1 by the host wrapper.
      * @param alloc_cb                 Device memory allocation callback
      * @param register_cb              Memory registration callback (nullptr for
      *                                 simulation)
@@ -330,9 +195,7 @@ public:
 
     /**
      * Per-buffer callback invoked by ProfilerBase's poll loop. Dispatches on
-     * info.type to copy either an L2SwimlaneAicpuTaskBuffer (PERF_RECORD) into the per-core
-     * record vector, or a L2SwimlaneAicpuSchedPhaseBuffer / L2SwimlaneAicpuOrchPhaseBuffer into the per-thread
-     * phase-record vector.
+     * info.type to copy an L2SwimlaneAicoreTaskBuffer into the per-core record vector.
      */
     void on_buffer_collected(const ReadyBufferInfo &info);
 
@@ -395,29 +258,11 @@ public:
     void *get_aicore_ring_addr_table_device_ptr() const { return aicore_ring_addr_table_dev_; }
 
     /**
-     * Read AICPU phase metadata that lives in L2SwimlaneDataHeader (not on the
-     * buffer pipeline): the core→thread mapping plus a has-data signal
-     * derived from accumulated per-event records. Single-shot — must be
-     * called after stop() so the shm region has settled.
-     */
-    void read_phase_header_metadata();
-
-    /**
-     * Sum per-core / per-thread total_record_count and dropped_record_count
-     * for both the PERF and PHASE pools, cross-check
+     * Sum per-core AICore pool counters, cross-check
      * `collected + dropped == device_total`, and LOG_ERROR any non-zero
-     * current_buf_ptr (which would indicate a device-side flush failure that
-     * left a buffer un-enqueued — see .claude/rules/discipline.md).
-     * The PHASE block is skipped silently when no phase activity was
-     * recorded (runtimes that don't emit phase records). Must be called
-     * after stop().
+     * current_buf_ptr after stop(). Must be called after stop().
      */
     void reconcile_counters();
-
-    /**
-     * @return Per-core L2SwimlaneAicpuTaskRecord vectors (indexed by core_index). For tests.
-     */
-    const std::vector<std::vector<L2SwimlaneAicpuTaskRecord>> &get_records() const { return collected_perf_records_; }
 
 private:
     // Shared memory pointers. shm_host_ / device_id_ live on ProfilerBase
@@ -446,39 +291,21 @@ private:
     // export_swimlane_json() to build <prefix>/l2_swimlane_records.json.
     std::string output_prefix_;
 
-    // Collected data (per-core vectors, indexed by core_index)
-    std::vector<std::vector<L2SwimlaneAicpuTaskRecord>> collected_perf_records_;
-
     // Collected AICore records (per-core vectors). Each entry is a full
     // L2SwimlaneAicoreTaskRecord captured from a rotated L2SwimlaneAicoreTaskBuffer. The
     // order across rotations is preserved by `copy_aicore_buffer` (we sort
     // incoming buffers by buffer_seq before flattening).
     std::vector<std::vector<L2SwimlaneAicoreTaskRecord>> collected_aicore_records_;
-
-    // AICPU phase profiling data — separate per-thread vectors for sched and
-    // orch records (kind-tagged at routing time; no parse-time discrimination).
-    std::vector<std::vector<L2SwimlaneAicpuSchedPhaseRecord>> collected_sched_phase_records_;
-    std::vector<std::vector<L2SwimlaneAicpuOrchPhaseRecord>> collected_orch_phase_records_;
-    bool has_phase_data_{false};
-
-    // Core-to-thread mapping (core_id → scheduler thread index, -1 = unassigned)
-    std::vector<int8_t> core_to_thread_;
+    uint64_t total_aicore_collected_{0};
 
     // Running totals used at reconcile time to cross-check device-side counters.
-    uint64_t total_perf_collected_{0};
-    uint64_t total_sched_phase_collected_{0};
-    uint64_t total_orch_phase_collected_{0};
-
     // Allocate a single buffer (any of the L2SwimlaneAicpu*Buffer kinds) and register it.
     // The RAII counterpart ``release_one_buffer`` lives on ProfilerBase and
     // is shared with every other collector.
     void *alloc_single_buffer(size_t size, void **host_ptr_out);
 
     // Per-buffer-kind handlers used by on_buffer_collected.
-    void copy_perf_buffer(const ReadyBufferInfo &info);
-    void copy_sched_phase_buffer(const ReadyBufferInfo &info);
-    void copy_orch_phase_buffer(const ReadyBufferInfo &info);
     void copy_aicore_buffer(const ReadyBufferInfo &info);
 };
 
-#endif  // SRC_A2A3_PLATFORM_INCLUDE_HOST_L2_SWIMLANE_COLLECTOR_H_
+#endif  // SRC_A2A3_PLATFORM_INCLUDE_HOST_SWIMLANE_COLLECTOR_H_

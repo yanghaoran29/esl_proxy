@@ -8,7 +8,7 @@
 
 #if ESL_PROXY_ONBOARD_HOST
 
-#include "host_onboard.h"
+extern int esl_onboard_run(int argc, char **argv);
 
 int main(int argc, char **argv)
 {

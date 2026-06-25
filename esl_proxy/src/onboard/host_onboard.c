@@ -3,13 +3,15 @@
  * -DESL_PROXY_ONBOARD_HOST.
  */
 #define _GNU_SOURCE
+
 #include "dlog_pub.h"
 #include "esl_runtime.h"
-#include "esl_swimlane_host_onboard.h"
 #include "kernel_args.h"
-#include "onboard_config.h"
 #include "onboard/onboard_trace.h"
+#include "onboard_config.h"
+#include "swimlane/swimlane_host.h"
 #include "tools.h"
+
 #include <acl/acl_rt.h>
 #include <ascend_hal.h>
 #include <dlfcn.h>
@@ -23,6 +25,10 @@
 #include <string.h>
 #include <unistd.h>
 
+/* ========================================================================== */
+/* defines                                                                    */
+/* ========================================================================== */
+
 #ifndef ESL_PROXY_KARGS_LOG_LEVEL
 #define ESL_PROXY_KARGS_LOG_LEVEL 1 /* DLOG_INFO */
 #endif
@@ -30,9 +36,11 @@
 #define kHalMemCtlEacces 13
 #define kHalMemCtlMaxRetries 3
 #define ESL_BOOTSTRAP_CACHE_MAX 32
+
 #ifndef ESL_PROXY_CANN_AICPU_LAUNCH_THREADS
 #define ESL_PROXY_CANN_AICPU_LAUNCH_THREADS 6
 #endif
+
 #define ACL_CHECK(call, msg)                                               \
     do {                                                                   \
         aclError _rc = (call);                                             \
@@ -41,6 +49,7 @@
             return 1;                                                      \
         }                                                                  \
     } while (0)
+
 #define ESL_HOST_SYNC_STREAM(stream, label)                                \
     do {                                                                   \
         aclError _rc = aclrtSynchronizeStreamWithTimeout(                  \
@@ -57,95 +66,6 @@
             return 1;                                                      \
         }                                                                  \
     } while (0)
-
-static const char *host_trace_stage_name(uint32_t stage)
-{
-    switch (stage) {
-    case ESL_TRACE_EXEC_ENTER: return "exec_enter";
-    case ESL_TRACE_INIT_ONCE_WAIT: return "init_once_wait";
-    case ESL_TRACE_INIT_ONCE_LEADER: return "init_once_leader";
-    case ESL_TRACE_INIT_PLATFORM: return "init_platform";
-    case ESL_TRACE_INIT_HANDSHAKE: return "init_handshake";
-    case ESL_TRACE_INIT_DONE: return "init_done";
-    case ESL_TRACE_WORKER_BARRIER: return "worker_barrier";
-    case ESL_TRACE_CUTTER_START: return "cutter_start";
-    case ESL_TRACE_CUTTER_PRE_CALL: return "cutter_pre_call";
-    case ESL_TRACE_CUTTER_LOOP_ENTER: return "cutter_loop_enter";
-    case ESL_TRACE_CUTTER_LOOP: return "cutter_loop";
-    case ESL_TRACE_CUTTER_DRAIN: return "cutter_drain";
-    case ESL_TRACE_CUTTER_DONE: return "cutter_done";
-    case ESL_TRACE_DISPATCH_START: return "dispatch_start";
-    case ESL_TRACE_DISPATCH_PRE_CALL: return "dispatch_pre_call";
-    case ESL_TRACE_DISPATCH_LOOP_ENTER: return "dispatch_loop_enter";
-    case ESL_TRACE_DISPATCH_PHASE1: return "dispatch_phase1";
-    case ESL_TRACE_DISPATCH_PHASE2: return "dispatch_phase2";
-    case ESL_TRACE_DISPATCH_STALL: return "dispatch_stall";
-    case ESL_TRACE_DISPATCH_DONE: return "dispatch_done";
-    case ESL_TRACE_ORCH_START: return "orch_start";
-    case ESL_TRACE_ORCH_PRE_CALL: return "orch_pre_call";
-    case ESL_TRACE_ORCH_IN_ENTRY: return "orch_in_entry";
-    case ESL_TRACE_ORCH_DONE: return "orch_done";
-    case ESL_TRACE_SIGNAL_ORCH_DONE: return "signal_orch_done";
-    case ESL_TRACE_FINISHED_BARRIER: return "finished_barrier";
-    case ESL_TRACE_SHUTDOWN: return "shutdown";
-    case ESL_TRACE_EXEC_RETURN: return "exec_return";
-    case ESL_TRACE_SPARE_WAIT: return "spare_wait";
-    case ESL_TRACE_SPARE_EXIT: return "spare_exit";
-    default: return "unknown";
-    }
-}
-
-static void esl_host_dump_trace_region(const uint64_t *wall, int slot_idx, const char *label)
-{
-    uint32_t thread_id;
-    uint32_t stage_id;
-
-    thread_id = (uint32_t)(wall[slot_idx] >> 32);
-    stage_id = (uint32_t)(wall[slot_idx] & 0xffffffffULL);
-    if (wall[slot_idx] == 0) {
-        fprintf(stderr, "[esl_proxy] trace %s: (empty)\n", label);
-        return;
-    }
-    fprintf(stderr,
-        "[esl_proxy] trace %s: thread=%u stage=%s(%u) aux_a=%llu aux_b=%llu aux_c=%llu\n",
-        label, thread_id, host_trace_stage_name(stage_id), stage_id,
-        (unsigned long long)wall[slot_idx + 1], (unsigned long long)wall[slot_idx + 2],
-        (unsigned long long)wall[slot_idx + 3]);
-}
-
-static void esl_host_dump_device_wall(const void *dev_wall_ptr)
-{
-    uint64_t wall[ESL_DEVICE_WALL_SLOTS];
-    aclError rc;
-
-    if (dev_wall_ptr == NULL) {
-        return;
-    }
-    rc = aclrtMemcpy(wall, sizeof(wall), dev_wall_ptr, sizeof(wall),
-        ACL_MEMCPY_DEVICE_TO_HOST);
-    if (rc != ACL_SUCCESS) {
-        fprintf(stderr, "[esl_proxy] D2H device_wall failed: %d\n", (int)rc);
-        return;
-    }
-
-    fprintf(stderr,
-        "[esl_proxy] device_wall stats: task_cnt=%llu subtask_cnt=%llu "
-        "completed_cnt=%llu wall_ns=%llu\n",
-        (unsigned long long)wall[0], (unsigned long long)wall[1],
-        (unsigned long long)wall[2], (unsigned long long)wall[3]);
-    fprintf(stderr,
-        "[esl_proxy] device_wall diag: commit=%llu n_uncomp=%llu "
-        "first_uncomp=%u pred_cnt[first]=%u ready_cube=%u ready_vec=%u\n",
-        (unsigned long long)wall[4], (unsigned long long)wall[5],
-        (unsigned)(wall[6] & 0xffffffffULL), (unsigned)(wall[6] >> 32),
-        (unsigned)(wall[7] & 0xffffffffULL), (unsigned)(wall[7] >> 32));
-
-    esl_host_dump_trace_region(wall, 8, "cutter(t0)");
-    esl_host_dump_trace_region(wall, 12, "dispatch(t1)");
-    esl_host_dump_trace_region(wall, 16, "orch(t2)");
-    esl_host_dump_trace_region(wall, 20, "global");
-    fflush(stderr);
-}
 
 #define ESL_HOST_SYNC_STREAM_DUMP(stream, label, dev_wall_ptr)             \
     do {                                                                   \
@@ -165,22 +85,80 @@ static void esl_host_dump_device_wall(const void *dev_wall_ptr)
             return 1;                                                      \
         }                                                                  \
     } while (0)
+
 #define AICORE_CORE_STRIDE (8ULL * 1024ULL * 1024ULL)
 #define AICORE_SUB_CORE_STRIDE 0x100000ULL
 #define AICORE_REG_VALID_FALLBACK 0xFFFFFFFFULL
 #define ESL_AICPU_JSON_PATH_FMT "/tmp/esl_proxy_inner_%016lx_%d.json"
-#define ESL_INNER_SO_BASENAME_FMT "simpler_inner_%016lx_%d.so"
 #define ESL_INNER_OP_TYPE_FMT "%s_%016lx"
 
-/* ===== host_regs.c ===== */
+/* ========================================================================== */
+/* types & structs                                                            */
+/* ========================================================================== */
 
 typedef int (*HalGetDeviceInfoByBuffFn)(uint64_t deviceId, int32_t moduleType,
-    int32_t infoType, void *buf,
-    int32_t *size);
+    int32_t infoType, void *buf, int32_t *size);
 typedef int (*HalMemCtlFn)(int type, void *paramValue, size_t paramValueSize,
     void *outValue, size_t *outSizeRet);
 
-static int get_pg_mask(uint64_t *valid, uint64_t device_id) {
+typedef struct EslAicpuLoader {
+    void *binary_handle;
+    rtFuncHandle init_handle;
+    rtFuncHandle exec_handle;
+    char json_path[256];
+    uint64_t inner_fp;
+    int device_id;
+    char inner_basename[64];
+} EslAicpuLoader;
+
+typedef struct {
+    uint64_t fp;
+    int device_id;
+} BootstrapKey;
+
+typedef struct {
+    void *ptr;
+} DevBuf;
+
+typedef struct EslAicoreLauncher {
+    char *binary;
+    size_t binary_len;
+    void *bin_handle;
+} EslAicoreLauncher;
+
+typedef struct {
+    void *ptr;
+} DevMem;
+
+typedef struct {
+    struct {
+        uint64_t unused[5];
+        uint64_t device_args_ptr;
+        uint64_t pad[20];
+    } k_args;
+    char kernel_name[32];
+    char so_name[32];
+    char op_name[32];
+} EslBootstrapLaunchArgs;
+
+typedef struct {
+    EslKernelArgs *k_args;
+} EslAicoreLaunchArgs;
+
+/* ========================================================================== */
+/* static globals                                                             */
+/* ========================================================================== */
+
+static BootstrapKey g_bootstrapped[ESL_BOOTSTRAP_CACHE_MAX];
+static size_t g_bootstrapped_count;
+
+/* ========================================================================== */
+/* AICore register mapping                                                    */
+/* ========================================================================== */
+
+/* 通过 HAL 查询设备上 AICore 核心的占用位图掩码。 */
+static int get_pg_mask(uint64_t *valid, uint64_t device_id)
+{
     uint64_t aicore_bitmap[PLATFORM_AICORE_MAP_BUFF_LEN] = {0};
     int32_t size_n = (int32_t)(sizeof(uint64_t) * PLATFORM_AICORE_MAP_BUFF_LEN);
     HalGetDeviceInfoByBuffFn halFuncDevInfo;
@@ -199,9 +177,11 @@ static int get_pg_mask(uint64_t *valid, uint64_t device_id) {
     return 1;
 }
 
+/* 枚举设备上所有 AIC/AIV 核心的寄存器虚拟地址。 */
 static int get_aicore_reg_info(int64_t **aic, size_t *aic_len, size_t *aic_cap,
     int64_t **aiv, size_t *aiv_len, size_t *aiv_cap,
-    int addr_type, int64_t device_id) {
+    int addr_type, int64_t device_id)
+{
     uint64_t valid = 0;
     HalMemCtlFn halFunc;
     struct AddrMapInPara in_map_para;
@@ -243,10 +223,8 @@ static int get_aicore_reg_info(int64_t **aic, size_t *aic_len, size_t *aic_cap,
             uint64_t vaddr = 0;
 
             if ((valid & (1ULL << i)) != 0) {
-                const uint64_t core_stride = 8ULL * 1024ULL * 1024ULL;
-                const uint64_t sub_core_stride = 0x100000ULL;
-
-                vaddr = out_map_para.ptr + (i * core_stride + j * sub_core_stride);
+                vaddr = out_map_para.ptr +
+                        (i * AICORE_CORE_STRIDE + j * AICORE_SUB_CORE_STRIDE);
             }
             if (j == 0) {
                 if (grow_array(aic, aic_cap, aic_len, (int64_t)vaddr) == NULL) {
@@ -262,7 +240,9 @@ static int get_aicore_reg_info(int64_t **aic, size_t *aic_len, size_t *aic_cap,
     return 0;
 }
 
-int esl_host_init_aicore_regs(uint64_t device_id, uint64_t *out_dev_regs) {
+/* 将 AICore 寄存器地址表拷贝到设备 GM 并返回设备指针。 */
+int esl_host_init_aicore_regs(uint64_t device_id, uint64_t *out_dev_regs)
+{
     int64_t *aic = NULL;
     size_t aic_len = 0;
     size_t aic_cap = 0;
@@ -339,44 +319,28 @@ int esl_host_init_aicore_regs(uint64_t device_id, uint64_t *out_dev_regs) {
     return 0;
 }
 
-/* ===== aicpu_loader.c ===== */
+/* ========================================================================== */
+/* AICPU loader                                                               */
+/* ========================================================================== */
 
-struct EslAicpuLoader {
-    void *binary_handle;
-    rtFuncHandle init_handle;
-    rtFuncHandle exec_handle;
-    char json_path[256];
-    uint64_t inner_fp;
-    int device_id;
-    char inner_basename[64];
-};
-
-typedef struct EslAicpuLoader EslAicpuLoader;
-
-typedef struct {
-    uint64_t fp;
-    int device_id;
-} BootstrapKey;
-
-static BootstrapKey g_bootstrapped[ESL_BOOTSTRAP_CACHE_MAX];
-static size_t g_bootstrapped_count;
-
-typedef struct {
-    void *ptr;
-} DevBuf;
-
-static aclError devbuf_alloc(DevBuf *buf, size_t n) {
+/* 在设备上分配 DevBuf 内存。 */
+static aclError devbuf_alloc(DevBuf *buf, size_t n)
+{
     return aclrtMalloc(&buf->ptr, n, ACL_MEM_MALLOC_HUGE_FIRST);
 }
 
-static void devbuf_free(DevBuf *buf) {
+/* 释放 DevBuf 设备内存。 */
+static void devbuf_free(DevBuf *buf)
+{
     if (buf->ptr != NULL) {
         aclrtFree(buf->ptr);
         buf->ptr = NULL;
     }
 }
 
-static int bootstrap_seen(uint64_t fp, int device_id) {
+/* 检查指定指纹与设备是否已完成 AICPU inner SO 引导。 */
+static int bootstrap_seen(uint64_t fp, int device_id)
+{
     size_t i;
 
     for (i = 0; i < g_bootstrapped_count; ++i) {
@@ -388,7 +352,9 @@ static int bootstrap_seen(uint64_t fp, int device_id) {
     return 0;
 }
 
-static int bootstrap_insert(uint64_t fp, int device_id) {
+/* 记录已完成的 AICPU inner SO 引导指纹。 */
+static int bootstrap_insert(uint64_t fp, int device_id)
+{
     if (g_bootstrapped_count >= ESL_BOOTSTRAP_CACHE_MAX) {
         return 0;
     }
@@ -398,11 +364,15 @@ static int bootstrap_insert(uint64_t fp, int device_id) {
     return 1;
 }
 
-EslAicpuLoader *esl_aicpu_loader_create(void) {
+/* 创建 AICPU 加载器实例。 */
+EslAicpuLoader *esl_aicpu_loader_create(void)
+{
     return (EslAicpuLoader *)calloc(1, sizeof(EslAicpuLoader));
 }
 
-void esl_aicpu_loader_destroy(EslAicpuLoader *loader) {
+/* 销毁 AICPU 加载器并清理临时 JSON 与已加载二进制。 */
+void esl_aicpu_loader_destroy(EslAicpuLoader *loader)
+{
     if (loader == NULL) {
         return;
     }
@@ -415,25 +385,18 @@ void esl_aicpu_loader_destroy(EslAicpuLoader *loader) {
     free(loader);
 }
 
+/* 通过 KFC 内核将 dispatcher/inner SO 引导到设备。 */
 int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader,
     const void *dispatcher_so, size_t dispatcher_len,
     const void *inner_so, size_t inner_len,
-    rtStream_t stream, int device_id) {
+    rtStream_t stream, int device_id)
+{
     DevBuf dev_dispatcher = {0};
     DevBuf dev_inner = {0};
     DevBuf dev_args = {0};
     aclError rc;
     char host_dev_args[160];
-    struct Args {
-        struct {
-            uint64_t unused[5];
-            uint64_t device_args_ptr;
-            uint64_t pad[20];
-        } k_args;
-        char kernel_name[32];
-        char so_name[32];
-        char op_name[32];
-    } args;
+    EslBootstrapLaunchArgs args;
     rtAicpuArgsEx_t rt_args;
     rtError_t rrc;
 
@@ -518,8 +481,8 @@ int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader,
     memset(&rt_args, 0, sizeof(rt_args));
     rt_args.args = &args;
     rt_args.argsSize = sizeof(args);
-    rt_args.kernelNameAddrOffset = offsetof(struct Args, kernel_name);
-    rt_args.soNameAddrOffset = offsetof(struct Args, so_name);
+    rt_args.kernelNameAddrOffset = offsetof(EslBootstrapLaunchArgs, kernel_name);
+    rt_args.soNameAddrOffset = offsetof(EslBootstrapLaunchArgs, so_name);
 
     rrc = rtAicpuKernelLaunchExWithArgs(KERNEL_TYPE_AICPU_KFC, "AST_DYN_AICPU", 1,
         &rt_args, NULL, stream, 0);
@@ -545,7 +508,9 @@ int esl_aicpu_loader_bootstrap(EslAicpuLoader *loader,
     return 0;
 }
 
-int esl_aicpu_loader_init(EslAicpuLoader *loader) {
+/* 加载 AICPU JSON 描述并解析 init/exec 符号句柄。 */
+int esl_aicpu_loader_init(EslAicpuLoader *loader)
+{
     char init_op[128];
     char exec_op[128];
     rtLoadBinaryOption_t option;
@@ -593,9 +558,10 @@ int esl_aicpu_loader_init(EslAicpuLoader *loader) {
     return 0;
 }
 
+/* 在指定 stream 上启动 AICPU init 或 exec 内核。 */
 int esl_aicpu_loader_launch(EslAicpuLoader *loader, rtStream_t stream,
-    EslKernelArgs *k_args, int aicpu_num,
-    const char *symbol_name) {
+    EslKernelArgs *k_args, int aicpu_num, const char *symbol_name)
+{
     rtFuncHandle handle;
     rtCpuKernelArgs_t cpu_args;
     rtLaunchKernelAttr_t attr;
@@ -630,21 +596,19 @@ int esl_aicpu_loader_launch(EslAicpuLoader *loader, rtStream_t stream,
     return 0;
 }
 
-/* ===== aicore_launcher.c ===== */
+/* ========================================================================== */
+/* AICore launcher                                                            */
+/* ========================================================================== */
 
-struct EslAicoreLauncher {
-    char *binary;
-    size_t binary_len;
-    void *bin_handle;
-};
-
-typedef struct EslAicoreLauncher EslAicoreLauncher;
-
-EslAicoreLauncher *esl_aicore_launcher_create(void) {
+/* 创建 AICore 启动器实例。 */
+EslAicoreLauncher *esl_aicore_launcher_create(void)
+{
     return (EslAicoreLauncher *)calloc(1, sizeof(EslAicoreLauncher));
 }
 
-void esl_aicore_launcher_destroy(EslAicoreLauncher *launcher) {
+/* 销毁 AICore 启动器并释放 ELF 缓冲。 */
+void esl_aicore_launcher_destroy(EslAicoreLauncher *launcher)
+{
     if (launcher == NULL) {
         return;
     }
@@ -652,8 +616,10 @@ void esl_aicore_launcher_destroy(EslAicoreLauncher *launcher) {
     free(launcher);
 }
 
+/* 将 AICore ELF 二进制拷贝到主机内存以备注册。 */
 int esl_aicore_launcher_load(EslAicoreLauncher *launcher, const void *elf_data,
-    size_t elf_len) {
+    size_t elf_len)
+{
     char *copy;
 
     if (launcher == NULL || elf_data == NULL || elf_len == 0) {
@@ -671,16 +637,15 @@ int esl_aicore_launcher_load(EslAicoreLauncher *launcher, const void *elf_data,
     return 0;
 }
 
+/* 注册并启动 AICore 内核（按 block_dim 下发）。 */
 int esl_aicore_launcher_launch(EslAicoreLauncher *launcher, rtStream_t stream,
-    void *k_args_dev, int block_dim) {
+    void *k_args_dev, int block_dim)
+{
     rtDevBinary_t binary;
     rtArgsEx_t rt_args;
     rtTaskCfgInfo_t cfg;
     rtError_t rc;
-
-    struct Args {
-        EslKernelArgs *k_args;
-    } args;
+    EslAicoreLaunchArgs args;
 
     if (launcher == NULL || k_args_dev == NULL || block_dim < 1) {
         return -1;
@@ -716,24 +681,28 @@ int esl_aicore_launcher_launch(EslAicoreLauncher *launcher, rtStream_t stream,
     return 0;
 }
 
-/* ===== host_runner.c (main) ===== */
+/* ========================================================================== */
+/* host runner                                                                */
+/* ========================================================================== */
 
-typedef struct {
-    void *ptr;
-} DevMem;
-
-static void devmem_free(DevMem *mem) {
+/* 释放 DevMem 设备内存。 */
+static void devmem_free(DevMem *mem)
+{
     if (mem->ptr != NULL) {
         aclrtFree(mem->ptr);
         mem->ptr = NULL;
     }
 }
 
-static aclError devmem_alloc(DevMem *mem, size_t n) {
+/* 在设备上分配 DevMem 内存。 */
+static aclError devmem_alloc(DevMem *mem, size_t n)
+{
     return aclrtMalloc(&mem->ptr, n, ACL_MEM_MALLOC_HUGE_FIRST);
 }
 
-static void esl_host_sync_cann_log_level(int level) {
+/* 在未设置 ASCEND_GLOBAL_LOG_LEVEL 时同步 CANN 日志级别。 */
+static void esl_host_sync_cann_log_level(int level)
+{
     if (getenv("ASCEND_GLOBAL_LOG_LEVEL") != NULL) {
         return;
     }
@@ -746,7 +715,9 @@ static void esl_host_sync_cann_log_level(int level) {
     dlog_setlevel(-1, level, 0);
 }
 
-static int resolve_device_id(int cli_dev) {
+/* 解析实际使用的 NPU 设备号（优先 TASK_DEVICE 环境变量）。 */
+static int resolve_device_id(int cli_dev)
+{
     const char *env = getenv("TASK_DEVICE");
 
     if (env != NULL && env[0] != '\0') {
@@ -755,19 +726,23 @@ static int resolve_device_id(int cli_dev) {
     return cli_dev;
 }
 
-static void usage(const char *prog) {
+/* 打印命令行用法说明。 */
+static void usage(const char *prog)
+{
     fprintf(
         stderr,
         "usage: %s [-d device_id] [--dispatcher PATH] [--aicpu PATH] [--aicore "
         "PATH]\n"
         "  defaults:\n"
-        "    dispatcher = build/onboard/aicpu/libsimpler_aicpu_dispatcher.so\n"
+        "    dispatcher = build/onboard/aicpu/libesl_aicpu_dispatcher.so\n"
         "    aicpu      = build/onboard/aicpu/libaicpu_kernel.so\n"
         "    aicore     = build/onboard/aicore/aicore_kernel.o\n",
         prog);
 }
 
-int esl_onboard_run(int argc, char **argv) {
+/* 上板主流程：加载 SO、初始化寄存器与 GM、启动 AICPU/AICore 并校验结果。 */
+int esl_onboard_run(int argc, char **argv)
+{
     int device_id = 0;
     char dispatcher_path[512] = {0};
     char aicpu_path[512] = {0};
@@ -820,7 +795,7 @@ int esl_onboard_run(int argc, char **argv) {
     if (dispatcher_path[0] == '\0') {
         env = getenv("ESL_PROXY_DISPATCHER_SO");
         strncpy(dispatcher_path,
-            env ? env : "build/onboard/aicpu/libsimpler_aicpu_dispatcher.so",
+            env ? env : "build/onboard/aicpu/libesl_aicpu_dispatcher.so",
             sizeof(dispatcher_path) - 1);
     }
     if (aicpu_path[0] == '\0') {
@@ -866,8 +841,7 @@ int esl_onboard_run(int argc, char **argv) {
 
     loader = esl_aicpu_loader_create();
     rc = esl_aicpu_loader_bootstrap(loader, dispatcher_bytes, dispatcher_len,
-        aicpu_bytes, aicpu_len, stream_aicpu,
-        device_id);
+        aicpu_bytes, aicpu_len, stream_aicpu, device_id);
     if (rc != 0) {
         fprintf(stderr, "bootstrap failed: %d\n", rc);
         esl_aicpu_loader_destroy(loader);
@@ -1047,8 +1021,7 @@ int esl_onboard_run(int argc, char **argv) {
     fprintf(stderr, "[esl_proxy] aicpu exec launch (after aicore; aicore waits "
                     "on aicpu_ready)\n");
     rc = esl_aicpu_loader_launch(loader, stream_aicpu, &k_args,
-        ESL_PROXY_AICPU_THREAD_NUM,
-        ESL_AICPU_EXEC_NAME);
+        ESL_PROXY_AICPU_THREAD_NUM, ESL_AICPU_EXEC_NAME);
     if (rc != 0) {
         esl_aicore_launcher_destroy(aicore);
         esl_aicpu_loader_destroy(loader);

@@ -5,11 +5,8 @@
 #include "kernel_args.h"
 #include "esl_runtime.h"
 #include "onboard_config.h"
-#include "onboard_tensor.h"
 #include "fake_kernel.h"
-#include "l2_swimlane/esl_swimlane_api.h"
-#include "l2_swimlane/aicore/aicore_profiling_state.h"
-#include "esl_swimlane_aicore_onboard.h"
+#include "swimlane/swimlane_aicore.h"
 
 #ifdef __CCE_KT_TEST__
 #define __aicore__
@@ -40,9 +37,9 @@ extern "C" __attribute__((weak)) __aicore__ void fake_kernel(__gm__ EslFakeDispa
 }
 
 __aicore__ __attribute__((weak)) void aicore_execute(
-    __gm__ EslRuntime *runtime, int block_idx, CoreType worker_core_type, __gm__ uint64_t *rotation_table,
-    uint32_t profiling_flag)
+    __gm__ EslRuntime *runtime, int block_idx, CoreType worker_core_type, uint32_t profiling_flag)
 {
+    (void)profiling_flag;
     __gm__ EslHandshake *my_hank = (__gm__ EslHandshake *)(&runtime->workers[block_idx]);
 
     while (my_hank->aicpu_ready == 0) {
@@ -93,8 +90,7 @@ __aicore__ __attribute__((weak)) void aicore_execute(
 
         ESL_SWIMLANE_AICORE_TASK_BEGIN(start_time);
         fake_kernel(exec_payload);
-        ESL_SWIMLANE_AICORE_TASK_RECORD(rotation_table, block_idx, profiling_flag, swim_local, exec_payload,
-                                        task_id, start_time);
+        ESL_SWIMLANE_AICORE_TASK_RECORD(swim_local, exec_payload, task_id, start_time);
 
         last_reg_val = reg_val;
         write_reg(REG_ID_COND, MAKE_FIN_VALUE(task_id));
@@ -114,23 +110,19 @@ __aicore__ __attribute__((weak)) void aicore_execute(
 
 extern "C" __global__ __aicore__ void KERNEL_ENTRY(aicore_kernel)(__gm__ KernelArgs *k_args)
 {
-    const uint32_t profiling_flag = k_args->enable_profiling_flag;
-    __gm__ uint64_t *rotation_table = nullptr;
-
-    set_aicore_profiling_flag(profiling_flag);
-    ESL_SWIMLANE_AICORE_KERNEL_ROTATION_TABLE(k_args, rotation_table);
-
 #ifdef __DAV_VEC__
     block_idx_aiv = get_block_idx() * get_subblockdim() + get_subblockid() + get_block_num();
     core_type_aiv = CoreType::AIV;
     set_ffts_base_addr((uint64_t)k_args->ffts_base_addr);
+    ESL_SWIMLANE_AICORE_KERNEL_ENTRY(k_args, block_idx_aiv);
     aicore_execute(reinterpret_cast<__gm__ EslRuntime *>(k_args->runtime_args), block_idx_aiv, core_type_aiv,
-                   rotation_table, profiling_flag);
+                   k_args->enable_profiling_flag);
 #else
     block_idx_aic = get_block_idx();
     core_type_aic = CoreType::AIC;
     set_ffts_base_addr((uint64_t)k_args->ffts_base_addr);
+    ESL_SWIMLANE_AICORE_KERNEL_ENTRY(k_args, block_idx_aic);
     aicore_execute(reinterpret_cast<__gm__ EslRuntime *>(k_args->runtime_args), block_idx_aic, core_type_aic,
-                   rotation_table, profiling_flag);
+                   k_args->enable_profiling_flag);
 #endif
 }

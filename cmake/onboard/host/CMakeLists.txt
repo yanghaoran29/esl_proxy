@@ -37,8 +37,7 @@ set(ESL_ONBOARD_RUNNER_SOURCES
 )
 if(ESL_PROXY_ENABLE_L2_SWIMLANE)
     list(APPEND ESL_ONBOARD_RUNNER_SOURCES
-        "${ONBOARD_SRC}/l2_swimlane/esl_swimlane_host.cpp"
-        "${ONBOARD_SRC}/l2_swimlane/l2_swimlane_collector.cpp"
+        "${ONBOARD_SRC}/swimlane/host_swimlane.cpp"
         "${ONBOARD_SRC}/onboard_log.c"
     )
 endif()
@@ -59,8 +58,6 @@ target_compile_options(esl_onboard_runner PRIVATE
 target_include_directories(esl_onboard_runner
     PRIVATE
         "${ONBOARD_INC}"
-        "${ONBOARD_INC}/l2_swimlane"
-        "${ONBOARD_SRC}/l2_swimlane"
         "${ESL_CORE}/include"
         "${ASCEND_HOME_PATH}/include"
         "${ASCEND_HOME_PATH}/pkg_inc"

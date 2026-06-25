@@ -209,7 +209,7 @@ int write_bytes(const char *path, const char *data, uint64_t len)
 
 void esl_make_inner_basename(uint64_t fp, int device_id, char *buf, size_t buf_size)
 {
-    snprintf(buf, buf_size, "simpler_inner_%016lx_%d.so", (unsigned long)fp, device_id);
+    snprintf(buf, buf_size, ESL_INNER_SO_BASENAME_FMT, (unsigned long)fp, device_id);
 }
 
 void esl_make_aicpu_op_type(const char *base, uint64_t fp, char *buf, size_t buf_size)
@@ -258,3 +258,99 @@ int esl_write_aicpu_kernel_json(const char *path, const char *kernel_so, uint64_
     fclose(out);
     return 1;
 }
+
+#ifdef ESL_PROXY_ONBOARD_HOST
+
+#include <acl/acl_rt.h>
+#include "onboard/onboard_trace.h"
+
+static const char *host_trace_stage_name(uint32_t stage)
+{
+    switch (stage) {
+    case ESL_TRACE_EXEC_ENTER: return "exec_enter";
+    case ESL_TRACE_INIT_ONCE_WAIT: return "init_once_wait";
+    case ESL_TRACE_INIT_ONCE_LEADER: return "init_once_leader";
+    case ESL_TRACE_INIT_PLATFORM: return "init_platform";
+    case ESL_TRACE_INIT_HANDSHAKE: return "init_handshake";
+    case ESL_TRACE_INIT_DONE: return "init_done";
+    case ESL_TRACE_WORKER_BARRIER: return "worker_barrier";
+    case ESL_TRACE_CUTTER_START: return "cutter_start";
+    case ESL_TRACE_CUTTER_PRE_CALL: return "cutter_pre_call";
+    case ESL_TRACE_CUTTER_LOOP_ENTER: return "cutter_loop_enter";
+    case ESL_TRACE_CUTTER_LOOP: return "cutter_loop";
+    case ESL_TRACE_CUTTER_DRAIN: return "cutter_drain";
+    case ESL_TRACE_CUTTER_DONE: return "cutter_done";
+    case ESL_TRACE_DISPATCH_START: return "dispatch_start";
+    case ESL_TRACE_DISPATCH_PRE_CALL: return "dispatch_pre_call";
+    case ESL_TRACE_DISPATCH_LOOP_ENTER: return "dispatch_loop_enter";
+    case ESL_TRACE_DISPATCH_PHASE1: return "dispatch_phase1";
+    case ESL_TRACE_DISPATCH_PHASE2: return "dispatch_phase2";
+    case ESL_TRACE_DISPATCH_STALL: return "dispatch_stall";
+    case ESL_TRACE_DISPATCH_DONE: return "dispatch_done";
+    case ESL_TRACE_ORCH_START: return "orch_start";
+    case ESL_TRACE_ORCH_PRE_CALL: return "orch_pre_call";
+    case ESL_TRACE_ORCH_IN_ENTRY: return "orch_in_entry";
+    case ESL_TRACE_ORCH_DONE: return "orch_done";
+    case ESL_TRACE_SIGNAL_ORCH_DONE: return "signal_orch_done";
+    case ESL_TRACE_FINISHED_BARRIER: return "finished_barrier";
+    case ESL_TRACE_SHUTDOWN: return "shutdown";
+    case ESL_TRACE_EXEC_RETURN: return "exec_return";
+    case ESL_TRACE_SPARE_WAIT: return "spare_wait";
+    case ESL_TRACE_SPARE_EXIT: return "spare_exit";
+    default: return "unknown";
+    }
+}
+
+static void esl_host_dump_trace_region(const uint64_t *wall, int slot_idx, const char *label)
+{
+    uint32_t thread_id;
+    uint32_t stage_id;
+
+    thread_id = (uint32_t)(wall[slot_idx] >> 32);
+    stage_id = (uint32_t)(wall[slot_idx] & 0xffffffffULL);
+    if (wall[slot_idx] == 0) {
+        fprintf(stderr, "[esl_proxy] trace %s: (empty)\n", label);
+        return;
+    }
+    fprintf(stderr,
+        "[esl_proxy] trace %s: thread=%u stage=%s(%u) aux_a=%llu aux_b=%llu aux_c=%llu\n",
+        label, thread_id, host_trace_stage_name(stage_id), stage_id,
+        (unsigned long long)wall[slot_idx + 1], (unsigned long long)wall[slot_idx + 2],
+        (unsigned long long)wall[slot_idx + 3]);
+}
+
+void esl_host_dump_device_wall(const void *dev_wall_ptr)
+{
+    uint64_t wall[ESL_DEVICE_WALL_SLOTS];
+    aclError rc;
+
+    if (dev_wall_ptr == NULL) {
+        return;
+    }
+    rc = aclrtMemcpy(wall, sizeof(wall), dev_wall_ptr, sizeof(wall),
+        ACL_MEMCPY_DEVICE_TO_HOST);
+    if (rc != ACL_SUCCESS) {
+        fprintf(stderr, "[esl_proxy] D2H device_wall failed: %d\n", (int)rc);
+        return;
+    }
+
+    fprintf(stderr,
+        "[esl_proxy] device_wall stats: task_cnt=%llu subtask_cnt=%llu "
+        "completed_cnt=%llu wall_ns=%llu\n",
+        (unsigned long long)wall[0], (unsigned long long)wall[1],
+        (unsigned long long)wall[2], (unsigned long long)wall[3]);
+    fprintf(stderr,
+        "[esl_proxy] device_wall diag: commit=%llu n_uncomp=%llu "
+        "first_uncomp=%u pred_cnt[first]=%u ready_cube=%u ready_vec=%u\n",
+        (unsigned long long)wall[4], (unsigned long long)wall[5],
+        (unsigned)(wall[6] & 0xffffffffULL), (unsigned)(wall[6] >> 32),
+        (unsigned)(wall[7] & 0xffffffffULL), (unsigned)(wall[7] >> 32));
+
+    esl_host_dump_trace_region(wall, 8, "cutter(t0)");
+    esl_host_dump_trace_region(wall, 12, "dispatch(t1)");
+    esl_host_dump_trace_region(wall, 16, "orch(t2)");
+    esl_host_dump_trace_region(wall, 20, "global");
+    fflush(stderr);
+}
+
+#endif /* ESL_PROXY_ONBOARD_HOST */

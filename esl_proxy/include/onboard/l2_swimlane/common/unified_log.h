@@ -1,6 +1,0 @@
-#ifndef ESL_PROXY_L2_SWIMLANE_UNIFIED_LOG_H
-#define ESL_PROXY_L2_SWIMLANE_UNIFIED_LOG_H
-
-#include "onboard_log.h"
-
-#endif /* ESL_PROXY_L2_SWIMLANE_UNIFIED_LOG_H */

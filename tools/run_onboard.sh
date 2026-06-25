@@ -19,7 +19,7 @@ DEVICE_ID=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-build) SKIP_BUILD=1; shift ;;
-    -d) DEVICE_ID="$2"; shift 2 ;;
+    -d|--device) DEVICE_ID="$2"; shift 2 ;;
     -h|--help)
       echo "usage: $0 [-d device_id] [--skip-build]"
       exit 0
@@ -47,7 +47,7 @@ if [[ "$SKIP_BUILD" -eq 0 ]]; then
 fi
 
 RUNNER="${ROOT}/build/onboard/host/esl_onboard_runner"
-DISPATCHER="${ROOT}/build/onboard/aicpu/libsimpler_aicpu_dispatcher.so"
+DISPATCHER="${ROOT}/build/onboard/aicpu/libesl_aicpu_dispatcher.so"
 AICPU="${ROOT}/build/onboard/aicpu/libaicpu_kernel.so"
 AICORE="${ROOT}/build/onboard/aicore/aicore_kernel.o"
 

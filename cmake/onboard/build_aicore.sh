@@ -31,7 +31,7 @@ if [[ -f "${BUILD_DIR}/CMakeCache.txt" ]]; then
   fi
 fi
 
-CUSTOM_INCLUDES="${ONBOARD_INC};${ONBOARD_INC}/l2_swimlane;${ROOT}/esl_proxy/include;${AICORE_SRC}/l2_swimlane"
+CUSTOM_INCLUDES="${ONBOARD_INC};${ROOT}/esl_proxy/include"
 ESL_PROXY_ENABLE_L2_SWIMLANE="${ESL_PROXY_ENABLE_L2_SWIMLANE:-0}"
 
 cmake -B "$BUILD_DIR" -S "${ROOT}/cmake/onboard/aicore" \

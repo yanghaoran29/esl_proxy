@@ -23,7 +23,6 @@ if(DEFINED CUSTOM_SOURCE_DIRS)
     foreach(SRC_DIR ${CUSTOM_SOURCE_DIRS})
         list(APPEND ALL_SOURCES
             "${SRC_DIR}/aicore_kernel.cpp"
-            "${SRC_DIR}/l2_swimlane/aicore_profiling_state.cpp"
         )
     endforeach()
 else()

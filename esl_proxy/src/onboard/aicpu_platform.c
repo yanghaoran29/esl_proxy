@@ -7,6 +7,7 @@
 #define _GNU_SOURCE
 
 #include "onboard_config.h"
+#include "memory_barrier.h"
 #include "tools.h"
 #include "onboard_log.h"
 #include "aicpu_bridge.h"
@@ -20,17 +21,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __aarch64__
-#define OUT_OF_ORDER_STORE_BARRIER() __asm__ __volatile__("dmb ishst" ::: "memory")
-#else
-#define OUT_OF_ORDER_STORE_BARRIER() __asm__ __volatile__("" ::: "memory")
-#endif
-
 #define HANDSHAKE_SPIN_MAX 10000000ULL
 #define DEINIT_ACK_SPIN_MAX 5000000ULL
 
 static uint64_t g_platform_regs;
-static EslRuntime *g_runtime;
 static uint64_t g_core_reg_addrs[RUNTIME_MAX_WORKER];
 
 /* ========================================================================== */
@@ -110,33 +104,8 @@ void cache_flush_range(const void *addr, size_t size)
 /* HW dispatch & AICore handshake                                             */
 /* ========================================================================== */
 
-int esl_hw_poll_fin(uint64_t reg_addr, uint32_t reg_task_id)
-{
-    uint64_t cond;
-
-    if (reg_addr == 0) {
-        return 0;
-    }
-    cond = read_reg(reg_addr, REG_ID_COND);
-#ifdef __aarch64__
-    __asm__ __volatile__("dmb ishld" ::: "memory");
-#endif
-    return (EXTRACT_TASK_STATE(cond) == TASK_FIN_STATE && EXTRACT_TASK_ID(cond) == (int)reg_task_id) ? 1 : 0;
-}
-
-void esl_hw_dispatch_reg(uint64_t reg_addr, uint32_t reg_task_id)
-{
-    if (reg_addr != 0) {
-        write_reg(reg_addr, REG_ID_DATA_MAIN_BASE, reg_task_id);
-    }
-}
-
-void esl_dispatch_payload_init(EslRuntime *runtime)
-{
-    g_runtime = runtime;
-}
-
-void esl_dispatch_payload_prepare(int core, uint32_t reg_task_id, const EslOnboardDispatchInput *input)
+void esl_dispatch_payload_prepare(EslRuntime *runtime, int core, uint32_t reg_task_id,
+                                  const EslOnboardDispatchInput *input)
 {
     EslFakeDispatchPayload *p;
     uint64_t base;
@@ -144,10 +113,10 @@ void esl_dispatch_payload_prepare(int core, uint32_t reg_task_id, const EslOnboa
     struct task_desc desc;
     struct task_payload pay;
 
-    if (g_runtime == NULL || core < 0 || core >= RUNTIME_MAX_WORKER || input == NULL) {
+    if (runtime == NULL || core < 0 || core >= RUNTIME_MAX_WORKER || input == NULL) {
         return;
     }
-    base = g_runtime->workers[core].task;
+    base = runtime->workers[core].task;
     if (base == 0) {
         return;
     }

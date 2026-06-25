@@ -4,17 +4,12 @@
 #ifdef ESL_PROXY_ONBOARD
 
 #include "onboard/onboard_crosscore_sync.h"
+#include "memory_barrier.h"
 #include "queue.h"
 #include "aicpu_bridge.h"
 #include "ring_buf.h"
 #include "cutter.h"
 #include "dispatch.h"
-
-#ifdef __aarch64__
-#define ESL_ONBOARD_STORE_BARRIER() __asm__ __volatile__("dmb ishst" ::: "memory")
-#else
-#define ESL_ONBOARD_STORE_BARRIER() __asm__ __volatile__("" ::: "memory")
-#endif
 
 extern atomic_int g_task_id;
 extern atomic_int g_min_uncomplete_task;
@@ -32,7 +27,7 @@ void esl_onboard_publish_queue(queue_t *queue)
 {
     if (queue != NULL) {
         cache_flush_range(queue, sizeof(queue_t));
-        ESL_ONBOARD_STORE_BARRIER();
+        OUT_OF_ORDER_STORE_BARRIER();
     }
 }
 
@@ -58,7 +53,7 @@ void esl_onboard_publish_task_slot(uint16_t task_id)
         cache_flush_range(&g_predecessors[task_id], sizeof(g_predecessors[task_id]));
     }
     cache_flush_range(&g_predecessor_cnt[slot], sizeof(g_predecessor_cnt[slot]));
-    ESL_ONBOARD_STORE_BARRIER();
+    OUT_OF_ORDER_STORE_BARRIER();
 }
 
 void esl_onboard_publish_predecessor_cnt(uint16_t task_id)
@@ -66,7 +61,7 @@ void esl_onboard_publish_predecessor_cnt(uint16_t task_id)
     const uint16_t slot = (uint16_t)(task_id & RING_MASK);
 
     cache_flush_range(&g_predecessor_cnt[slot], sizeof(g_predecessor_cnt[slot]));
-    ESL_ONBOARD_STORE_BARRIER();
+    OUT_OF_ORDER_STORE_BARRIER();
 }
 
 void esl_onboard_publish_counters(void)
@@ -77,14 +72,14 @@ void esl_onboard_publish_counters(void)
     cache_flush_range(&g_completed_cnt, sizeof(g_completed_cnt));
     cache_flush_range(&g_orch_is_done, sizeof(g_orch_is_done));
     cache_flush_range(&g_predecessor_ring.tail, sizeof(g_predecessor_ring.tail));
-    ESL_ONBOARD_STORE_BARRIER();
+    OUT_OF_ORDER_STORE_BARRIER();
 }
 
 void esl_onboard_publish_atomic_u64(uint64_t *field)
 {
     if (field != NULL) {
         cache_flush_range((const void *)field, sizeof(uint64_t));
-        ESL_ONBOARD_STORE_BARRIER();
+        OUT_OF_ORDER_STORE_BARRIER();
     }
 }
 
@@ -92,7 +87,7 @@ void esl_onboard_publish_u16(uint16_t *field)
 {
     if (field != NULL) {
         cache_flush_range((const void *)field, sizeof(uint16_t));
-        ESL_ONBOARD_STORE_BARRIER();
+        OUT_OF_ORDER_STORE_BARRIER();
     }
 }
 

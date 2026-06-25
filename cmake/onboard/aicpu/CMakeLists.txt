@@ -106,5 +106,5 @@ target_link_libraries(aicpu_dispatcher PRIVATE dl)
 
 set_target_properties(aicpu_dispatcher PROPERTIES
     LINK_FLAGS "-Wl,--build-id"
-    OUTPUT_NAME "simpler_aicpu_dispatcher"
+    OUTPUT_NAME "esl_aicpu_dispatcher"
 )

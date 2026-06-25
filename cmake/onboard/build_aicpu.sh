@@ -47,7 +47,7 @@ ORCH_CASE="${ORCH_CASE:-paged_attention_unroll_manual_scope.h}"
 QWEN3_SPMD_TIER="${QWEN3_SPMD_TIER:-2}"
 ESL_PROXY_ENABLE_L2_SWIMLANE="${ESL_PROXY_ENABLE_L2_SWIMLANE:-0}"
 
-CUSTOM_INCLUDES="${ONBOARD_INC};${ESL_CORE}/include;${ESL_CORE}/cases;${ONBOARD_INC}/l2_swimlane;${ONBOARD_SRC}/l2_swimlane"
+CUSTOM_INCLUDES="${ONBOARD_INC};${ESL_CORE}/include;${ESL_CORE}/cases"
 SWIMLANE_FLAGS=""
 if [[ "$ESL_PROXY_ENABLE_L2_SWIMLANE" != "0" ]]; then
   SWIMLANE_FLAGS="-DESL_PROXY_ENABLE_L2_SWIMLANE=1"
@@ -56,7 +56,7 @@ fi
 # Sources are flat in src/onboard. Build the AICPU kernel file list = everything
 # in src/onboard EXCEPT the aicore / host / dispatcher sources, plus the core
 # scheduler files from esl_proxy/src.
-NOT_AICPU="aicore_kernel.cpp host_onboard.c aicpu_dispatcher.c aicpu_kernel.c host_runner.c"
+NOT_AICPU="aicore_kernel.cpp host_onboard.c host_swimlane.cpp swimlane_aicpu.cpp aicpu_dispatcher.c aicpu_kernel.c host_runner.c"
 SRC_FILES=""
 for f in "$ONBOARD_SRC"/*.c "$ONBOARD_SRC"/*.cpp; do
   [[ -e "$f" ]] || continue
@@ -67,7 +67,7 @@ for f in "$ONBOARD_SRC"/*.c "$ONBOARD_SRC"/*.cpp; do
 done
 for f in aicpu_runtime cutter dispatch dispatch_payload shm; do SRC_FILES="${SRC_FILES};${ESL_CORE}/src/${f}.c"; done
 if [[ "$ESL_PROXY_ENABLE_L2_SWIMLANE" != "0" ]]; then
-  SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/l2_swimlane/l2_swimlane_collector_aicpu.cpp;${ONBOARD_SRC}/l2_swimlane/device_time_aicpu.c"
+  SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/swimlane/swimlane_aicpu.cpp"
 fi
 
 export SIMPLER_DISABLE_WARNINGS_AS_ERRORS=1

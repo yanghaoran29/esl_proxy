@@ -6,7 +6,7 @@ ROOT=/data/y00955915/Desktop/esl_proxy_main/esl_proxy
 cd "$ROOT"
 
 RUNNER="${ROOT}/build/onboard/host/esl_onboard_runner"
-DISPATCHER="${ROOT}/build/onboard/aicpu/libsimpler_aicpu_dispatcher.so"
+DISPATCHER="${ROOT}/build/onboard/aicpu/libesl_aicpu_dispatcher.so"
 AICPU="${ROOT}/build/onboard/aicpu/libaicpu_kernel.so"
 DEVICE="${TASK_DEVICE:-0}"
 

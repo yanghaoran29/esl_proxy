@@ -2,23 +2,23 @@
 #define _GNU_SOURCE
 
 #include "aicpu_runtime.h"
-#include "onboard_config.h"
-#include "tools.h"
-#include "onboard_log.h"
-#include "dlog_pub.h"
 #include "aicpu_bridge.h"
-#include "kernel_args.h"
 #include "conf.h"
-#include "dispatch.h"
-#include "ring_buf.h"
-#include "task.h"
 #include "cutter.h"
+#include "dispatch.h"
+#include "dlog_pub.h"
+#include "kernel_args.h"
 #include "mem_pool.h"
-#include "l2_swimlane/esl_swimlane_aicpu_c.h"
-#include "esl_swimlane_aicpu_onboard.h"
 #include "onboard/onboard_crosscore_sync.h"
+#include "memory_barrier.h"
 #include "onboard/onboard_trace.h"
+#include "onboard_config.h"
+#include "onboard_log.h"
+#include "ring_buf.h"
 #include "spin.h"
+#include "swimlane/swimlane_aicpu.h"
+#include "task.h"
+#include "tools.h"
 
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -60,7 +60,6 @@ static atomic_flag g_once = ATOMIC_FLAG_INIT;
 static AicoreBridge g_bridge;
 static uint64_t g_device_start_cycle;
 static uint32_t g_core_dispatch_seq[RUNTIME_MAX_WORKER];
-ESL_SWIMLANE_AICPU_DISPATCH_TS_STORAGE;
 static when2free_entry_t g_onboard_when2free[ONBOARD_WHEN2FREE_CAP];
 volatile uint64_t *g_esl_stats_base;
 
@@ -68,8 +67,8 @@ volatile uint64_t *g_esl_stats_base;
 /* Runtime execute path                                                       */
 /* ========================================================================== */
 
-static int init_once(EslRuntime *runtime, int thread)
-{
+/* 单次初始化：平台、握手与 AICore bridge，多线程仅 leader 执行。 */
+static int init_once(EslRuntime *runtime, int thread) {
     if (atomic_flag_test_and_set_explicit(&g_once, memory_order_acquire)) {
         esl_onboard_trace(thread, ESL_TRACE_INIT_ONCE_WAIT, 0, 0, 0);
         while (!atomic_load_explicit(&g_init_done, memory_order_acquire) &&
@@ -98,8 +97,8 @@ static int init_once(EslRuntime *runtime, int thread)
     return 0;
 }
 
-int32_t esl_aicpu_execute(EslRuntime *runtime)
-{
+/* AICPU 主执行入口：按线程角色运行 cutter / dispatch / orch 并协调收尾。 */
+int32_t esl_aicpu_execute(EslRuntime *runtime) {
     int idx;
     int finished;
 
@@ -143,18 +142,17 @@ int32_t esl_aicpu_execute(EslRuntime *runtime)
         esl_onboard_trace(idx, ESL_TRACE_DISPATCH_PRE_CALL, 0, 0, 0);
         dispatch_loop_run(0);
         esl_onboard_trace(idx, ESL_TRACE_DISPATCH_DONE,
-                          (uint64_t)g_completed_cnt,
-                          (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire), 0);
+            (uint64_t)g_completed_cnt,
+            (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire), 0);
         break;
     case ESL_AICPU_ROLE_ORCH:
         esl_onboard_trace(idx, ESL_TRACE_ORCH_START, 0, 0, 0);
-        ESL_SWIMLANE_AICPU_SET_ORCH_THREAD(idx);
         esl_onboard_trace(idx, ESL_TRACE_ORCH_PRE_CALL, 0, 0, 0);
         esl_onboard_trace(idx, ESL_TRACE_ORCH_IN_ENTRY, 0, 0, 0);
         aicpu_orchestration_entry(0);
         esl_onboard_trace(idx, ESL_TRACE_ORCH_DONE,
-                          (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire),
-                          (uint64_t)g_subtask_cnt, 0);
+            (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire),
+            (uint64_t)g_subtask_cnt, 0);
         esl_signal_orch_done();
         esl_onboard_trace(idx, ESL_TRACE_SIGNAL_ORCH_DONE, 0, 0, 0);
         break;
@@ -178,9 +176,9 @@ int32_t esl_aicpu_execute(EslRuntime *runtime)
     return 0;
 }
 
+/* 将调度统计与诊断信息写入 device_wall GM 并刷 cache。 */
 void esl_write_stats(uint64_t task_cnt, uint64_t subtask_cnt, uint64_t completed_cnt, uint64_t commit,
-                     uint64_t ready_cube, uint64_t ready_vec, uint64_t min_uncomplete)
-{
+    uint64_t ready_cube, uint64_t ready_vec, uint64_t min_uncomplete) {
     if (g_esl_stats_base != NULL) {
         g_esl_stats_base[0] = task_cnt;
         g_esl_stats_base[1] = subtask_cnt;
@@ -197,8 +195,8 @@ void esl_write_stats(uint64_t task_cnt, uint64_t subtask_cnt, uint64_t completed
 /* CANN kernel entry points                                                   */
 /* ========================================================================== */
 
-__attribute__((visibility("default"))) int simpler_aicpu_init(void *arg)
-{
+/* CANN AICPU init 内核入口：解析 KernelArgs、初始化日志与 swimlane 基址。 */
+__attribute__((visibility("default"))) int esl_aicpu_init(void *arg) {
     KernelArgs *k_args;
 
     init_log_switch();
@@ -220,8 +218,8 @@ __attribute__((visibility("default"))) int simpler_aicpu_init(void *arg)
     return 0;
 }
 
-__attribute__((visibility("default"))) int simpler_aicpu_exec(void *arg)
-{
+/* CANN AICPU exec 内核入口：设置寄存器表与统计基址，调用 esl_aicpu_execute。 */
+__attribute__((visibility("default"))) int esl_aicpu_exec(void *arg) {
     KernelArgs *k_args;
     EslRuntime *runtime;
     int rc;
@@ -245,9 +243,9 @@ __attribute__((visibility("default"))) int simpler_aicpu_exec(void *arg)
     set_platform_regs(k_args->regs);
     g_esl_stats_base = (volatile uint64_t *)(uintptr_t)k_args->device_wall_data_base;
     esl_onboard_trace_set_base(g_esl_stats_base);
-    LOG_ERROR("simpler_aicpu_exec: start");
+    LOG_ERROR("esl_aicpu_exec: start");
     rc = esl_aicpu_execute(runtime);
-    LOG_ERROR("simpler_aicpu_exec: rc=%d", rc);
+    LOG_ERROR("esl_aicpu_exec: rc=%d", rc);
     if (rc != 0) {
         LOG_ERROR("esl_aicpu_execute failed rc=%d", rc);
         return rc;
@@ -260,12 +258,8 @@ __attribute__((visibility("default"))) int simpler_aicpu_exec(void *arg)
     return rc;
 }
 
-/* ========================================================================== */
-/* AICore bridge (dispatch.c)                                                 */
-/* ========================================================================== */
-
-static uint64_t core_reg_addr(int worker_id)
-{
+/* 解析物理 worker 对应的 AICore 握手寄存器基址（握手表优先，HAL 表兜底）。 */
+static uint64_t core_reg_addr(int worker_id) {
     uint64_t reg_addr = esl_handshake_reg_addr(worker_id);
 
     if (reg_addr != 0) {
@@ -286,11 +280,8 @@ static uint64_t core_reg_addr(int worker_id)
     return ((uint64_t *)table)[hal_idx];
 }
 
-/* esl_pick_phys_worker is provided as a static inline by worker_map.h
- * (included via onboard_config.h) — shared with the host build. */
-
-static uint32_t esl_next_reg_task_id(int phys)
-{
+/* 为指定物理核生成下一个寄存器 task id（避开 EXIT 保留值）。 */
+static uint32_t esl_next_reg_task_id(int phys) {
     uint32_t seq;
     uint32_t reg_id;
 
@@ -306,8 +297,8 @@ static uint32_t esl_next_reg_task_id(int phys)
     return reg_id;
 }
 
-int aicore_bridge_init(AicoreBridge *bridge, EslRuntime *runtime, uint64_t fake_kernel_addr)
-{
+/* 初始化 AICore bridge 状态（runtime、fake kernel 地址）。 */
+int aicore_bridge_init(AicoreBridge *bridge, EslRuntime *runtime, uint64_t fake_kernel_addr) {
     if (bridge == NULL || runtime == NULL) {
         return -1;
     }
@@ -317,8 +308,8 @@ int aicore_bridge_init(AicoreBridge *bridge, EslRuntime *runtime, uint64_t fake_
     return 0;
 }
 
-void aicore_bridge_shutdown(AicoreBridge *bridge)
-{
+/* 关闭 AICore bridge 并向所有核发送 shutdown 信号。 */
+void aicore_bridge_shutdown(AicoreBridge *bridge) {
     if (bridge != NULL && bridge->initialized) {
         if (bridge->runtime != NULL) {
             esl_shutdown_all_cores(bridge->runtime);
@@ -327,8 +318,8 @@ void aicore_bridge_shutdown(AicoreBridge *bridge)
     }
 }
 
-int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid)
-{
+/* 轮询各核 COND 寄存器，将已 FIN 的 slot 标记完成并更新 msg_bitmap。 */
+int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid) {
     (void)dispatch_tid;
     if (bridge == NULL || !bridge->initialized) {
         return 0;
@@ -356,14 +347,25 @@ int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid)
                 if (reg_task == 0U) {
                     continue;
                 }
-                if (esl_hw_poll_fin(core_reg_addr(phys), reg_task)) {
-                    ESL_SWIMLANE_AICPU_COMPLETE_TASK(
-                        phys, ESL_AICPU_ROLE_DISPATCH, reg_task,
-                        ESL_SWIMLANE_AICPU_DISPATCH_TS(g_hw_dispatch_ts, exe_type, core, slot));
-                    g_ctrl_t[0].msg_bitmap[exe_type][slot] |= mask;
-                    esl_onboard_publish_atomic_u64(&g_ctrl_t[0].msg_bitmap[exe_type][slot]);
-                    g_executors[exe_type][core].idx = (uint8_t)AIC_OSTD;
-                    g_executors[exe_type][core].tasks[slot] = EXEC_SLOT_EMPTY;
+                {
+                    const uint64_t _reg_addr = core_reg_addr(phys);
+                    int _fin = 0;
+
+                    if (_reg_addr != 0) {
+                        const uint64_t _cond = read_reg(_reg_addr, REG_ID_COND);
+
+                        OUT_OF_ORDER_LOAD_BARRIER();
+                        _fin = (EXTRACT_TASK_STATE(_cond) == TASK_FIN_STATE &&
+                                  EXTRACT_TASK_ID(_cond) == (int)reg_task)
+                                     ? 1
+                                     : 0;
+                    }
+                    if (_fin) {
+                        g_ctrl_t[0].msg_bitmap[exe_type][slot] |= mask;
+                        esl_onboard_publish_atomic_u64(&g_ctrl_t[0].msg_bitmap[exe_type][slot]);
+                        g_executors[exe_type][core].idx = (uint8_t)AIC_OSTD;
+                        g_executors[exe_type][core].tasks[slot] = EXEC_SLOT_EMPTY;
+                    }
                 }
             }
         }
@@ -371,8 +373,8 @@ int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid)
     return 0;
 }
 
-static void esl_pack_dispatch_input(EslOnboardDispatchInput *in, uint16_t task_id, uint32_t block_idx)
-{
+/* 从 ring buffer 打包任务描述与 payload 为 AICore dispatch 输入。 */
+static void esl_pack_dispatch_input(EslOnboardDispatchInput *in, uint16_t task_id, uint32_t block_idx) {
     const struct task_desc *td = &g_basic_buf[task_id & RING_MASK];
     const struct task_payload *pay = &g_task_payload[task_id & RING_MASK];
 
@@ -391,9 +393,9 @@ static void esl_pack_dispatch_input(EslOnboardDispatchInput *in, uint16_t task_i
     in->scalars = pay->scalars;
 }
 
+/* 向指定 AICore 下发任务：写 GM payload 并 kick DATA_MAIN_BASE 寄存器。 */
 int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t task_id, int core, int slot,
-                                int exe_type, uint32_t block_idx)
-{
+    int exe_type, uint32_t block_idx) {
     (void)dispatch_tid;
     g_executors[exe_type][core].tasks[slot] = task_id;
     g_executors[exe_type][core].duration[slot] = g_basic_buf[task_id & RING_MASK].duration;
@@ -414,28 +416,23 @@ int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t
     }
     {
         const uint32_t reg_task = esl_next_reg_task_id(phys);
-        esl_dispatch_payload_prepare(phys, reg_task, &din);
+        esl_dispatch_payload_prepare(bridge->runtime, phys, reg_task, &din);
         g_executors[exe_type][core].base[slot] = reg_task;
         ESL_SWIMLANE_AICPU_ON_DISPATCH(phys, ESL_AICPU_ROLE_DISPATCH);
-        ESL_SWIMLANE_AICPU_RECORD_DISPATCH_TS(g_hw_dispatch_ts, exe_type, core, slot);
-        esl_hw_dispatch_reg(reg_addr, reg_task);
+        write_reg(reg_addr, REG_ID_DATA_MAIN_BASE, reg_task);
     }
     return 0;
 }
 
-/* ========================================================================== */
-/* Shared-memory cache sync (aicpu_bridge.h)                                  */
-/* ========================================================================== */
-
-void esl_onboard_invalidate_runtime(void *runtime)
-{
+/* 使 AICPU 侧对 GM 中 EslRuntime 的读取看到 host 最新写入。 */
+void esl_onboard_invalidate_runtime(void *runtime) {
     if (runtime != NULL) {
         cache_invalidate_range(runtime, sizeof(EslRuntime));
     }
 }
 
-void esl_onboard_flush_shared_after_orch(void)
-{
+/* orch 完成后将共享 DAG/任务状态刷回 GM，供 cutter/dispatch 线程可见。 */
+void esl_onboard_flush_shared_after_orch(void) {
     cache_flush_range(&g_task_id, sizeof(g_task_id));
     cache_flush_range(&g_orch_is_done, sizeof(g_orch_is_done));
     cache_flush_range(g_basic_buf, sizeof(g_basic_buf));
@@ -451,8 +448,8 @@ void esl_onboard_flush_shared_after_orch(void)
 /* Platform init / shutdown                                                   */
 /* ========================================================================== */
 
-int esl_platform_init(EslRuntime *runtime, AicoreBridge *bridge)
-{
+/* 初始化 onboard 平台子系统：内存池、executor、bridge 与 swimlane。 */
+int esl_platform_init(EslRuntime *runtime, AicoreBridge *bridge) {
     ring_buf_init();
     init_state_buf();
     init_predecessors();
@@ -466,7 +463,6 @@ int esl_platform_init(EslRuntime *runtime, AicoreBridge *bridge)
             }
         }
     }
-    esl_dispatch_payload_init(runtime);
     if (runtime != NULL) {
         runtime->worker_count = ESL_PROXY_ONBOARD_WORKER_COUNT;
     }
@@ -482,14 +478,10 @@ int esl_platform_init(EslRuntime *runtime, AicoreBridge *bridge)
     return 0;
 }
 
-void esl_platform_shutdown(AicoreBridge *bridge)
-{
+/* 平台收尾：刷 swimlane 记录并关闭 AICore bridge。 */
+void esl_platform_shutdown(AicoreBridge *bridge) {
     ESL_SWIMLANE_AICPU_SHUTDOWN_FLUSH(bridge);
     aicore_bridge_shutdown(bridge);
 }
-
-/* ========================================================================== */
-/* Orchestration case (ORCH_CASE env / build flag)                            */
-/* ========================================================================== */
 
 #include INCLUDE_FILE(ORCH_CASE)

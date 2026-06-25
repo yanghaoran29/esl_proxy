@@ -29,8 +29,8 @@ struct KernelArgs {
     uint64_t ffts_base_addr;
     uint64_t dump_data_base;
     uint64_t l2_swimlane_data_base;
-    uint64_t pmu_data_base;       /* reserved (swimlane-only build: always 0) */
-    uint64_t pmu_reg_addrs;       /* reserved (swimlane-only build: always 0) */
+    uint64_t _pad_reserved0;
+    uint64_t _pad_reserved1;
     uint64_t dep_gen_data_base;
     uint64_t scope_stats_data_base;
     uint64_t l2_swimlane_aicore_rotation_table;

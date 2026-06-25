@@ -121,7 +121,7 @@ static inline void onboard_dispatcher_log(const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
-    dlog_error(CCECPU, "[simpler-dispatcher] %s", buf);
+    dlog_error(CCECPU, "[esl-dispatcher] %s", buf);
 }
 
 #endif /* ESL_PROXY_ONBOARD_LOG_H */

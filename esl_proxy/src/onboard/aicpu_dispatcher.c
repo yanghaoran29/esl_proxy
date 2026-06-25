@@ -37,8 +37,9 @@ _Static_assert(offsetof(struct DispatcherDeviceArgs, inner_so_len) == 128, "inne
 
 static void make_inner_so_path(uint64_t fp, uint64_t device_id, char *buf, size_t buf_size)
 {
-    snprintf(buf, buf_size, "/usr/lib64/aicpu_kernels/0/aicpu_kernels_device/simpler_inner_%016lx_%lu.so",
-             (unsigned long)fp, (unsigned long)device_id);
+    snprintf(buf, buf_size,
+        "/usr/lib64/aicpu_kernels/0/aicpu_kernels_device/" ESL_INNER_SO_BASENAME_FMT,
+        (unsigned long)fp, (int)device_id);
 }
 
 int StaticTileFwkBackendKernelServer(void *args)
