@@ -7,6 +7,8 @@
 #include <stdint.h>
 #include <stdatomic.h>
 
+#include "dispatch.h"
+#include "ring_buf.h"
 #include "conf.h"
 
 typedef struct queue queue_t;
@@ -114,15 +116,6 @@ static inline void esl_onboard_invalidate_sched_snapshot(void)
     cache_invalidate_range(&g_ctrl_t[0].completed_queue, sizeof(queue_t));
 }
 
-static inline void esl_onboard_advance_task_id(void)
-{
-    const uint16_t finished = (uint16_t)atomic_load_explicit(&g_task_id, memory_order_relaxed);
-
-    esl_onboard_publish_task_slot(finished);
-    atomic_fetch_add_explicit(&g_task_id, 1, memory_order_release);
-    esl_onboard_publish_counters();
-}
-
 #else
 
 static inline void esl_onboard_publish_task_slot(uint16_t task_id)
@@ -160,12 +153,6 @@ static inline void esl_onboard_consume_min_uncomplete(void)
 
 static inline void esl_onboard_invalidate_sched_snapshot(void)
 {
-}
-
-static inline void esl_onboard_advance_task_id(void)
-{
-    extern atomic_int g_task_id;
-    (void)atomic_fetch_add_explicit(&g_task_id, 1, memory_order_relaxed);
 }
 
 #endif

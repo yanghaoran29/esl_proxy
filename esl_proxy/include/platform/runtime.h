@@ -1,5 +1,5 @@
 /*
- * Minimal Runtime / Handshake layout (algorithm layer).
+ * Minimal Runtime / Handshake layout (platform layer).
  * Public field order matches simpler tensormap_and_ringbuffer Runtime
  * through func_id_to_addr_ for GM binary compatibility.
  */

@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ONBOARD_INC="${ROOT}/esl_proxy/include/platform/onboard"
 BUILD_DIR="${ROOT}/build/onboard/aicore"
 AICORE_ENTRY="${ROOT}/esl_proxy/src/platform/onboard/aicore_entry.cpp"
-AICORE_EXECUTOR="${ROOT}/esl_proxy/src/algorithm/aicore_executor.cpp"
+AICORE_EXECUTOR="${ROOT}/esl_proxy/src/platform/onboard/aicore_executor.cpp"
 
 if [[ -z "${ASCEND_HOME_PATH:-}" ]]; then
   echo "ASCEND_HOME_PATH is not set" >&2

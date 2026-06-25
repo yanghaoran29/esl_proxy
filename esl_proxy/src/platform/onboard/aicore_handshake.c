@@ -1,4 +1,4 @@
-/* aicore_handshake.c — AICPU-AICore handshake state machine (algorithm layer). */
+/* aicore_handshake.c — AICPU-AICore handshake state machine. */
 #define _GNU_SOURCE
 
 #include "aicore_bridge.h"

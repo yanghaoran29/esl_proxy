@@ -9,7 +9,7 @@
 #include "dlog_pub.h"
 #include "kernel_args.h"
 #include "memory_barrier.h"
-#include "onboard_trace.h"
+#include "platform.h"
 #include "onboard_config.h"
 #include "onboard_log.h"
 #include "platform_regs.h"
@@ -126,7 +126,7 @@ int32_t esl_aicpu_execute(EslRuntime *runtime) {
     case ESL_AICPU_ROLE_DISPATCH:
         esl_onboard_trace(idx, ESL_TRACE_DISPATCH_START, 0, 0, 0);
         esl_onboard_trace(idx, ESL_TRACE_DISPATCH_PRE_CALL, 0, 0, 0);
-        dispatch_loop_run(0);
+        dispatch_worker((void *)0);
         esl_onboard_trace(idx, ESL_TRACE_DISPATCH_DONE,
             (uint64_t)g_completed_cnt,
             (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire), 0);

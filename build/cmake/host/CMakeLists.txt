@@ -34,6 +34,7 @@ set(ESL_SRC "${ESL_CORE}/src")
 set(ESL_ONBOARD_RUNNER_SOURCES
     "${ESL_SRC}/main.c"
     "${ONBOARD_SRC}/host_onboard.c"
+    "${ONBOARD_SRC}/onboard_trace.c"
     "${ONBOARD_SRC}/tools.c"
 )
 if(ESL_PROXY_ENABLE_L2_SWIMLANE)

@@ -4,10 +4,10 @@
 #include "aicore_bridge.h"
 #include "aicpu_runtime.h"
 #include "conf.h"
-#include "dispatch.h"
 #include "executor.h"
 #include "mem_pool.h"
 #include "onboard_config.h"
+#include "dispatch.h"
 #include "ring_buf.h"
 #include "runtime.h"
 #include "swimlane_aicpu.h"
@@ -50,7 +50,7 @@ int esl_platform_init(EslRuntime *runtime, AicoreBridge *bridge)
     if (aicore_bridge_init(bridge, runtime, fake_addr) != 0) {
         return -1;
     }
-    dispatch_set_aicore_bridge(bridge);
+    dispatch_bind(bridge);
     ESL_SWIMLANE_AICPU_INIT(ESL_PROXY_ONBOARD_WORKER_COUNT);
     return 0;
 }

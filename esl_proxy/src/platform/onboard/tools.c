@@ -5,6 +5,9 @@
 
 #include "tools.h"
 
+#include "platform.h"
+#include "onboard_config.h"
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -259,10 +262,15 @@ int esl_write_aicpu_kernel_json(const char *path, const char *kernel_so, uint64_
     return 1;
 }
 
+uint64_t platform_time_ns(void)
+{
+    return esl_onboard_time_ns();
+}
+
 #ifdef ESL_PROXY_ONBOARD_HOST
 
 #include <acl/acl_rt.h>
-#include "onboard_trace.h"
+#include "platform.h"
 
 static void esl_host_dump_trace_region(const uint64_t *wall, int slot_idx, const char *label)
 {

@@ -24,6 +24,7 @@
 #include "spin.h"
 
 #include "tensor.h"
+#include "platform.h"
 
 extern atomic_int g_task_id;
 extern atomic_int g_min_uncomplete_task;
@@ -45,19 +46,15 @@ struct ring_buf {
     uint16_t* _Atomic tail;
 };
 
-#include "onboard_crosscore_sync.h"
-
 static inline void ring_buf_init(void)
 {
+    uint16_t *head = NULL;
+
     for (size_t i = 0; i < RING_SIZE; i++) {
         g_successor_buf[i].next = NULL;
     }
-#ifdef ESL_PROXY_ONBOARD
-    static uint16_t predecessor_storage[NODE_BUFF_SIZE];
-    g_predecessor_ring.head = predecessor_storage;
-#else
-    g_predecessor_ring.head = malloc(sizeof(uint16_t) * NODE_BUFF_SIZE);
-#endif
+    platform_predecessor_ring_init(&head);
+    g_predecessor_ring.head = head;
     atomic_store(&g_predecessor_ring.tail, g_predecessor_ring.head);
     atomic_store(&g_predecessor_ring.start, g_predecessor_ring.head);
 }
@@ -136,16 +133,12 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
         uint16_t* idx = atomic_load_explicit(&g_predecessor_ring.tail, memory_order_relaxed);
         atomic_store_explicit(&g_predecessor_ring.tail, idx + 1, memory_order_relaxed);
         *idx = target[i];
-#ifdef ESL_PROXY_ONBOARD
-        esl_onboard_publish_u16(idx);
-#endif
+        platform_publish_u16(idx);
         cnt++;
     }
     ptr->cnt = cnt;
     task_payload_materialize(task_id);
-#ifdef ESL_PROXY_ONBOARD
-    esl_onboard_publish_task_slot(task_id);
-#endif
+    platform_publish_task_slot(task_id);
     return cnt;
 }
 
@@ -153,9 +146,7 @@ static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uin
                             uint32_t jitter_mask)
 {
     while ((task_id - (uint32_t)atomic_load(&g_min_uncomplete_task)) >= RING_SIZE) {
-#ifdef ESL_PROXY_ONBOARD
-        esl_onboard_consume_min_uncomplete();
-#endif
+        platform_consume_min_uncomplete();
         MAIN_LOGF("[orchestration] task_id = %u g_min_uncomplete_task = %u", task_id, g_min_uncomplete_task);
         spin_wait();
     }

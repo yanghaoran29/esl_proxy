@@ -9,24 +9,14 @@
 #include "executor.h"
 #include "conf.h"
 #include "dispatch.h"
-
-#ifndef ESL_PROXY_ONBOARD
-#include "worker_map.h"
-#endif
-
-#ifdef ESL_PROXY_ONBOARD
-#include "onboard_config.h"
-#include "aicore_bridge.h"
-#endif
+#include "platform.h"
 
 atomic_int g_task_id = 0;
 atomic_int g_min_uncomplete_task = 0;
-// Keep Atomic For Multi Dispatch Thread
 atomic_int g_completed_cnt = 0;
 atomic_bool g_is_done = false;
 atomic_bool g_orch_is_done = false;
 atomic_flag g_lock_buf[RING_SIZE];
-
 
 struct task_desc g_basic_buf[RING_SIZE];
 struct task_payload g_task_payload[RING_SIZE];
@@ -40,8 +30,6 @@ uint16_t g_task_id_buf[RING_SIZE];
 executor_t g_executors[EXE_TYPE_CNT][AIC_CNT];
 mem_pool_t g_mem_pool;
 ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
-/* Weak so an orchestration case header (which defines its own g_subtask_cnt)
- * overrides this default; the smoke path (no case definition) uses this one. */
 int __attribute__((weak)) g_subtask_cnt = 0;
 
 void init_predecessors(void)
@@ -54,40 +42,29 @@ void init_predecessors(void)
 
 void init_ctrl_t(void)
 {
-    uint64_t free_init = (uint64_t)((1ULL << AIC_CNT) - 1);
-#ifdef ESL_PROXY_ONBOARD
-    /* Only block_dim logical cores exist on HW; wider bitmap lets ctz pick
-     * core>=block_dim and dispatch CUBE to AIV workers (hang / lost FIN). */
-    free_init = (uint64_t)((1ULL << ESL_PROXY_ONBOARD_BLOCK_DIM) - 1);
-#else
-    free_init = (uint64_t)((1ULL << ESL_PROXY_WORKER_BLOCK_DIM) - 1);
-#endif
+    uint64_t free_init = (uint64_t)((1ULL << platform_worker_block_dim()) - 1);
+
     for (int tid = 0; tid < DISPATCH_THREAD_CNT; tid++) {
         g_ctrl_t[tid].tid = (uint16_t)tid;
 
-        // Initialize free_bitmap for TASK_TYPE
         for (int i = 0; i < TASK_TYPE_CNT; i++) {
             for (int j = 0; j < AIC_OSTD; j++) {
                 g_ctrl_t[tid].free_bitmap[i][j] = free_init;
             }
         }
-        // set_mix(tid);
-        // Initialize msg_bitmap for EXE_TYPE
         for (int i = 0; i < EXE_TYPE_CNT; i++) {
             for (int j = 0; j < AIC_OSTD; j++) {
                 g_ctrl_t[tid].msg_bitmap[i][j] = 0;
             }
         }
-        
-        // Initialize task_id_map
+
         for (int i = 0; i < EXE_TYPE_CNT; i++) {
             for (int j = 0; j < AIC_CNT; j++) {
                 g_ctrl_t[tid].task_id_map1[i][j] = 0;
                 g_ctrl_t[tid].task_id_map2[i][j] = 0;
             }
         }
-        
-        // Initialize queues
+
         for (int i = 0; i < TASK_TYPE_CNT; i++) {
             memset(&g_ctrl_t[tid].ready_queue[i], 0, sizeof(queue_t));
             atomic_flag_clear_explicit(&g_ctrl_t[tid].ready_queue[i].lock, memory_order_release);
@@ -100,7 +77,5 @@ void init_ctrl_t(void)
 void esl_signal_orch_done(void)
 {
     atomic_store_explicit(&g_orch_is_done, true, memory_order_release);
-#ifdef ESL_PROXY_ONBOARD
-    esl_onboard_flush_shared_after_orch();
-#endif
+    platform_orch_done_notify();
 }

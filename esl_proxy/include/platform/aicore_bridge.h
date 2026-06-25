@@ -22,23 +22,13 @@ typedef struct AicoreBridge {
     int initialized;
 } AicoreBridge;
 
+void esl_runtime_setup_host(EslRuntime *rt, EslFakeDispatchPayload *payload, int worker_count);
+
 int aicore_bridge_init(AicoreBridge *bridge, EslRuntime *runtime, uint64_t fake_kernel_addr);
 void aicore_bridge_shutdown(AicoreBridge *bridge);
 int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid);
 int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t task_id,
                                 int core, int slot, int exe_type, uint32_t block_idx);
-
-static inline int esl_phys_worker(int core, int exe_type)
-{
-#ifdef ESL_PROXY_ONBOARD
-    if (exe_type == 0) {
-        return core;
-    }
-    return ESL_PROXY_ONBOARD_BLOCK_DIM + core * PLATFORM_AIV_CORES_PER_BLOCKDIM;
-#else
-    return core * EXE_TYPE_CNT + exe_type;
-#endif
-}
 
 int esl_handshake_all_cores(EslRuntime *runtime);
 void esl_shutdown_all_cores(EslRuntime *runtime);

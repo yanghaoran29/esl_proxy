@@ -29,17 +29,12 @@
 #include <time.h>
 
 #include "conf.h"
+#include "platform.h"
 
-#ifdef ESL_PROXY_ONBOARD
-#include "tools.h"
-#else
 static inline uint64_t get_time_ns(void)
 {
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+    return platform_time_ns();
 }
-#endif
 
 #if WORKER_LOG
 extern int g_worker_log;

@@ -80,6 +80,11 @@ int main(void) {
     init_predecessors();
     init_ctrl_t();
 
+    if (platform_bringup() != 0) {
+        MAIN_LOGF("[host] platform_bringup failed");
+        return 1;
+    }
+
     platform_init_from_env();
     MAIN_LOGF("[host] fake_kernel = %s (ESL_PROXY_FAKE_KERNEL=1: 72 workers + busy-wait; "
               "default: sync FIN, no worker threads)",

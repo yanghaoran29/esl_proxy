@@ -12,6 +12,7 @@
 #include "task.h"
 #include "spin.h"
 #include "log.h"
+#include "platform.h"
 
 typedef struct queue {
     uint64_t cnt;
@@ -21,39 +22,6 @@ typedef struct queue {
     atomic_flag lock;
 } queue_t;
 
-#ifdef ESL_PROXY_ONBOARD
-#include "memory_barrier.h"
-
-void cache_invalidate_range(const void *addr, size_t size);
-void cache_flush_range(const void *addr, size_t size);
-
-static inline void esl_onboard_queue_lock_prepare(queue_t *queue)
-{
-    if (queue != NULL) {
-        cache_invalidate_range(queue, sizeof(queue_t));
-    }
-}
-
-static inline void esl_onboard_queue_unlock_publish(queue_t *queue)
-{
-    if (queue != NULL) {
-        cache_flush_range(queue, sizeof(queue_t));
-        OUT_OF_ORDER_STORE_BARRIER();
-    }
-}
-#else
-static inline void esl_onboard_queue_lock_prepare(queue_t *queue)
-{
-    (void)queue;
-}
-
-static inline void esl_onboard_queue_unlock_publish(queue_t *queue)
-{
-    (void)queue;
-}
-#endif
-
-// Forward declarations for lock/unlock functions
 static inline void lock_q(queue_t *queue);
 static inline void unlock_q(queue_t *queue);
 
@@ -65,10 +33,6 @@ static inline bool batch_dequeue(queue_t *queue, uint16_t *item, uint16_t *n)
         unlock_q(queue);
         return false;
     }
-    /* Ring index must wrap (head/tail kept masked in [0,RING_SIZE), like the
-     * single-element enqueue/dequeue). Without the split-copy, tasks[head]
-     * reads out of bounds when head+*n crosses RING_SIZE — which corrupts any
-     * task flow larger than the ring (e.g. qwen3's 3096-task DAG). */
     uint64_t head = queue->head & (RING_SIZE - 1);
     uint16_t first = (uint16_t)(((RING_SIZE - head) < *n) ? (RING_SIZE - head) : *n);
     memcpy(item, &queue->tasks[head], first * sizeof(uint16_t));
@@ -131,9 +95,7 @@ static inline bool enqueue(queue_t *queue, uint16_t item)
 
 static inline void lock_q(queue_t *queue)
 {
-#ifdef ESL_PROXY_ONBOARD
-    esl_onboard_queue_lock_prepare(queue);
-#endif
+    platform_queue_lock_prepare(queue);
     while (atomic_flag_test_and_set_explicit(&queue->lock, memory_order_acquire)) {
         spin_wait();
     }
@@ -142,9 +104,7 @@ static inline void lock_q(queue_t *queue)
 static inline void unlock_q(queue_t *queue)
 {
     atomic_flag_clear_explicit(&queue->lock, memory_order_release);
-#ifdef ESL_PROXY_ONBOARD
-    esl_onboard_queue_unlock_publish(queue);
-#endif
+    platform_queue_unlock_publish(queue);
 }
 
 #endif

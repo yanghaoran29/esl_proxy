@@ -7,7 +7,7 @@
 #include "dlog_pub.h"
 #include "runtime.h"
 #include "kernel_args.h"
-#include "onboard_trace.h"
+#include "platform.h"
 #include "onboard_config.h"
 #include "swimlane_host.h"
 #include "tools.h"

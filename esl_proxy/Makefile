@@ -72,8 +72,12 @@ SRCS := \
 	src/main.c \
 	src/algorithm/dispatch.c \
 	src/algorithm/cutter.c \
+	src/platform/sim/aicore_bridge.c \
+	src/platform/sim/runtime_setup.c \
+	src/platform/sim/platform_bringup.c \
 	src/platform/sim/fake_aicore_host.c \
 	src/platform/sim/platform_sim.c \
+	src/platform/sim/platform_sync_sim.c \
 	src/algorithm/manager.c \
 	src/algorithm/log.c \
 	src/algorithm/shm.c

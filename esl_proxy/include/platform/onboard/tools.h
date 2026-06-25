@@ -83,9 +83,4 @@ static inline uint32_t reg_offset(RegId reg)
     }
 }
 
-static inline uint64_t get_time_ns(void)
-{
-    return esl_onboard_time_ns();
-}
-
 #endif /* ESL_PROXY_ONBOARD_TOOLS_H */

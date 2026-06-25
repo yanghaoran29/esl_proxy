@@ -1,4 +1,4 @@
-/* aicore_bridge.c — dispatch payload, bridge poll/dispatch (algorithm layer). */
+/* aicore_bridge.c — onboard dispatch payload, bridge poll/dispatch. */
 #define _GNU_SOURCE
 
 #include "aicore_bridge.h"
@@ -8,6 +8,7 @@
 #include "memory_barrier.h"
 #include "onboard_config.h"
 #include "onboard_log.h"
+#include "platform.h"
 #include "platform_regs.h"
 #include "ring_buf.h"
 #include "onboard_crosscore_sync.h"
@@ -186,7 +187,7 @@ int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid)
         return 0;
     }
     const int n_workers = bridge->runtime->worker_count;
-    const int n_cores = ESL_PROXY_ONBOARD_BLOCK_DIM;
+    const int n_cores = (int)platform_worker_block_dim();
 
     for (int exe_type = 0; exe_type < EXE_TYPE_CNT; exe_type++) {
         for (int slot = 0; slot < AIC_OSTD; slot++) {
@@ -261,7 +262,7 @@ int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t
     g_executors[exe_type][core].tasks[slot] = task_id;
     g_executors[exe_type][core].duration[slot] = g_basic_buf[task_id & RING_MASK].duration;
     g_executors[exe_type][core].idx = (uint8_t)slot;
-    const int phys = esl_pick_phys_worker(core, exe_type);
+    const int phys = platform_pick_phys_worker(core, exe_type);
     g_executors[exe_type][core].block_idx[slot] = (uint16_t)phys;
     if (bridge != NULL && bridge->runtime != NULL && phys >= bridge->runtime->worker_count) {
         g_ctrl_t[0].msg_bitmap[exe_type][slot] |= (uint64_t)1 << core;

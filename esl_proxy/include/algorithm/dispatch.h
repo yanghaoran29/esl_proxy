@@ -1,11 +1,5 @@
 /*
  * dispatch.h - Task Dispatch with Shared Memory and Work-Stealing
- *
- * Distributes tasks to Executors via shared memory with work-stealing
- * load balancing across multiple Dispatch instances.
- *
- * Trust the Caller (Principle X): No input validation, undefined on invalid input.
- * C11 standard with _Atomic for lock-free concurrency.
  */
 
 #ifndef DISPATCH_H
@@ -19,28 +13,34 @@
 #include "task.h"
 #include "queue.h"
 
-
 typedef struct ctrl {
-    /* Per-core slot availability / HW completion bits (onboard: atomic for poll/dispatch). */
     uint64_t free_bitmap[TASK_TYPE_CNT][AIC_OSTD];
     uint64_t msg_bitmap[EXE_TYPE_CNT][AIC_OSTD];
 
     uint16_t task_id_map1[EXE_TYPE_CNT][AIC_CNT];
     uint16_t task_id_map2[EXE_TYPE_CNT][AIC_CNT];
 
-    queue_t  ready_queue[TASK_TYPE_CNT];
-    queue_t  completed_queue;
+    queue_t ready_queue[TASK_TYPE_CNT];
+    queue_t completed_queue;
     uint16_t tid;
 } ctrl_t;
 
 void *dispatch_worker(void *arg);
 void init_ctrl_t(void);
 
-/* Onboard AICPU: cutter / dispatch / orchestrator on separate threads */
-void dispatch_loop_run(int tid);
-#ifdef ESL_PROXY_ONBOARD
-void dispatch_set_aicore_bridge(void *bridge);
-#endif
+void dispatch_bind(void *bridge);
+void dispatch_tick_begin(int tid);
+void dispatch_poll(int tid);
+int dispatch_submit(ctrl_t *ctrl, int type, int exe_type, uint16_t task_id, int core, int slot,
+                    uint64_t mask, uint32_t raw_duration, uint32_t jitter_mask);
+void dispatch_drain_completions(int tid, uint16_t *task_ids, int *complete_cnt, int max_cnt);
+void dispatch_after_push_completed(int tid, int complete_cnt);
+uint32_t dispatch_executor_duration(uint32_t raw_duration);
+int dispatch_stall_limit(void);
+void dispatch_loop_enter(int tid, uint64_t start_ns);
+void dispatch_loop_phase2_begin(int tid);
+void dispatch_stall(int tid, int prev_completed);
+void dispatch_loop_exit(int tid, uint64_t elapsed_ns);
 
 extern int g_completed_subtask_cnt;
 
