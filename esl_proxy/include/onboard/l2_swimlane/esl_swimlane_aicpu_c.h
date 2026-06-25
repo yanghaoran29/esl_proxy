@@ -14,6 +14,8 @@
 
 #if ESL_PROXY_ENABLE_L2_SWIMLANE
 
+#include "tools.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -45,8 +47,13 @@ void l2_swimlane_aicpu_flush(int thread_idx, const int *cur_thread_cores, int co
     l2_swimlane_aicpu_flush((thread_idx), (cores), (core_num))
 #define ESL_SWIMLANE_AICPU_ON_DISPATCH(core_id, thread_idx) \
     l2_swimlane_aicpu_on_aicore_dispatch((core_id), (thread_idx))
-#define ESL_SWIMLANE_AICPU_COMPLETE_TASK(core_id, thread_idx, reg_task_id, dispatch_ts, finish_ts) \
-    l2_swimlane_aicpu_complete_task((core_id), (thread_idx), (reg_task_id), (dispatch_ts), (finish_ts))
+#define ESL_SWIMLANE_AICPU_DISPATCH_TS(arr, exe_type, core, slot) \
+    ((arr)[(exe_type)][(core)][(slot)])
+#define ESL_SWIMLANE_AICPU_RECORD_DISPATCH_TS(arr, exe_type, core, slot) \
+    ((arr)[(exe_type)][(core)][(slot)] = esl_onboard_sys_cnt())
+#define ESL_SWIMLANE_AICPU_COMPLETE_TASK(core_id, thread_idx, reg_task_id, dispatch_ts) \
+    l2_swimlane_aicpu_complete_task((core_id), (thread_idx), (reg_task_id), (dispatch_ts), \
+                                   esl_onboard_sys_cnt())
 
 #else /* !ESL_PROXY_ENABLE_L2_SWIMLANE */
 
@@ -59,8 +66,10 @@ void l2_swimlane_aicpu_flush(int thread_idx, const int *cur_thread_cores, int co
 #define ESL_SWIMLANE_AICPU_FLUSH(thread_idx, cores, core_num) \
     ((void)(thread_idx), (void)(cores), (void)(core_num))
 #define ESL_SWIMLANE_AICPU_ON_DISPATCH(core_id, thread_idx) ((void)(core_id), (void)(thread_idx))
-#define ESL_SWIMLANE_AICPU_COMPLETE_TASK(core_id, thread_idx, reg_task_id, dispatch_ts, finish_ts) \
-    ((void)(core_id), (void)(thread_idx), (void)(reg_task_id), (void)(dispatch_ts), (void)(finish_ts), 0)
+#define ESL_SWIMLANE_AICPU_DISPATCH_TS(arr, exe_type, core, slot) ((uint64_t)0)
+#define ESL_SWIMLANE_AICPU_RECORD_DISPATCH_TS(arr, exe_type, core, slot) ((void)0)
+#define ESL_SWIMLANE_AICPU_COMPLETE_TASK(core_id, thread_idx, reg_task_id, dispatch_ts) \
+    ((void)(core_id), (void)(thread_idx), (void)(reg_task_id), (void)(dispatch_ts), 0)
 
 #endif /* ESL_PROXY_ENABLE_L2_SWIMLANE */
 

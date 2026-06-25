@@ -13,6 +13,7 @@
 
 #if ESL_PROXY_ENABLE_L2_SWIMLANE
 
+#include "tools.h"
 #include "aicpu/l2_swimlane_collector_aicpu.h"
 #include "aicore/aicore_profiling_state.h"
 #include "aicore/l2_swimlane_collector_aicore.h"
@@ -57,8 +58,13 @@ void esl_swimlane_host_set_core_types(const int32_t *core_types, int count);
 
 #define ESL_SWIMLANE_AICPU_ON_DISPATCH(core_id, thread_idx) \
     l2_swimlane_aicpu_on_aicore_dispatch((core_id), (thread_idx))
-#define ESL_SWIMLANE_AICPU_COMPLETE_TASK(core_id, thread_idx, reg_task_id, dispatch_ts, finish_ts) \
-    l2_swimlane_aicpu_complete_task((core_id), (thread_idx), (reg_task_id), (dispatch_ts), (finish_ts))
+#define ESL_SWIMLANE_AICPU_DISPATCH_TS(arr, exe_type, core, slot) \
+    ((arr)[(exe_type)][(core)][(slot)])
+#define ESL_SWIMLANE_AICPU_RECORD_DISPATCH_TS(arr, exe_type, core, slot) \
+    ((arr)[(exe_type)][(core)][(slot)] = esl_onboard_sys_cnt())
+#define ESL_SWIMLANE_AICPU_COMPLETE_TASK(core_id, thread_idx, reg_task_id, dispatch_ts) \
+    l2_swimlane_aicpu_complete_task((core_id), (thread_idx), (reg_task_id), (dispatch_ts), \
+                                   esl_onboard_sys_cnt())
 
 #define ESL_SWIMLANE_AICPU_INIT_PHASE(workers, sched_threads, orch_threads) \
     l2_swimlane_aicpu_init_phase((workers), (sched_threads), (orch_threads))
@@ -110,8 +116,10 @@ void esl_swimlane_host_set_core_types(const int32_t *core_types, int count);
     ((void)(thread_idx), (void)(cores), (void)(core_num))
 
 #define ESL_SWIMLANE_AICPU_ON_DISPATCH(core_id, thread_idx) ((void)(core_id), (void)(thread_idx))
-#define ESL_SWIMLANE_AICPU_COMPLETE_TASK(core_id, thread_idx, reg_task_id, dispatch_ts, finish_ts) \
-    ((void)(core_id), (void)(thread_idx), (void)(reg_task_id), (void)(dispatch_ts), (void)(finish_ts), 0)
+#define ESL_SWIMLANE_AICPU_DISPATCH_TS(arr, exe_type, core, slot) ((uint64_t)0)
+#define ESL_SWIMLANE_AICPU_RECORD_DISPATCH_TS(arr, exe_type, core, slot) ((void)0)
+#define ESL_SWIMLANE_AICPU_COMPLETE_TASK(core_id, thread_idx, reg_task_id, dispatch_ts) \
+    ((void)(core_id), (void)(thread_idx), (void)(reg_task_id), (void)(dispatch_ts), 0)
 
 #define ESL_SWIMLANE_AICPU_INIT_PHASE(workers, sched_threads, orch_threads) \
     ((void)(workers), (void)(sched_threads), (void)(orch_threads))
