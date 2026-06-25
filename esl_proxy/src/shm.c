@@ -10,6 +10,10 @@
 #include "conf.h"
 #include "dispatch.h"
 
+#ifndef ESL_PROXY_ONBOARD
+#include "worker_map.h"
+#endif
+
 #ifdef ESL_PROXY_ONBOARD
 #include "onboard_config.h"
 #include "aicpu_bridge.h"
@@ -24,6 +28,7 @@ volatile bool g_orch_is_done = false;
 
 
 struct task_desc g_basic_buf[RING_SIZE];
+struct task_payload g_task_payload[RING_SIZE];
 struct node_list g_successor_buf[RING_SIZE];
 struct node_list g_successor_exp_buf[HALF_RING_SIZE];
 
@@ -53,6 +58,8 @@ void init_ctrl_t(void)
     /* Only block_dim logical cores exist on HW; wider bitmap lets ctz pick
      * core>=block_dim and dispatch CUBE to AIV workers (hang / lost FIN). */
     free_init = (uint64_t)((1ULL << ESL_PROXY_ONBOARD_BLOCK_DIM) - 1);
+#else
+    free_init = (uint64_t)((1ULL << ESL_PROXY_WORKER_BLOCK_DIM) - 1);
 #endif
     for (int tid = 0; tid < DISPATCH_THREAD_CNT; tid++) {
         g_ctrl_t[tid].tid = (uint16_t)tid;

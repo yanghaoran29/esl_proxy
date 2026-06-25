@@ -25,6 +25,7 @@
 
 #include "tensor.h"
 #include "onboard/onboard_crosscore_sync.h"
+#include "dispatch_payload.h"
 
 extern atomic_int g_task_id;
 extern int g_min_uncomplete_task;
@@ -32,6 +33,7 @@ extern int g_completed_cnt;
 extern volatile bool g_orch_is_done;
 extern atomic_bool g_is_done;
 extern struct task_desc g_basic_buf[RING_SIZE];
+extern struct task_payload g_task_payload[RING_SIZE];
 extern struct predecessor_list g_predecessors[RING_SIZE];
 extern struct ring_buf g_predecessor_ring;
 extern struct node_list g_successor_buf[RING_SIZE];
@@ -83,8 +85,10 @@ static inline void add_tensor_addr(uint16_t task_id, uint64_t addr)
 
 static inline void add_scalar(uint16_t task_id, int64_t t)
 {
-    int idx = g_basic_buf[task_id & RING_MASK].scalar_cnt++;
-    g_basic_buf[task_id & RING_MASK].scalar[idx] = t;
+    const uint16_t slot = (uint16_t)(task_id & RING_MASK);
+    int idx = (int)g_task_payload[slot].scalar_cnt++;
+
+    g_task_payload[slot].scalars[idx] = t;
 }
 
 static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uint16_t start)
@@ -115,6 +119,7 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
         cnt++;
     }
     ptr->cnt = cnt;
+    task_payload_materialize(task_id);
 #ifdef ESL_PROXY_ONBOARD
     esl_onboard_publish_task_slot(task_id);
 #endif
@@ -138,6 +143,8 @@ static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uin
     g_basic_buf[task_id & RING_MASK].id = (uint16_t)task_id;
     g_basic_buf[task_id & RING_MASK].duration = duration_ns;
     g_basic_buf[task_id & RING_MASK].jitter_mask = jitter_mask;
+    g_task_payload[task_id & RING_MASK].tensor_cnt = 0;
+    g_task_payload[task_id & RING_MASK].scalar_cnt = 0;
     g_subtask_cnt += count;
     WORKER_LOGF("new,task_id,%u,type,%d,subtask_cnt,%d", task_id, type, count);
     return true;

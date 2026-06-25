@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <stdatomic.h>
 #include "conf.h"
+#include "tensor.h"
 
 typedef uint16_t task_id_t;
 
@@ -50,6 +51,20 @@ typedef struct {
     uint32_t successor_cnt;
 } task_state;
 
+enum {
+    TASK_MAX_TENSORS = 16,
+    TASK_MAX_SCALARS = 32,
+};
+
+/* Orchestration-time kernel arguments (materialized at submit). */
+struct task_payload {
+    Tensor       tensors[TASK_MAX_TENSORS];
+    int64_t      scalars[TASK_MAX_SCALARS];
+    uint16_t     tensor_cnt;
+    uint16_t     scalar_cnt;
+};
+
+/* Thin task descriptor — no tensor/scalar storage (see task_payload). */
 struct task_desc {
     uint16_t       id;          /* ring-buffer task id */
     task_type_t    type;        /* CUBE / VECTOR / MIX */
@@ -57,10 +72,6 @@ struct task_desc {
     void          *kernel;      /* device kernel entry, NULL if unset */
     uint32_t       index;       /* SPMD base block index */
     uint32_t       count;       /* SPMD instance count (block_num) */
-    uint64_t       data[16];    /* tensor addresses (Tensor handles) */
-    int64_t        scalar[32];  /* scalar kernel arguments */
-    uint16_t       tensor_cnt;  /* number of valid data[] entries */
-    uint16_t       scalar_cnt;  /* number of valid scalar[] entries */
     uint32_t       duration;    /* fake-kernel busy-wait duration (ns, swimlane measured) */
     uint32_t       jitter_mask; /* fake-kernel jitter mask (§4.2); 0 = no jitter */
 };
