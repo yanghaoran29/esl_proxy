@@ -30,11 +30,10 @@ int main(int argc, char **argv)
 #include "conf.h"
 #include "cutter.h"
 #include "dispatch.h"
-#include "fake_aicore_host.h"
+#include "platform.h"
 #include "log.h"
 #include "manager.h"
 #include "mem_pool.h"
-#include "worker_map.h"
 
 /* Orchestration case header. Override at build time, e.g.
  *   make CASE=qwen3_dynamic_tensormap.h
@@ -81,11 +80,11 @@ int main(void) {
     init_predecessors();
     init_ctrl_t();
 
-    host_fake_aicore_configure_from_env();
+    platform_init_from_env();
     MAIN_LOGF("[host] fake_kernel = %s (ESL_PROXY_FAKE_KERNEL=1: 72 workers + busy-wait; "
               "default: sync FIN, no worker threads)",
-              host_fake_aicore_kernel_enabled() ? "on" : "off");
-    host_fake_aicore_start(ESL_PROXY_HOST_WORKER_COUNT);
+              platform_fake_kernel_enabled() ? "on" : "off");
+    platform_workers_start(PLATFORM_HOST_WORKER_COUNT);
 
     for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
         pthread_create(&cutter_threads[i], NULL, cutter_worker,
@@ -119,7 +118,7 @@ int main(void) {
     for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
         pthread_join(dispatch_threads[i], NULL);
     }
-    host_fake_aicore_stop();
+    platform_workers_stop();
 
     if (g_completed_cnt != (int)g_task_id) {
         MAIN_LOGF("[host] FAIL: completed_cnt=%d task_id=%u",

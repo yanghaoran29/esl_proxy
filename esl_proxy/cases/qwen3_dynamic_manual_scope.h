@@ -18,7 +18,7 @@
 #include "ring_buf.h"
 
 #ifndef QWEN3_SPMD_TIER
-#define QWEN3_SPMD_TIER 4
+#define QWEN3_SPMD_TIER 0
 #endif
 #if QWEN3_SPMD_TIER < 0 || QWEN3_SPMD_TIER > 4
 #error "QWEN3_SPMD_TIER must be 0..4"
@@ -359,7 +359,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         uint16_t down_ids[40];
         for (int opi = 0, base = 0; base < 40; base += qwen3_blocks_per_task(40)) {
             int cur_blocks = qwen3_cur_blocks(40, base);
-            new_task(g_task_id, TASK_TYPE_MIX, (uint16_t)cur_blocks, DUR_OUT_PROJ, MASK_OUT_PROJ);
+            new_task(g_task_id, TASK_TYPE_CUBE, (uint16_t)cur_blocks, DUR_OUT_PROJ, MASK_OUT_PROJ);
             add_input(g_task_id, view(ext_hidden_states, 0u, base * 128u, (uint32_t)user_batch, (uint32_t)(cur_blocks * 128)));
             Tensor attn_out_tile = view(attn_out, (uint32_t)b0, 0u, (uint32_t)cur_valid, 5120u);
             Tensor resid1_piece = view(resid1_tile, 0u, base * 128u, 16u, (uint32_t)(cur_blocks * 128));

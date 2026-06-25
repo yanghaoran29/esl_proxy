@@ -1,5 +1,6 @@
-build/
+build/onboard/
 report/
 *.o
 *.so
 *.a
+l2_swimlane_*.json

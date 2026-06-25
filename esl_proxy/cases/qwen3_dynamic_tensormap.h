@@ -17,7 +17,7 @@
 #include "tensormap.h"
 
 #ifndef QWEN3_SPMD_TIER
-#define QWEN3_SPMD_TIER 4
+#define QWEN3_SPMD_TIER 0
 #endif
 #if QWEN3_SPMD_TIER < 0 || QWEN3_SPMD_TIER > 4
 #error "QWEN3_SPMD_TIER must be 0..4"
@@ -288,7 +288,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
         for (int base = 0; base < 40; base += qwen3_blocks_per_task(40)) {
             // 40: out_proj SPMD total chunks; cols/chunk = 5120/40 = 128
             int cur_blocks = qwen3_cur_blocks(40, base);
-            new_task(g_task_id, TASK_TYPE_MIX, (uint16_t)cur_blocks, DUR_OUT_PROJ, MASK_OUT_PROJ);
+            new_task(g_task_id, TASK_TYPE_CUBE, (uint16_t)cur_blocks, DUR_OUT_PROJ, MASK_OUT_PROJ);
             Tensor attn_out_tile = view(attn_out[b0 / 16], 0u, 0u, (uint32_t)cur_valid, 5120u);
             Tensor resid1_piece = view(resid1_tile, 0u, base * 128u, 16u, (uint32_t)(cur_blocks * 128));
             tm_in_ro(g_task_id, ext_hidden_states);

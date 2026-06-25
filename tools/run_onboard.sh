@@ -41,9 +41,9 @@ if [[ "$SKIP_BUILD" -eq 0 ]]; then
     export ORCH_CASE="$ESL_PROXY_ORCH_CASE"
     echo "[esl_proxy] ORCH_CASE=$ORCH_CASE"
   fi
-  bash cmake/onboard/build_aicpu.sh
-  bash cmake/onboard/build_aicore.sh
-  bash cmake/onboard/build_onboard_host.sh
+  bash build/build_aicpu.sh
+  bash build/build_aicore.sh
+  bash build/build_onboard_host.sh
 fi
 
 RUNNER="${ROOT}/build/onboard/host/esl_onboard_runner"
