@@ -72,7 +72,6 @@ SRCS := \
 	src/dispatch_payload.c \
 	src/cutter.c \
 	src/fake_aicore_host.c \
-	src/worker_map.c \
 	src/manager.c \
 	src/log.c \
 	src/shm.c

@@ -46,7 +46,7 @@ fi
 ORCH_CASE="${ORCH_CASE:-paged_attention_unroll_manual_scope.h}"
 QWEN3_SPMD_TIER="${QWEN3_SPMD_TIER:-2}"
 
-CUSTOM_INCLUDES="${ONBOARD_INC};${ESL_CORE}/include;${ESL_CORE}/cases"
+CUSTOM_INCLUDES="${ONBOARD_INC};${ESL_CORE}/include;${ESL_CORE}/cases;${ONBOARD_SRC};${ONBOARD_SRC}/l2_swimlane"
 
 # Sources are flat in src/onboard. Build the AICPU kernel file list = everything
 # in src/onboard EXCEPT the aicore / host / dispatcher sources, plus the core

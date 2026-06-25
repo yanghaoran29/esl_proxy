@@ -22,6 +22,10 @@
 
 #include <stdatomic.h>
 
+extern atomic_bool g_orch_is_done;
+extern atomic_int g_completed_cnt;
+extern atomic_bool g_is_done;
+
 #ifdef ESL_PROXY_ONBOARD
 #include "aicpu_runtime.h"
 #include "onboard_config.h"

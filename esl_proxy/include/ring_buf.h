@@ -29,10 +29,7 @@
 
 extern atomic_int g_task_id;
 extern atomic_int g_min_uncomplete_task;
-extern atomic_int g_completed_cnt;
-extern atomic_bool g_orch_is_done;
 extern atomic_flag g_lock_buf[RING_SIZE];
-extern atomic_bool g_is_done;
 extern struct task_desc g_basic_buf[RING_SIZE];
 extern struct task_payload g_task_payload[RING_SIZE];
 extern struct predecessor_list g_predecessors[RING_SIZE];
@@ -65,24 +62,25 @@ static inline void ring_buf_init(void)
     atomic_store(&g_predecessor_ring.start, g_predecessor_ring.head);
 }
 
-/* input/output/inout tensors are all recorded the same way: append the
- * tensor's buffer_addr to data[] and bump tensor_cnt. task_desc keeps a single
- * flat data[]/tensor_cnt with no direction field, so there is one implementation
- * here; the dependency direction (when needed) is tracked by the tensormap
- * layer, not the ring buffer. The distinct add_input/output/inout spellings are
- * kept only for call-site readability. */
-static inline void add_tensor_addr(uint16_t task_id, uint64_t addr)
+/* input/output/inout tensors are all recorded the same way: append the full
+ * Tensor into the task payload (g_task_payload[slot].tensors[]) and bump
+ * tensor_cnt. esl_build_dispatch_payload reads these back to forward shape +
+ * buffer_addr + owner_task_id to the kernel, so the whole Tensor is stored (not
+ * just buffer_addr). Dependency direction (when needed) is tracked by the
+ * tensormap layer, not the ring buffer; the distinct add_input/output/inout
+ * spellings are kept only for call-site readability. */
+static inline void add_tensor(uint16_t task_id, const Tensor *t)
 {
-    int idx = g_basic_buf[task_id & RING_MASK].tensor_cnt++;
-    g_basic_buf[task_id & RING_MASK].data[idx] = addr;
+    const uint16_t slot = (uint16_t)(task_id & RING_MASK);
+    int idx = (int)g_task_payload[slot].tensor_cnt++;
+    g_task_payload[slot].tensors[idx] = *t;
 }
 
-/* Only buffer_addr is recorded, so the macros read that 8-byte field directly
- * instead of copying the whole 128B Tensor. (t).buffer_addr is valid for both
- * lvalue and rvalue arguments, e.g. add_input(id, view(x, ...)). */
-#define add_input(task_id, t)  add_tensor_addr((task_id), (t).buffer_addr)
-#define add_output(task_id, t) add_tensor_addr((task_id), (t).buffer_addr)
-#define add_inout(task_id, t)  add_tensor_addr((task_id), (t).buffer_addr)
+/* The temp copy makes (t) valid for both lvalue and rvalue arguments, e.g.
+ * add_input(id, view(x, ...)). */
+#define add_input(task_id, t)  do { Tensor _tm_t_ = (t); add_tensor((task_id), &_tm_t_); } while (0)
+#define add_output(task_id, t) do { Tensor _tm_t_ = (t); add_tensor((task_id), &_tm_t_); } while (0)
+#define add_inout(task_id, t)  do { Tensor _tm_t_ = (t); add_tensor((task_id), &_tm_t_); } while (0)
 
 static inline void add_scalar(uint16_t task_id, int64_t t)
 {
@@ -119,7 +117,13 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
         if (target[i] < min_uncomplete_task)
             continue;
         WORKER_LOGF("succeed,task_id,%u,predecessor_id,%u,idx,%d", task_id, target[i], cnt);
-        uint16_t* idx = atomic_fetch_add(&g_predecessor_ring.tail, 1);
+        /* Reserve one uint16 slot. NOTE: atomic_fetch_add on an _Atomic(uint16_t*)
+         * advances by BYTES, not elements (GCC's __atomic treats the pointer as a
+         * byte address — confirmed on both the host gcc and the AICPU cross-
+         * compiler), which half-overwrites the previous slot and corrupts the
+         * dependency graph. Use explicit element-stride pointer arithmetic. */
+        uint16_t* idx = atomic_load_explicit(&g_predecessor_ring.tail, memory_order_relaxed);
+        atomic_store_explicit(&g_predecessor_ring.tail, idx + 1, memory_order_relaxed);
         *idx = target[i];
 #ifdef ESL_PROXY_ONBOARD
         esl_onboard_publish_u16(idx);

@@ -60,7 +60,6 @@ static atomic_flag g_once = ATOMIC_FLAG_INIT;
 static AicoreBridge g_bridge;
 static uint64_t g_device_start_cycle;
 static uint32_t g_core_dispatch_seq[RUNTIME_MAX_WORKER];
-static _Atomic uint32_t g_aiv_lane_pick[PLATFORM_MAX_BLOCKDIM];
 ESL_SWIMLANE_AICPU_DISPATCH_TS_STORAGE;
 static when2free_entry_t g_onboard_when2free[ONBOARD_WHEN2FREE_CAP];
 volatile uint64_t *g_esl_stats_base;
@@ -287,15 +286,8 @@ static uint64_t core_reg_addr(int worker_id)
     return ((uint64_t *)table)[hal_idx];
 }
 
-static int esl_pick_phys_worker(int core, int exe_type)
-{
-    if (exe_type == 0) {
-        return core;
-    }
-    uint32_t lane = atomic_fetch_add_explicit(&g_aiv_lane_pick[core], 1U, memory_order_relaxed) %
-                    (uint32_t)PLATFORM_AIV_CORES_PER_BLOCKDIM;
-    return ESL_PROXY_ONBOARD_BLOCK_DIM + core * PLATFORM_AIV_CORES_PER_BLOCKDIM + (int)lane;
-}
+/* esl_pick_phys_worker is provided as a static inline by worker_map.h
+ * (included via onboard_config.h) — shared with the host build. */
 
 static uint32_t esl_next_reg_task_id(int phys)
 {

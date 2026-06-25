@@ -8,6 +8,7 @@
 
 #include "tensor.h"
 #include "onboard_tensor.h"
+#include "worker_map.h"   /* single source of block_dim / AIV-lanes / worker count */
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,18 +22,20 @@ extern "C" {
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 _Static_assert(ESL_PROXY_AICPU_THREAD_NUM == 3, "three-thread cutter/dispatch/orch model");
 #endif
-/* block_dim=24 → 24 AIC + 48 AIV = 72 workers (1+2 per blockdim) */
-#define ESL_PROXY_ONBOARD_BLOCK_DIM 24
+/* block_dim=24 → 24 AIC + 48 AIV = 72 workers (1+2 per blockdim).
+ * The numbers come from worker_map.h (single source); these names are aliases
+ * kept so existing onboard/platform call sites stay unchanged. */
+#define ESL_PROXY_ONBOARD_BLOCK_DIM ESL_PROXY_WORKER_BLOCK_DIM
 #define ESL_PROXY_ONBOARD_AIC_COUNT ESL_PROXY_ONBOARD_BLOCK_DIM
 #define ESL_PROXY_ONBOARD_AIV_COUNT (ESL_PROXY_ONBOARD_BLOCK_DIM * PLATFORM_AIV_CORES_PER_BLOCKDIM)
 #define ESL_PROXY_ONBOARD_WORKER_COUNT (ESL_PROXY_ONBOARD_AIC_COUNT + ESL_PROXY_ONBOARD_AIV_COUNT)
 #define ESL_PROXY_FAKE_AICORE_COUNT ESL_PROXY_ONBOARD_WORKER_COUNT
 
 /* --- platform architectural (AICPU / AICore / Host) --- */
-#define PLATFORM_MAX_BLOCKDIM 24
+#define PLATFORM_MAX_BLOCKDIM ESL_PROXY_WORKER_BLOCK_DIM
 #define PLATFORM_CORES_PER_BLOCKDIM 3
 #define PLATFORM_AIC_CORES_PER_BLOCKDIM 1
-#define PLATFORM_AIV_CORES_PER_BLOCKDIM 2
+#define PLATFORM_AIV_CORES_PER_BLOCKDIM ESL_PROXY_AIV_LANES_PER_BLOCK
 #define PLATFORM_MAX_AICPU_THREADS 4
 #define PLATFORM_MAX_AICPU_THREADS_JUST_FOR_LAUNCH 6
 #define PLATFORM_OP_EXECUTE_TIMEOUT_US 3000000ULL
