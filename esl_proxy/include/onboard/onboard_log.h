@@ -29,9 +29,27 @@ extern int g_log_info_v;
 extern "C" {
 #endif
 
-void set_log_level(int level);
-void set_log_info_v(int v);
-int get_log_info_v(void);
+static inline void set_log_level(int level)
+{
+    (void)level;
+}
+
+static inline void set_log_info_v(int v)
+{
+    if (v < 0) {
+        v = 0;
+    }
+    if (v > 9) {
+        v = 9;
+    }
+    g_log_info_v = v;
+}
+
+static inline int get_log_info_v(void)
+{
+    return g_log_info_v;
+}
+
 void init_log_switch(void);
 
 void dev_vlog_debug(const char *func, const char *fmt, va_list args);

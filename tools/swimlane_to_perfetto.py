@@ -101,8 +101,8 @@ def _resolve_func_ids(tasks: list, func_names: dict[str, str]) -> None:
 
 
 def _filter_aicore_view_only(events: list) -> list:
-    """Keep only AICore View (pid=1): kernel start→end slices and their lane metadata."""
-    kept = [e for e in events if e.get("pid") == 1]
+    """Keep only Worker View (pid=4): AICore kernel start→end slices and lane metadata."""
+    kept = [e for e in events if e.get("pid") == 4]
     for e in kept:
         if e.get("cat") == "__metadata" and e.get("name") == "process_sort_index":
             e["args"] = {"sort_index": 1}

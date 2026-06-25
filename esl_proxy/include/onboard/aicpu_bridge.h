@@ -11,6 +11,7 @@
 #include "conf.h"
 #include "esl_runtime.h"
 #include "onboard_config.h"
+#include "tools.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,11 +52,27 @@ void esl_dispatch_payload_prepare(EslRuntime *runtime, int core, uint32_t reg_ta
 void set_platform_regs(uint64_t regs);
 uint64_t get_platform_regs(void);
 
-volatile uint32_t *get_reg_ptr(uint64_t reg_base_addr, RegId reg);
-uint64_t read_reg(uint64_t reg_base_addr, RegId reg);
-void write_reg(uint64_t reg_base_addr, RegId reg, uint64_t value);
+static inline volatile uint32_t *get_reg_ptr(uint64_t reg_base_addr, RegId reg)
+{
+    return (volatile uint32_t *)(uintptr_t)(reg_base_addr + reg_offset(reg));
+}
 
-void platform_init_aicore_regs(uint64_t reg_addr);
+static inline uint64_t read_reg(uint64_t reg_base_addr, RegId reg)
+{
+    return (uint64_t)*get_reg_ptr(reg_base_addr, reg);
+}
+
+static inline void write_reg(uint64_t reg_base_addr, RegId reg, uint64_t value)
+{
+    *get_reg_ptr(reg_base_addr, reg) = (uint32_t)value;
+}
+
+static inline void platform_init_aicore_regs(uint64_t reg_addr)
+{
+    write_reg(reg_addr, REG_ID_FAST_PATH_ENABLE, REG_SPR_FAST_PATH_OPEN);
+    write_reg(reg_addr, REG_ID_DATA_MAIN_BASE, AICPU_IDLE_TASK_ID);
+}
+
 void cache_invalidate_range(const void *addr, size_t size);
 void cache_flush_range(const void *addr, size_t size);
 

@@ -13,10 +13,6 @@
 #include "spin.h"
 #include "log.h"
 
-#ifdef ESL_PROXY_ONBOARD
-#include "onboard/onboard_crosscore_sync.h"
-#endif
-
 typedef struct queue {
     uint64_t cnt;
     uint64_t head;
@@ -24,6 +20,38 @@ typedef struct queue {
     uint16_t tasks[RING_SIZE];
     atomic_flag lock;
 } queue_t;
+
+#ifdef ESL_PROXY_ONBOARD
+#include "memory_barrier.h"
+
+void cache_invalidate_range(const void *addr, size_t size);
+void cache_flush_range(const void *addr, size_t size);
+
+static inline void esl_onboard_queue_lock_prepare(queue_t *queue)
+{
+    if (queue != NULL) {
+        cache_invalidate_range(queue, sizeof(queue_t));
+    }
+}
+
+static inline void esl_onboard_queue_unlock_publish(queue_t *queue)
+{
+    if (queue != NULL) {
+        cache_flush_range(queue, sizeof(queue_t));
+        OUT_OF_ORDER_STORE_BARRIER();
+    }
+}
+#else
+static inline void esl_onboard_queue_lock_prepare(queue_t *queue)
+{
+    (void)queue;
+}
+
+static inline void esl_onboard_queue_unlock_publish(queue_t *queue)
+{
+    (void)queue;
+}
+#endif
 
 // Forward declarations for lock/unlock functions
 static inline void lock_q(queue_t *queue);

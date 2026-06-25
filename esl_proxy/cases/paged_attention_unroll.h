@@ -23,7 +23,6 @@
 #include "mem_pool.h"
 #include "tensormap.h"
 
-/* fake kernel设计文档.md §5.2.2/§5.2.3 实测均值 (ns) + §5.2.4 mask */
 #define DUR_PA_QK_MATMUL 51340U
 #define DUR_PA_SOFTMAX_PREP 59130U
 #define DUR_PA_PV_MATMUL 52600U
@@ -68,7 +67,8 @@ void aicpu_orchestration_entry(uint64_t orch_args) {
                 add_scalar(g_task_id, (int64_t)n_blocks);
                 add_scalar(g_task_id, (int64_t)(b_idx * 64 + bn)); // max_blocks=64
                 tm_submit(g_task_id);
-        esl_onboard_advance_task_id();
+                esl_onboard_advance_task_id();
+
                 Tensor pij_buf = alloc_tensors((uint32_t[2]){16, 8192}, 2, BFLOAT16); // q_tile=16, n_unroll*block_size=64*128
                 Tensor mi = alloc_tensors((uint32_t[2]){1, 16}, 2, FLOAT32); // q_tile=16
                 Tensor li = alloc_tensors((uint32_t[2]){1, 16}, 2, FLOAT32); // q_tile=16
@@ -83,10 +83,10 @@ void aicpu_orchestration_entry(uint64_t orch_args) {
                 add_scalar(g_task_id, (int64_t)n_blocks);
                 add_scalar(g_task_id, (int64_t)128); // block_size=128
                 tm_submit(g_task_id);
-        esl_onboard_advance_task_id();
-                Tensor oi_new = alloc_tensors((uint32_t[2]){16, 128}, 2, FLOAT32); // q_tile=16, block_size=128
+                esl_onboard_advance_task_id();
 
                 /* task 2: pv_matmul */
+                Tensor oi_new = alloc_tensors((uint32_t[2]){16, 128}, 2, FLOAT32); // q_tile=16, block_size=128
                 new_task(g_task_id, TASK_TYPE_CUBE, 1, DUR_PA_PV_MATMUL, MASK_PA_PV_MATMUL);
                 tm_in(g_task_id, pij_buf);
                 tm_in_ro(g_task_id, ext_value_cache);
@@ -95,7 +95,7 @@ void aicpu_orchestration_entry(uint64_t orch_args) {
                 add_scalar(g_task_id, (int64_t)n_blocks);
                 add_scalar(g_task_id, (int64_t)(b_idx * 64 + bn)); // max_blocks=64
                 tm_submit(g_task_id);
-        esl_onboard_advance_task_id();
+                esl_onboard_advance_task_id();
 
                 /* task 3: online_update */
                 new_task(g_task_id, TASK_TYPE_VECTOR, 1, DUR_PA_ONLINE_UPDATE, MASK_PA_ONLINE_UPDATE);
@@ -109,7 +109,7 @@ void aicpu_orchestration_entry(uint64_t orch_args) {
                 add_scalar(g_task_id, (int64_t)is_first);
                 add_scalar(g_task_id, (int64_t)is_last);
                 tm_submit(g_task_id);
-        esl_onboard_advance_task_id();
+                esl_onboard_advance_task_id();
             }
         }
     }

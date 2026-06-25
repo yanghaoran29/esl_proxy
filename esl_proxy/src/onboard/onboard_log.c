@@ -21,27 +21,6 @@ void init_log_switch(void)
     g_is_log_enable_error = CheckLogLevel(AICPU, DLOG_ERROR);
 }
 
-void set_log_level(int level)
-{
-    (void)level;
-}
-
-void set_log_info_v(int v)
-{
-    if (v < 0) {
-        v = 0;
-    }
-    if (v > 9) {
-        v = 9;
-    }
-    g_log_info_v = v;
-}
-
-int get_log_info_v(void)
-{
-    return g_log_info_v;
-}
-
 static void dev_vlog_emit(int level, int info_v, const char *func, const char *fmt, va_list args)
 {
     char buffer[2048];

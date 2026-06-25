@@ -87,7 +87,6 @@ int main(void) {
               host_fake_aicore_kernel_enabled() ? "on" : "off");
     host_fake_aicore_start(ESL_PROXY_HOST_WORKER_COUNT);
 
-#if !ORCH_ONLY
     for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
         pthread_create(&cutter_threads[i], NULL, cutter_worker,
                        (void *)(intptr_t)i);
@@ -97,7 +96,6 @@ int main(void) {
         pthread_create(&dispatch_threads[i], NULL, dispatch_worker,
                        (void *)(intptr_t)i);
     }
-#endif
 
 #if ORCHESTRATION_TIME
     uint64_t start_ns = get_time_ns();
@@ -115,17 +113,12 @@ int main(void) {
 #endif
     atomic_store(&g_orch_is_done, true);
 
-    // for (int i = 0; i < EXECUTOR_THREAD_CNT; i++) {
-    //     pthread_join(executor_threads[i], NULL);
-    // }
-#if !ORCH_ONLY
     for (int i = 0; i < CUTTER_THREAD_CNT; i++) {
         pthread_join(cutter_threads[i], NULL);
     }
     for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
         pthread_join(dispatch_threads[i], NULL);
     }
-#endif
     host_fake_aicore_stop();
 
     if (g_completed_cnt != (int)g_task_id) {

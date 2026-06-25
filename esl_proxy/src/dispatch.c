@@ -29,7 +29,6 @@ extern atomic_bool g_is_done;
 #ifdef ESL_PROXY_ONBOARD
 #include "aicpu_runtime.h"
 #include "onboard_config.h"
-#include "onboard/onboard_crosscore_sync.h"
 #include "onboard/onboard_trace.h"
 #include "onboard_log.h"
 extern uint16_t g_commit_task_id;

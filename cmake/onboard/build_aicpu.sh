@@ -65,7 +65,7 @@ for f in "$ONBOARD_SRC"/*.c "$ONBOARD_SRC"/*.cpp; do
   for e in $NOT_AICPU; do [[ "$base" == "$e" ]] && skip=1 && break; done
   [[ $skip -eq 0 ]] && SRC_FILES="${SRC_FILES:+$SRC_FILES;}$f"
 done
-for f in aicpu_runtime cutter dispatch dispatch_payload shm; do SRC_FILES="${SRC_FILES};${ESL_CORE}/src/${f}.c"; done
+for f in aicpu_runtime cutter dispatch shm; do SRC_FILES="${SRC_FILES};${ESL_CORE}/src/${f}.c"; done
 if [[ "$ESL_PROXY_ENABLE_L2_SWIMLANE" != "0" ]]; then
   SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/swimlane/swimlane_aicpu.cpp"
 fi

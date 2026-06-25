@@ -24,8 +24,6 @@
 #include "spin.h"
 
 #include "tensor.h"
-#include "onboard/onboard_crosscore_sync.h"
-#include "dispatch_payload.h"
 
 extern atomic_int g_task_id;
 extern atomic_int g_min_uncomplete_task;
@@ -46,6 +44,8 @@ struct ring_buf {
     uint16_t* _Atomic start;
     uint16_t* _Atomic tail;
 };
+
+#include "onboard/onboard_crosscore_sync.h"
 
 static inline void ring_buf_init(void)
 {
@@ -100,6 +100,17 @@ static inline void lock(int slotIdx)
 static inline void unlock(int slotIdx)
 {
     atomic_flag_clear_explicit(&g_lock_buf[slotIdx], memory_order_release);
+}
+
+static inline void task_payload_materialize(uint16_t task_id)
+{
+    const uint16_t slot = (uint16_t)(task_id & RING_MASK);
+    struct task_payload *pay = &g_task_payload[slot];
+    uint16_t i;
+
+    for (i = 0; i < pay->tensor_cnt; ++i) {
+        pay->tensors[i].owner_task_id = task_id;
+    }
 }
 
 static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uint16_t start)

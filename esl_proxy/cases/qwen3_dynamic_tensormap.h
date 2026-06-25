@@ -153,7 +153,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             tm_submit(g_task_id);
             g_task_id++;
 
-            new_task(g_task_id, TASK_TYPE_CUBE, (uint16_t)cur_blocks, DUR_V_PROJ);
+            new_task(g_task_id, TASK_TYPE_CUBE, (uint16_t)cur_blocks, DUR_V_PROJ, MASK_V_PROJ);
             tm_in(g_task_id, normed_tile);
             tm_in_ro(g_task_id, ext_wv);
             Tensor v_piece = view(v_proj, (uint32_t)b0, base * 128u, 16u, cur_blocks * 128u);
@@ -164,7 +164,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             g_task_id++;
         }
 
-        new_task(g_task_id, TASK_TYPE_VECTOR, 1, DUR_QK_NORM);
+        new_task(g_task_id, TASK_TYPE_VECTOR, 1, DUR_QK_NORM, MASK_QK_NORM);
         Tensor k0_norm = view(k_proj_norm, (uint32_t)b0, 0u, 16u, 1024u);
         Tensor q0_norm = view(q_proj_norm, (uint32_t)b0, 0u, 16u, 5120u);
         Tensor q0_in = view(q_proj, (uint32_t)b0, 0u, 16u, 5120u);
@@ -236,7 +236,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             tm_submit(g_task_id);
             g_task_id++;
 
-            new_task(g_task_id, TASK_TYPE_VECTOR, (uint16_t)cur_blocks, DUR_SOFTMAX);
+            new_task(g_task_id, TASK_TYPE_VECTOR, (uint16_t)cur_blocks, DUR_SOFTMAX, MASK_SOFTMAX);
             Tensor cur_li_piece = view(all_cur_li, base * 1024u, 0u, (uint32_t)(cur_blocks * 1024), 1u);
             Tensor cur_mi_piece = view(all_cur_mi, base * 1024u, 0u, (uint32_t)(cur_blocks * 1024), 1u);
             Tensor exp_padded_piece = view(all_exp_padded, base * 1024u, 0u, (uint32_t)(cur_blocks * 1024), 128u);
@@ -263,7 +263,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             tm_submit(g_task_id);
             g_task_id++;
 
-            new_task(g_task_id, TASK_TYPE_VECTOR, (uint16_t)cur_blocks, DUR_ONLINE_SOFTMAX);
+            new_task(g_task_id, TASK_TYPE_VECTOR, (uint16_t)cur_blocks, DUR_ONLINE_SOFTMAX, MASK_ONLINE_SOFTMAX);
             tm_in(g_task_id, oi_tmp_piece);
             tm_in(g_task_id, cur_mi_piece);
             tm_in(g_task_id, cur_li_piece);
@@ -303,7 +303,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             g_task_id++;
         }
 
-        new_task(g_task_id, TASK_TYPE_VECTOR, 1, DUR_POST_RMSNORM);
+        new_task(g_task_id, TASK_TYPE_VECTOR, 1, DUR_POST_RMSNORM, MASK_POST_RMSNORM);
         tm_in(g_task_id, resid1_tile);
         tm_out(g_task_id, post_norm_tile);
         tm_in_ro(g_task_id, ext_post_rms_weight);
@@ -322,7 +322,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             tm_submit(g_task_id);
             g_task_id++;
 
-            new_task(g_task_id, TASK_TYPE_CUBE, (uint16_t)cur_blocks, DUR_UP_PROJ);
+            new_task(g_task_id, TASK_TYPE_CUBE, (uint16_t)cur_blocks, DUR_UP_PROJ, MASK_UP_PROJ);
             tm_in(g_task_id, post_norm_tile);
             tm_in_ro(g_task_id, ext_w_up);
             tm_inout(g_task_id, up_piece);
@@ -330,7 +330,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             tm_submit(g_task_id);
             g_task_id++;
 
-            new_task(g_task_id, TASK_TYPE_VECTOR, (uint16_t)cur_blocks, DUR_SILU);
+            new_task(g_task_id, TASK_TYPE_VECTOR, (uint16_t)cur_blocks, DUR_SILU, MASK_SILU);
             tm_in(g_task_id, gate_piece);
             tm_in(g_task_id, up_piece);
             Tensor mlp_piece = view(mlp_tile, 0u, base * 512u, 16u, (uint32_t)(cur_blocks * 512));
@@ -351,7 +351,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             tm_submit(g_task_id);
             g_task_id++;
 
-            new_task(g_task_id, TASK_TYPE_VECTOR, (uint16_t)cur_blocks, DUR_DOWN_PROJ_RES);
+            new_task(g_task_id, TASK_TYPE_VECTOR, (uint16_t)cur_blocks, DUR_DOWN_PROJ_RES, MASK_DOWN_PROJ_RES);
             tm_in(g_task_id, down_piece);
             tm_in(g_task_id, resid1_piece);
             tm_out_ro(g_task_id, ext_out);

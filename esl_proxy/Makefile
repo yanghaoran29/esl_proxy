@@ -69,7 +69,6 @@ TARGET  := $(BIN_DIR)/esl_proxy
 SRCS := \
 	src/main.c \
 	src/dispatch.c \
-	src/dispatch_payload.c \
 	src/cutter.c \
 	src/fake_aicore_host.c \
 	src/manager.c \

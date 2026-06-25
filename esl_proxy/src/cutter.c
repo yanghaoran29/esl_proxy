@@ -2,7 +2,6 @@
 #include "log.h"
 #include "ring_buf.h"
 #ifdef ESL_PROXY_ONBOARD
-#include "onboard/onboard_crosscore_sync.h"
 #include "onboard/onboard_trace.h"
 #include "onboard/onboard_config.h"
 #include "onboard_log.h"

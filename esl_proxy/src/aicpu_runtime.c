@@ -9,7 +9,6 @@
 #include "dlog_pub.h"
 #include "kernel_args.h"
 #include "mem_pool.h"
-#include "onboard/onboard_crosscore_sync.h"
 #include "memory_barrier.h"
 #include "onboard/onboard_trace.h"
 #include "onboard_config.h"

@@ -20,9 +20,8 @@ for case in "${CASES[@]}"; do
     make -C "$ESL" clean
     make -C "$ESL" \
         CASE="$case" \
-        ORCH_ONLY=1 \
         MAIN_LOG=0 \
-        EXTRA_CFLAGS="-DORCH_ONLY=1 -DMAIN_LOG=0 -DLOG_OUTPUT_MODE=0"
+        EXTRA_CFLAGS="-DMAIN_LOG=0 -DLOG_OUTPUT_MODE=0"
     rm -f "$ESL/log/pto._thread_"*.csv
     (cd "$ESL" && WORKER_LOG=1 LOG_OUTPUT_MODE=0 ./bin/esl_proxy)
     cp "$ESL/log/pto._thread_0.csv" "$OUT/${name}.csv"

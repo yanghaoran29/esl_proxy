@@ -11,6 +11,7 @@ bin/
 obj/
 out/
 a.out
+report/
 
 # IDE
 .vscode/
@@ -30,7 +31,6 @@ Thumbs.db
 # Logs
 *.log
 log/
-report/
 
 # Environment
 .env*

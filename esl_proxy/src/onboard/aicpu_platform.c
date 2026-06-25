@@ -12,7 +12,7 @@
 #include "onboard_log.h"
 #include "aicpu_bridge.h"
 #include "kernel_args.h"
-#include "dispatch_payload.h"
+#include "task.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -39,27 +39,6 @@ void set_platform_regs(uint64_t regs)
 uint64_t get_platform_regs(void)
 {
     return g_platform_regs;
-}
-
-volatile uint32_t *get_reg_ptr(uint64_t reg_base_addr, RegId reg)
-{
-    return (volatile uint32_t *)(uintptr_t)(reg_base_addr + reg_offset(reg));
-}
-
-uint64_t read_reg(uint64_t reg_base_addr, RegId reg)
-{
-    return (uint64_t)*get_reg_ptr(reg_base_addr, reg);
-}
-
-void write_reg(uint64_t reg_base_addr, RegId reg, uint64_t value)
-{
-    *get_reg_ptr(reg_base_addr, reg) = (uint32_t)value;
-}
-
-void platform_init_aicore_regs(uint64_t reg_addr)
-{
-    write_reg(reg_addr, REG_ID_FAST_PATH_ENABLE, REG_SPR_FAST_PATH_OPEN);
-    write_reg(reg_addr, REG_ID_DATA_MAIN_BASE, AICPU_IDLE_TASK_ID);
 }
 
 void cache_invalidate_range(const void *addr, size_t size)
@@ -103,6 +82,49 @@ void cache_flush_range(const void *addr, size_t size)
 /* ========================================================================== */
 /* HW dispatch & AICore handshake                                             */
 /* ========================================================================== */
+
+static void esl_build_dispatch_payload(EslFakeDispatchPayload *out, const struct task_desc *desc,
+                                       const struct task_payload *pay, uint32_t block_idx)
+{
+    uint16_t tc;
+    uint16_t sc;
+    int i;
+
+    if (out == NULL || desc == NULL || pay == NULL) {
+        return;
+    }
+
+    memset(out, 0, sizeof(*out));
+    out->task.id = desc->id;
+    out->task.type = (uint16_t)desc->type;
+    out->task.mode = (uint16_t)desc->mode;
+    out->task.tensor_cnt = pay->tensor_cnt;
+    out->task.scalar_cnt = pay->scalar_cnt;
+    out->task.duration = desc->duration;
+    out->task.jitter_mask = desc->jitter_mask;
+    out->task.index = block_idx;
+    out->task.count = desc->count;
+    out->task.kernel = (uint64_t)(uintptr_t)desc->kernel;
+    out->duration_ticks = (int64_t)desc->duration;
+    out->jitter_mask = (int64_t)desc->jitter_mask;
+
+    tc = pay->tensor_cnt;
+    sc = pay->scalar_cnt;
+    if (tc > ESL_ONBOARD_MAX_TENSOR_ARGS) {
+        tc = ESL_ONBOARD_MAX_TENSOR_ARGS;
+    }
+    if (sc > ESL_ONBOARD_MAX_SCALAR_ARGS) {
+        sc = ESL_ONBOARD_MAX_SCALAR_ARGS;
+    }
+
+    for (i = 0; i < (int)tc; ++i) {
+        out->tensors[i] = pay->tensors[i];
+        out->args[i] = (uint64_t)(uintptr_t)&out->tensors[i];
+    }
+    for (i = 0; i < (int)sc; ++i) {
+        out->args[tc + (uint16_t)i] = (uint64_t)pay->scalars[i];
+    }
+}
 
 void esl_dispatch_payload_prepare(EslRuntime *runtime, int core, uint32_t reg_task_id,
                                   const EslOnboardDispatchInput *input)
