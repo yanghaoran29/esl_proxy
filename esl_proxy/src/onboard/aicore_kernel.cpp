@@ -6,6 +6,7 @@
 #include "esl_runtime.h"
 #include "onboard_config.h"
 #include "onboard_tensor.h"
+#include "fake_kernel.h"
 #include "l2_swimlane/esl_swimlane_api.h"
 #include "l2_swimlane/aicore/aicore_profiling_state.h"
 
@@ -21,32 +22,20 @@
 #define KERNEL_ENTRY(x) x##_0_mix_aic
 #endif
 
+__aicore__ static uint64_t esl_fake_now_sys_to_ns(void)
+{
+    return get_sys_cnt_aicore() * 1000000000ULL / ESL_ONBOARD_SYS_CNT_FREQ;
+}
+
 extern "C" __attribute__((weak)) __aicore__ void fake_kernel(__gm__ EslFakeDispatchPayload *payload)
 {
     if (payload == nullptr) {
         return;
     }
 
-    /* duration_ticks and jitter are in ns (§4.1); convert to SYS_CNT only for busy-wait. */
-    const uint64_t duration_ns = static_cast<uint64_t>(payload->duration_ticks);
-    const uint64_t mask = static_cast<uint64_t>(payload->jitter_mask);
-    const uint64_t start = get_sys_cnt_aicore();
-    int64_t wait_ns = static_cast<int64_t>(duration_ns);
-
-    if (mask != 0U) {
-        const int64_t jitter_ns =
-            static_cast<int64_t>(start & mask) - static_cast<int64_t>((mask + 1U) / 2U);
-        wait_ns += jitter_ns;
-    }
-    if (wait_ns < 1) {
-        wait_ns = static_cast<int64_t>(duration_ns);
-    }
-    const uint64_t wait_sys_cnt = static_cast<uint64_t>(wait_ns) * ESL_ONBOARD_SYS_CNT_FREQ / 1000000000ULL;
-    const uint64_t end = start + wait_sys_cnt;
-
-    while (get_sys_cnt_aicore() < end) {
-        SPIN_WAIT_HINT();
-    }
+    /* Map SYS_CNT to ns-scale timeline so esl_fake_kernel_busy_wait_ns matches Host semantics. */
+    esl_fake_kernel_busy_wait_ns(static_cast<uint64_t>(payload->duration_ticks),
+                                 static_cast<uint64_t>(payload->jitter_mask), esl_fake_now_sys_to_ns);
 }
 
 #if ESL_PROXY_ENABLE_L2_SWIMLANE
