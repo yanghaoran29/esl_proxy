@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 
+#include "tensor.h"
 #include "onboard_tensor.h"
 
 #ifdef __cplusplus
@@ -109,8 +110,8 @@ typedef struct EslOnboardTaskDesc {
 
 typedef struct EslOnboardDispatchInput {
     EslOnboardTaskDesc task;
-    uint64_t tensor_addrs[ESL_ONBOARD_MAX_TENSOR_ARGS];
-    int64_t scalars[ESL_ONBOARD_MAX_SCALAR_ARGS];
+    const Tensor *tensors;
+    const int64_t *scalars;
 } EslOnboardDispatchInput;
 
 typedef struct EslFakeDispatchPayload {
@@ -118,7 +119,7 @@ typedef struct EslFakeDispatchPayload {
     int64_t duration_ticks; /* ns (swimlane measured mean; name kept for layout) */
     int64_t jitter_mask;    /* jitter amplitude mask in ns (§4.2) */
     uint64_t args[ESL_ONBOARD_MAX_KERNEL_ARGS];
-    EslOnboardTensor tensors[ESL_ONBOARD_MAX_TENSOR_ARGS];
+    Tensor tensors[ESL_ONBOARD_MAX_TENSOR_ARGS];
 } __attribute__((aligned(64))) EslFakeDispatchPayload;
 
 /* SYS_CNT counter frequency on A3 (50 MHz). */

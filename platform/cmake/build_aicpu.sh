@@ -60,7 +60,7 @@ for f in "$ONBOARD_SRC"/*.c "$ONBOARD_SRC"/*.cpp; do
   for e in $NOT_AICPU; do [[ "$base" == "$e" ]] && skip=1 && break; done
   [[ $skip -eq 0 ]] && SRC_FILES="${SRC_FILES:+$SRC_FILES;}$f"
 done
-for f in aicpu_runtime cutter dispatch shm; do SRC_FILES="${SRC_FILES};${ESL_CORE}/src/${f}.c"; done
+for f in aicpu_runtime cutter dispatch dispatch_payload shm; do SRC_FILES="${SRC_FILES};${ESL_CORE}/src/${f}.c"; done
 
 export SIMPLER_DISABLE_WARNINGS_AS_ERRORS=1
 ONBOARD_LOG_FLAGS="-DWORKER_LOG=0 -DMAIN_LOG=0"

@@ -26,7 +26,7 @@ int aicore_bridge_init(AicoreBridge *bridge, EslRuntime *runtime, uint64_t fake_
 void aicore_bridge_shutdown(AicoreBridge *bridge);
 int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid);
 int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t task_id,
-                                int core, int slot, int exe_type);
+                                int core, int slot, int exe_type, uint32_t block_idx);
 
 static inline int esl_phys_worker(int core, int exe_type)
 {

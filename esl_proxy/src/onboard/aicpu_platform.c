@@ -11,6 +11,7 @@
 #include "onboard_log.h"
 #include "aicpu_bridge.h"
 #include "kernel_args.h"
+#include "dispatch_payload.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -140,9 +141,8 @@ void esl_dispatch_payload_prepare(int core, uint32_t reg_task_id, const EslOnboa
     EslFakeDispatchPayload *p;
     uint64_t base;
     int slot;
-    uint16_t tc;
-    uint16_t sc;
-    int i;
+    struct task_desc desc;
+    struct task_payload pay;
 
     if (g_runtime == NULL || core < 0 || core >= RUNTIME_MAX_WORKER || input == NULL) {
         return;
@@ -151,33 +151,36 @@ void esl_dispatch_payload_prepare(int core, uint32_t reg_task_id, const EslOnboa
     if (base == 0) {
         return;
     }
-    /* Must match AICore: exec_payload = payload_base + (reg_task_id & 1). */
     slot = (int)(reg_task_id & 1u);
     p = (EslFakeDispatchPayload *)(uintptr_t)(base + (uint64_t)slot * sizeof(EslFakeDispatchPayload));
 
-    memset(p, 0, sizeof(*p));
-    p->task = input->task;
-    /* duration_ticks / jitter_mask are both in ns; AICore converts to SYS_CNT. */
-    p->duration_ticks = (int64_t)input->task.duration;
-    p->jitter_mask = (int64_t)input->task.jitter_mask;
+    desc.id = input->task.id;
+    desc.type = (task_type_t)input->task.type;
+    desc.mode = (org_mode_t)input->task.mode;
+    desc.kernel = (void *)(uintptr_t)input->task.kernel;
+    desc.index = input->task.index;
+    desc.count = input->task.count;
+    desc.duration = input->task.duration;
+    desc.jitter_mask = input->task.jitter_mask;
 
-    tc = input->task.tensor_cnt;
-    sc = input->task.scalar_cnt;
-    if (tc > ESL_ONBOARD_MAX_TENSOR_ARGS) {
-        tc = ESL_ONBOARD_MAX_TENSOR_ARGS;
+    pay.tensor_cnt = input->task.tensor_cnt;
+    pay.scalar_cnt = input->task.scalar_cnt;
+    if (input->tensors != NULL) {
+        uint16_t tc = pay.tensor_cnt;
+        if (tc > TASK_MAX_TENSORS) {
+            tc = TASK_MAX_TENSORS;
+        }
+        memcpy(pay.tensors, input->tensors, (size_t)tc * sizeof(Tensor));
     }
-    if (sc > ESL_ONBOARD_MAX_SCALAR_ARGS) {
-        sc = ESL_ONBOARD_MAX_SCALAR_ARGS;
+    if (input->scalars != NULL && pay.scalar_cnt > 0) {
+        uint16_t sc = pay.scalar_cnt;
+        if (sc > TASK_MAX_SCALARS) {
+            sc = TASK_MAX_SCALARS;
+        }
+        memcpy(pay.scalars, input->scalars, (size_t)sc * sizeof(int64_t));
     }
 
-    for (i = 0; i < (int)tc; ++i) {
-        p->tensors[i].buffer_addr = input->tensor_addrs[i];
-        p->args[i] = (uint64_t)(uintptr_t)&p->tensors[i];
-    }
-    for (i = 0; i < (int)sc; ++i) {
-        p->args[tc + (uint16_t)i] = (uint64_t)input->scalars[i];
-    }
-
+    esl_build_dispatch_payload(p, &desc, &pay, input->task.index);
     cache_flush_range(p, sizeof(EslFakeDispatchPayload));
 }
 

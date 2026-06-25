@@ -21,6 +21,7 @@ extern int g_min_uncomplete_task;
 extern int g_completed_cnt;
 extern volatile bool g_orch_is_done;
 extern struct task_desc g_basic_buf[RING_SIZE];
+extern struct task_payload g_task_payload[RING_SIZE];
 extern struct predecessor_list g_predecessors[RING_SIZE];
 extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
 extern uint16_t g_predecessor_cnt[RING_SIZE];
@@ -52,6 +53,7 @@ void esl_onboard_publish_task_slot(uint16_t task_id)
     const uint16_t slot = (uint16_t)(task_id & RING_MASK);
 
     cache_flush_range(&g_basic_buf[slot], sizeof(g_basic_buf[slot]));
+    cache_flush_range(&g_task_payload[slot], sizeof(g_task_payload[slot]));
     if (task_id < RING_SIZE) {
         cache_flush_range(&g_predecessors[task_id], sizeof(g_predecessors[task_id]));
     }

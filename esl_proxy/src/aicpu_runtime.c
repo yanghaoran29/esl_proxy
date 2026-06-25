@@ -383,33 +383,28 @@ int aicore_bridge_poll_completions(AicoreBridge *bridge, int dispatch_tid)
     return 0;
 }
 
-static void esl_pack_dispatch_input(EslOnboardDispatchInput *in, uint16_t task_id)
+static void esl_pack_dispatch_input(EslOnboardDispatchInput *in, uint16_t task_id, uint32_t block_idx)
 {
     const struct task_desc *td = &g_basic_buf[task_id & RING_MASK];
-    uint16_t i;
+    const struct task_payload *pay = &g_task_payload[task_id & RING_MASK];
 
     memset(in, 0, sizeof(*in));
     in->task.id = task_id;
     in->task.type = (uint16_t)td->type;
     in->task.mode = (uint16_t)td->mode;
-    in->task.tensor_cnt = td->tensor_cnt;
-    in->task.scalar_cnt = td->scalar_cnt;
+    in->task.tensor_cnt = pay->tensor_cnt;
+    in->task.scalar_cnt = pay->scalar_cnt;
     in->task.duration = td->duration;
     in->task.jitter_mask = td->jitter_mask;
-    in->task.index = td->index;
+    in->task.index = block_idx;
     in->task.count = td->count;
     in->task.kernel = (uint64_t)(uintptr_t)td->kernel;
-
-    for (i = 0; i < td->tensor_cnt && i < ESL_ONBOARD_MAX_TENSOR_ARGS; ++i) {
-        in->tensor_addrs[i] = td->data[i];
-    }
-    for (i = 0; i < td->scalar_cnt && i < ESL_ONBOARD_MAX_SCALAR_ARGS; ++i) {
-        in->scalars[i] = td->scalar[i];
-    }
+    in->tensors = pay->tensors;
+    in->scalars = pay->scalars;
 }
 
 int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t task_id, int core, int slot,
-                                int exe_type)
+                                int exe_type, uint32_t block_idx)
 {
     (void)dispatch_tid;
     g_executors[exe_type][core].tasks[slot] = task_id;
@@ -424,7 +419,7 @@ int aicore_bridge_dispatch_task(AicoreBridge *bridge, int dispatch_tid, uint16_t
     }
     EslOnboardDispatchInput din;
 
-    esl_pack_dispatch_input(&din, task_id);
+    esl_pack_dispatch_input(&din, task_id, block_idx);
     const uint64_t reg_addr = core_reg_addr(phys);
     if (reg_addr == 0) {
         return -1;
@@ -458,6 +453,7 @@ void esl_onboard_flush_shared_after_orch(void)
     cache_flush_range(&g_task_id, sizeof(g_task_id));
     cache_flush_range(&g_orch_is_done, sizeof(g_orch_is_done));
     cache_flush_range(g_basic_buf, sizeof(g_basic_buf));
+    cache_flush_range(g_task_payload, sizeof(g_task_payload));
     cache_flush_range(g_predecessors, sizeof(g_predecessors));
     cache_flush_range(g_successor_buf, sizeof(g_successor_buf));
     cache_flush_range(g_predecessor_cnt, sizeof(g_predecessor_cnt));
