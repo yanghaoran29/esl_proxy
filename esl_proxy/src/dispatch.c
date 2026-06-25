@@ -165,14 +165,19 @@ static inline int send_block(ctrl_t *ctrl, int type, int exe_type, uint16_t task
     return 0;
 #else
     {
-        const int phys = esl_pick_phys_worker(core, exe_type);
-        g_executors[exe_type][core].block_idx[slot] = (uint16_t)phys;
-        if (phys < 0) {
-            ctrl->free_bitmap[type][slot] |= mask;
-            return -1;
-        }
-        if (host_fake_aicore_submit(phys, task_id, exe_type, core, slot, mask, raw_duration,
-                                    jitter_mask) != 0) {
+        if (host_fake_aicore_kernel_enabled()) {
+            const int phys = esl_pick_phys_worker(core, exe_type);
+            g_executors[exe_type][core].block_idx[slot] = (uint16_t)phys;
+            if (phys < 0) {
+                ctrl->free_bitmap[type][slot] |= mask;
+                return -1;
+            }
+            if (host_fake_aicore_submit(phys, task_id, exe_type, core, slot, mask, raw_duration,
+                                        jitter_mask) != 0) {
+                ctrl->free_bitmap[type][slot] |= mask;
+                return -1;
+            }
+        } else if (host_fake_aicore_finish_sync(task_id, exe_type, core, slot, mask) != 0) {
             ctrl->free_bitmap[type][slot] |= mask;
             return -1;
         }

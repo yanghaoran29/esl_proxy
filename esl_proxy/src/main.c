@@ -80,6 +80,10 @@ int main(void) {
     init_predecessors();
     init_ctrl_t();
 
+    host_fake_aicore_configure_from_env();
+    MAIN_LOGF("[host] fake_kernel = %s (ESL_PROXY_FAKE_KERNEL=1: 72 workers + busy-wait; "
+              "default: sync FIN, no worker threads)",
+              host_fake_aicore_kernel_enabled() ? "on" : "off");
     host_fake_aicore_start(ESL_PROXY_HOST_WORKER_COUNT);
 
 #if !ORCH_ONLY

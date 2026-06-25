@@ -18,10 +18,16 @@ typedef struct {
     uint64_t mask;
 } HostFakeFin;
 
+void host_fake_aicore_configure_from_env(void);
+int host_fake_aicore_kernel_enabled(void);
+
 void host_fake_aicore_start(int worker_count);
 void host_fake_aicore_stop(void);
 
-/* Queue one subtask on phys_worker; returns 0 on success. */
+/* Synchronous FIN (no worker threads): dispatch thread only. */
+int host_fake_aicore_finish_sync(uint16_t task_id, int exe_type, int core, int slot, uint64_t mask);
+
+/* Queue one subtask on phys_worker; returns 0 on success. Requires workers started. */
 int host_fake_aicore_submit(int phys_worker, uint16_t task_id, int exe_type, int core, int slot,
                             uint64_t mask, uint32_t duration_ns, uint32_t jitter_mask);
 

@@ -16,6 +16,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define HOST_FAKE_JOB_QUEUE_DEPTH 64
 #define HOST_FAKE_FIN_QUEUE_CAP 16384
@@ -46,7 +47,33 @@ static pthread_mutex_t g_fin_push_mu = PTHREAD_MUTEX_INITIALIZER;
 static HostFakeWorkerQueue g_fake_queues[ESL_PROXY_HOST_WORKER_COUNT];
 static pthread_t g_fake_threads[ESL_PROXY_HOST_WORKER_COUNT];
 static atomic_bool g_fake_shutdown;
+static bool g_fake_kernel_enabled;
 static int g_fake_worker_count;
+
+static int host_fake_env_truthy(const char *v)
+{
+    if (v == NULL || v[0] == '\0') {
+        return 0;
+    }
+    if (v[0] == '0' && v[1] == '\0') {
+        return 0;
+    }
+    if (strcmp(v, "false") == 0 || strcmp(v, "FALSE") == 0 || strcmp(v, "off") == 0 ||
+        strcmp(v, "OFF") == 0 || strcmp(v, "no") == 0 || strcmp(v, "NO") == 0) {
+        return 0;
+    }
+    return 1;
+}
+
+void host_fake_aicore_configure_from_env(void)
+{
+    g_fake_kernel_enabled = host_fake_env_truthy(getenv("ESL_PROXY_FAKE_KERNEL")) != 0;
+}
+
+int host_fake_aicore_kernel_enabled(void)
+{
+    return g_fake_kernel_enabled ? 1 : 0;
+}
 
 static int host_fake_fin_push(const HostFakeFin *fin)
 {
@@ -93,11 +120,22 @@ static void host_fake_signal_completion(const HostFakeJob *job)
     fin.slot = job->slot;
     fin.mask = job->mask;
     if (host_fake_fin_push(&fin) != 0) {
-        /* Should not happen with FIN queue >> in-flight subtasks. */
         for (;;) {
             spin_wait();
         }
     }
+}
+
+int host_fake_aicore_finish_sync(uint16_t task_id, int exe_type, int core, int slot, uint64_t mask)
+{
+    HostFakeFin fin;
+
+    fin.task_id = task_id;
+    fin.exe_type = (uint8_t)exe_type;
+    fin.core = (uint8_t)core;
+    fin.slot = (uint8_t)slot;
+    fin.mask = mask;
+    return host_fake_fin_push(&fin);
 }
 
 static int host_fake_queue_push(HostFakeWorkerQueue *q, const HostFakeJob *job)
@@ -161,13 +199,19 @@ void host_fake_aicore_start(int worker_count)
 {
     int i;
 
+    atomic_store_explicit(&g_fake_shutdown, false, memory_order_release);
+    atomic_store_explicit(&g_fin_head, 0U, memory_order_relaxed);
+    atomic_store_explicit(&g_fin_tail, 0U, memory_order_relaxed);
+    g_fake_worker_count = 0;
+
+    if (!g_fake_kernel_enabled) {
+        return;
+    }
+
     if (worker_count <= 0 || worker_count > ESL_PROXY_HOST_WORKER_COUNT) {
         worker_count = ESL_PROXY_HOST_WORKER_COUNT;
     }
     g_fake_worker_count = worker_count;
-    atomic_store_explicit(&g_fake_shutdown, false, memory_order_release);
-    atomic_store_explicit(&g_fin_head, 0U, memory_order_relaxed);
-    atomic_store_explicit(&g_fin_tail, 0U, memory_order_relaxed);
     for (i = 0; i < g_fake_worker_count; ++i) {
         HostFakeWorkerQueue *q = &g_fake_queues[i];
         atomic_store_explicit(&q->head, 0U, memory_order_relaxed);
