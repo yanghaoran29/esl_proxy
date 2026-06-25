@@ -123,7 +123,7 @@ static inline void push_2_completed_queue(int tid)
     }
 #endif
     batch_enqueue(&g_ctrl_t[tid].completed_queue, task_id, (uint16_t)complete_cnt);
-    g_completed_cnt += complete_cnt;
+    atomic_fetch_add_explicit(&g_completed_cnt, complete_cnt, memory_order_acquire);
 #ifdef ESL_PROXY_ONBOARD
     esl_onboard_publish_counters();
 #endif
@@ -278,7 +278,7 @@ void dispatch_loop_run(int tid)
     esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_LOOP_ENTER, (uint64_t)tid, 0, 0);
     esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE1, start_ns, 0, 0);
 #endif
-    while (!g_orch_is_done) {
+    while (!atomic_load(&g_orch_is_done)) {
 #ifdef ESL_PROXY_ONBOARD
         if ((phase1_iter & 0x3FFFFU) == 0) {
             esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE1, phase1_iter,
@@ -308,7 +308,7 @@ void dispatch_loop_run(int tid)
 #ifndef ESL_PROXY_ONBOARD
     count = 50000000;
 #endif
-    while (g_completed_cnt <
+    while (atomic_load(&g_completed_cnt) <
            atomic_load_explicit(&g_task_id, memory_order_acquire)) {
 #ifdef ESL_PROXY_ONBOARD
         if ((phase2_iter & 0x3FFFFU) == 0) {

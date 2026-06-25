@@ -29,9 +29,9 @@ void init_state_buf(void) {
     }
 }
 
-extern int g_min_uncomplete_task;
+extern atomic_int g_min_uncomplete_task;
 extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
-extern volatile bool g_orch_is_done;
+extern atomic_bool g_orch_is_done;
 extern _Atomic bool g_is_done;
 
 /* Written only by the cutter thread (add_successors sets it, resolve_dep
@@ -63,14 +63,14 @@ static inline bool update_task_state(uint16_t cnt, uint16_t* cq_buf)
         uint16_t idx = task_id & RING_MASK;
         g_state_buf[idx].state = TASK_STATUS_COMPLETED;
     }
-    uint16_t i = g_min_uncomplete_task;
+    uint16_t i = atomic_load_explicit(&g_min_uncomplete_task, memory_order_acquire);
     uint16_t end = atomic_load_explicit(&g_task_id, memory_order_acquire);
     for (; i < end; i++) {
         if (g_state_buf[i].state != TASK_STATUS_COMPLETED) {
             break;
         }
     }
-    (g_min_uncomplete_task = i);
+    atomic_store(&g_min_uncomplete_task, i);
 #ifdef ESL_PROXY_ONBOARD
     esl_onboard_publish_counters();
 #endif

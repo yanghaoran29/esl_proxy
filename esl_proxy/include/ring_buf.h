@@ -28,9 +28,10 @@
 #include "dispatch_payload.h"
 
 extern atomic_int g_task_id;
-extern int g_min_uncomplete_task;
-extern int g_completed_cnt;
-extern volatile bool g_orch_is_done;
+extern atomic_int g_min_uncomplete_task;
+extern atomic_int g_completed_cnt;
+extern atomic_bool g_orch_is_done;
+extern atomic_flag g_lock_buf[RING_SIZE];
 extern atomic_bool g_is_done;
 extern struct task_desc g_basic_buf[RING_SIZE];
 extern struct task_payload g_task_payload[RING_SIZE];
@@ -91,6 +92,18 @@ static inline void add_scalar(uint16_t task_id, int64_t t)
     g_task_payload[slot].scalars[idx] = t;
 }
 
+static inline void lock(int slotIdx)
+{
+    while (atomic_flag_test_and_set_explicit(&g_lock_buf[slotIdx], memory_order_acquire)) {
+        spin_wait();
+    }
+}
+
+static inline void unlock(int slotIdx)
+{
+    atomic_flag_clear_explicit(&g_lock_buf[slotIdx], memory_order_release);
+}
+
 static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uint16_t start)
 {
     // int slotIdx = task_id & RING_MASK;
@@ -100,18 +113,13 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
     if (ptr->cnt <= 0)
         ptr->exp = atomic_load(&g_predecessor_ring.tail);
     
-    uint16_t min_uncomplete_task = g_min_uncomplete_task;
+    uint16_t min_uncomplete_task = atomic_load_explicit(&g_min_uncomplete_task, memory_order_acquire);
     for (uint16_t i = 0; i < n; i++)
     {
         if (target[i] < min_uncomplete_task)
             continue;
         WORKER_LOGF("succeed,task_id,%u,predecessor_id,%u,idx,%d", task_id, target[i], cnt);
-        /* Reserve one uint16 slot. NOTE: atomic_fetch_add on an _Atomic(uint16_t*)
-         * advances by BYTES (not elements) under the AICPU cross-compiler, which
-         * half-overwrites the previous slot and corrupts the dependency graph.
-         * Use explicit element-stride pointer arithmetic instead. */
-        uint16_t* idx = atomic_load_explicit(&g_predecessor_ring.tail, memory_order_relaxed);
-        atomic_store_explicit(&g_predecessor_ring.tail, idx + 1, memory_order_relaxed);
+        uint16_t* idx = atomic_fetch_add(&g_predecessor_ring.tail, 1);
         *idx = target[i];
 #ifdef ESL_PROXY_ONBOARD
         esl_onboard_publish_u16(idx);
@@ -129,7 +137,7 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
 static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uint32_t duration_ns,
                             uint32_t jitter_mask)
 {
-    while ((task_id - (uint32_t)g_min_uncomplete_task) >= RING_SIZE) {
+    while ((task_id - (uint32_t)atomic_load(&g_min_uncomplete_task)) >= RING_SIZE) {
 #ifdef ESL_PROXY_ONBOARD
         esl_onboard_consume_min_uncomplete();
 #endif

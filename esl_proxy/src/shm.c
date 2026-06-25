@@ -20,11 +20,12 @@
 #endif
 
 atomic_int g_task_id = 0;
-int g_min_uncomplete_task = 0;
+atomic_int g_min_uncomplete_task = 0;
 // Keep Atomic For Multi Dispatch Thread
-int g_completed_cnt = 0;
+atomic_int g_completed_cnt = 0;
 atomic_bool g_is_done = false;
-volatile bool g_orch_is_done = false;
+atomic_bool g_orch_is_done = false;
+atomic_flag g_lock_buf[RING_SIZE];
 
 
 struct task_desc g_basic_buf[RING_SIZE];
@@ -98,7 +99,7 @@ void init_ctrl_t(void)
 
 void esl_signal_orch_done(void)
 {
-    g_orch_is_done = true;
+    atomic_store_explicit(&g_orch_is_done, true, memory_order_release);
 #ifdef ESL_PROXY_ONBOARD
     esl_onboard_flush_shared_after_orch();
 #endif
