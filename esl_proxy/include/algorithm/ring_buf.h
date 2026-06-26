@@ -24,13 +24,17 @@
 #include "spin.h"
 
 #include "tensor.h"
+#include "platform.h"
+#include "memory_barrier.h"
 
 extern atomic_int g_task_id;
 extern atomic_int g_min_uncomplete_task;
 extern atomic_flag g_lock_buf[RING_SIZE];
 extern struct task_desc g_basic_buf[RING_SIZE];
 extern struct predecessor_list g_predecessors[RING_SIZE];
+extern uint16_t g_predecessor_cnt[RING_SIZE];
 extern struct ring_buf g_predecessor_ring;
+extern uint16_t predecessor_storage[NODE_BUFF_SIZE];
 extern struct node_list g_successor_buf[RING_SIZE];
 extern struct node_list g_successor_exp_buf[HALF_RING_SIZE];
 extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
@@ -49,7 +53,7 @@ static inline void ring_buf_init(void)
     for (size_t i = 0; i < RING_SIZE; i++) {
         g_successor_buf[i].next = NULL;
     }
-    g_predecessor_ring.head = malloc(sizeof(uint16_t) * NODE_BUFF_SIZE);
+    g_predecessor_ring.head = predecessor_storage;
     atomic_store(&g_predecessor_ring.tail, g_predecessor_ring.head);
     atomic_store(&g_predecessor_ring.start, g_predecessor_ring.head);
 }
@@ -106,26 +110,42 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
         if (target[i] < min_uncomplete_task)
             continue;
         WORKER_LOGF("succeed,task_id,%u,predecessor_id,%u,idx,%d", task_id, target[i], cnt);
-        uint16_t* idx = atomic_fetch_add(&g_predecessor_ring.tail, 1);
+        uint16_t* idx = atomic_load_explicit(&g_predecessor_ring.tail, memory_order_relaxed);
+        atomic_store_explicit(&g_predecessor_ring.tail, idx + 1, memory_order_relaxed);
         *idx = target[i];
+        cache_flush_range((const void *)idx, sizeof(uint16_t));
+        OUT_OF_ORDER_STORE_BARRIER();
         cnt++;
     }
     ptr->cnt = cnt;
+    cache_flush_range(&g_basic_buf[slotIdx], sizeof(g_basic_buf[slotIdx]));
+    cache_flush_range(&g_predecessors[task_id], sizeof(g_predecessors[task_id]));
+    cache_flush_range(&g_predecessor_cnt[slotIdx], sizeof(g_predecessor_cnt[slotIdx]));
+    OUT_OF_ORDER_STORE_BARRIER();
+
     return cnt;
 }
 
-static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uint16_t duration)
+static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uint32_t duration_ns,
+                            uint32_t jitter_mask)
 {
-    while ((task_id - atomic_load(&g_min_uncomplete_task)) >= RING_SIZE ) {
+    while ((task_id - (uint32_t)atomic_load(&g_min_uncomplete_task)) >= RING_SIZE) {
+        cache_invalidate_range(&g_min_uncomplete_task, sizeof(g_min_uncomplete_task));
         MAIN_LOGF("[orchestration] task_id = %u g_min_uncomplete_task = %u", task_id, g_min_uncomplete_task);
         spin_wait();
     }
     if (count > 1)
         g_basic_buf[task_id & RING_MASK].mode = ORG_MODE_SPMD_SYNC;
-    g_basic_buf[task_id & RING_MASK].count = count; 
-    g_basic_buf[task_id & RING_MASK].duration = duration;
+    g_basic_buf[task_id & RING_MASK].type = (task_type_t)type;
+    g_basic_buf[task_id & RING_MASK].count = count;
+    g_basic_buf[task_id & RING_MASK].id = (uint16_t)task_id;
+    g_basic_buf[task_id & RING_MASK].duration = duration_ns;
+    g_basic_buf[task_id & RING_MASK].jitter_mask = jitter_mask;
+    g_basic_buf[task_id & RING_MASK].tensor_cnt = 0;
+    g_basic_buf[task_id & RING_MASK].scalar_cnt = 0;
     g_subtask_cnt += count;
     WORKER_LOGF("new,task_id,%u,type,%d,subtask_cnt,%d", task_id, type, count);
+    return true;
 }
 
 #endif /* DAG_RING_BUF_H */

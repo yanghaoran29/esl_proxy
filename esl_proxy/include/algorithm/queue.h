@@ -12,6 +12,8 @@
 #include "task.h"
 #include "spin.h"
 #include "log.h"
+#include "platform.h"
+#include "memory_barrier.h"
 
 typedef struct queue {
     uint64_t cnt;
@@ -87,6 +89,9 @@ static inline bool enqueue(queue_t *queue, uint16_t item)
 
 static inline void lock_q(queue_t *queue)
 {
+    if (queue != NULL) {
+        cache_invalidate_range(queue, sizeof(queue_t));
+    }
     while (atomic_flag_test_and_set_explicit(&queue->lock, memory_order_acquire)) {
         spin_wait();
     }
@@ -95,6 +100,10 @@ static inline void lock_q(queue_t *queue)
 static inline void unlock_q(queue_t *queue)
 {
     atomic_flag_clear_explicit(&queue->lock, memory_order_release);
+    if (queue != NULL) {
+        cache_flush_range(queue, sizeof(queue_t));
+        OUT_OF_ORDER_STORE_BARRIER();
+    }
 }
 
 #endif

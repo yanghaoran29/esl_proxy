@@ -16,6 +16,7 @@
 #include <stdbool.h>
 
 #include "conf.h"
+#define EXEC_SLOT_EMPTY ((uint16_t)0xFFFF)
 
 /*
  * Executor
@@ -32,6 +33,7 @@ typedef struct executor {
  * executor_init - Initialize all executors
  */
 void executor_init(void);
+void executors_init_slots_empty(void);
 
 /*
  * executor_worker - Worker thread for executor timing
