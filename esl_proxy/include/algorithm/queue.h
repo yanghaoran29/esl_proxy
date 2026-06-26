@@ -22,6 +22,7 @@ typedef struct queue {
     atomic_flag lock;
 } queue_t;
 
+// Forward declarations for lock/unlock functions
 static inline void lock_q(queue_t *queue);
 static inline void unlock_q(queue_t *queue);
 

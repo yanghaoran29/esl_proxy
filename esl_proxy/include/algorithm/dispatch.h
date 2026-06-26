@@ -1,5 +1,11 @@
 /*
  * dispatch.h - Task Dispatch with Shared Memory and Work-Stealing
+ *
+ * Distributes tasks to Executors via shared memory with work-stealing
+ * load balancing across multiple Dispatch instances.
+ *
+ * Trust the Caller (Principle X): No input validation, undefined on invalid input.
+ * C11 standard with _Atomic for lock-free concurrency.
  */
 
 #ifndef DISPATCH_H
@@ -14,14 +20,15 @@
 #include "queue.h"
 
 typedef struct ctrl {
+    // 64CORES
     uint64_t free_bitmap[TASK_TYPE_CNT][AIC_OSTD];
     uint64_t msg_bitmap[EXE_TYPE_CNT][AIC_OSTD];
 
     uint16_t task_id_map1[EXE_TYPE_CNT][AIC_CNT];
     uint16_t task_id_map2[EXE_TYPE_CNT][AIC_CNT];
 
-    queue_t ready_queue[TASK_TYPE_CNT];
-    queue_t completed_queue;
+    queue_t  ready_queue[TASK_TYPE_CNT];
+    queue_t  completed_queue;
     uint16_t tid;
 } ctrl_t;
 

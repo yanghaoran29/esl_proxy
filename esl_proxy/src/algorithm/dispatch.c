@@ -1,5 +1,8 @@
 /*
  * dispatch.c - Dispatch Worker Thread Implementation
+ *
+ * Worker thread entry point for Dispatch.
+ * This file is compiled separately as it contains pthread-specific code.
  */
 
 #include "dispatch.h"
@@ -95,7 +98,7 @@ int dispatch_submit(ctrl_t *ctrl, int type, int exe_type, uint16_t task_id, int 
     platform_consume_task_slot(task_id);
     g_executors[exe_type][core].duration[slot] =
         dispatch_executor_duration(g_basic_buf[task_id & RING_MASK].duration);
-    g_executors[exe_type][core].idx = (uint8_t)slot;
+    g_executors[exe_type][core].idx = (uint8_t)slot;  // Point to the slot with the new task
 
     if (slot == 1) {
         ctrl->task_id_map2[type][core] = task_id;
@@ -103,6 +106,7 @@ int dispatch_submit(ctrl_t *ctrl, int type, int exe_type, uint16_t task_id, int 
         ctrl->task_id_map1[type][core] = task_id;
     }
 
+    // Clear the free bit for this core/slot combination (mark as busy)
     ctrl->free_bitmap[type][slot] &= ~mask;
     platform_publish_atomic_u64(&ctrl->free_bitmap[type][slot]);
 
@@ -110,6 +114,7 @@ int dispatch_submit(ctrl_t *ctrl, int type, int exe_type, uint16_t task_id, int 
         return aicore_bridge_dispatch_task(g_bridge, (int)ctrl->tid, task_id, core, slot, exe_type,
                                            0);
     }
+    // Fake Return
     ctrl->msg_bitmap[type][slot] |= mask;
     return 0;
 }
@@ -141,6 +146,7 @@ int dispatch_stall_limit(void)
     return 10000;
 }
 
+// TODO: add counter for spmd
 static inline void push_2_completed_queue(int tid)
 {
     uint16_t task_id[DISPATCH_COMPLETE_BATCH];
@@ -153,9 +159,11 @@ static inline void push_2_completed_queue(int tid)
     dispatch_after_push_completed(tid, complete_cnt);
 }
 
+// TODO: Work Stealing
 static inline int send_task(ctrl_t *ctrl, int type)
 {
     int exe_type = type;
+    // Check both slots - slot is free if neither slot 0 nor slot 1 has been sent a task
     uint64_t free_bitmap = ctrl->free_bitmap[type][0] & ctrl->free_bitmap[type][1];
     uint64_t block_mask = (uint64_t)((1ULL << platform_worker_block_dim()) - 1);
     uint16_t cnt;
@@ -168,7 +176,7 @@ static inline int send_task(ctrl_t *ctrl, int type)
         return 0;
     }
     uint16_t task_ids[AIC_CNT];
-    if (!batch_dequeue(&ctrl->ready_queue[type], task_ids, &cnt)) {
+    if (!batch_dequeue(&ctrl->ready_queue[type], task_ids, &cnt)){
         return 0;
     }
 
@@ -176,11 +184,14 @@ static inline int send_task(ctrl_t *ctrl, int type)
         uint16_t task_id = task_ids[i];
         uint64_t idx = (uint64_t)__builtin_ctzll(free_bitmap);
         uint64_t mask = (uint64_t)0x1 << idx;
+        // Determine which slot to use - prefer slot 0 if it's not busy
         int core = (int)idx;
         int slot = (ctrl->free_bitmap[type][0] & mask) != 0 ? 0 : 1;
+        // Scale down duration for faster simulation (divide by 10000 to handle large durations)
         uint32_t raw_duration = g_basic_buf[task_id & RING_MASK].duration;
         uint32_t jitter_mask = g_basic_buf[task_id & RING_MASK].jitter_mask;
 
+        // Set executor's tasks and duration
         g_executors[exe_type][core].tasks[slot] = task_id;
         if (dispatch_submit(ctrl, type, exe_type, task_id, core, slot, mask, raw_duration,
                             jitter_mask) != 0) {
@@ -208,8 +219,14 @@ int dispatch(int tid)
     return total_sent;
 }
 
+/*
+ * Dispatch worker thread entry point
+ * Runs the dispatch loop for task distribution
+ */
 void *dispatch_worker(void *arg)
 {
+    // atomic_store(&g_is_done, true);
+    // return NULL;
     int tid = (int)(intptr_t)arg;
     int total_sent = 0;
     uint64_t start_ns = platform_time_ns();

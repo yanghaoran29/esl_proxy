@@ -9,10 +9,9 @@
 #include <string.h>
 #include <stdatomic.h>
 
-task_state *g_state_buf;
+task_state* g_state_buf;
 
-void init_state_buf(void)
-{
+void init_state_buf(void) {
     void *buf = NULL;
     size_t size = 0;
 
@@ -31,10 +30,10 @@ void init_state_buf(void)
 
 extern atomic_int g_min_uncomplete_task;
 extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
-extern atomic_bool g_orch_is_done;
+extern _Atomic bool g_orch_is_done;
 extern _Atomic bool g_is_done;
 
-uint16_t g_predecessor_cnt[RING_SIZE];
+uint16_t  g_predecessor_cnt[RING_SIZE];
 uint16_t g_commit_task_id = 0;
 uint16_t g_completed_task_cnt = 0;
 
@@ -46,11 +45,9 @@ static inline int ready_queue_index(task_type_t type)
     return (int)type;
 }
 
-static inline bool update_task_state(uint16_t cnt, uint16_t *cq_buf)
-{
-    if (cnt <= 0) {
+static inline bool update_task_state(uint16_t cnt, uint16_t* cq_buf) {
+    if (cnt <= 0)
         return false;
-    }
 
     for (uint32_t j = 0; j < cnt; j++) {
         uint16_t task_id = cq_buf[j];
@@ -72,8 +69,7 @@ static inline bool update_task_state(uint16_t cnt, uint16_t *cq_buf)
     return true;
 }
 
-void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE])
-{
+void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) {
     uint16_t end = atomic_load_explicit(&g_task_id, memory_order_acquire);
     uint16_t commit = g_commit_task_id;
     uint16_t tmp = commit + ADD_BATCH_SIZE;
@@ -83,6 +79,7 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE])
         platform_consume_task_slot(task_idx);
         struct predecessor_list *ptr = &g_predecessors[task_idx];
         if (ptr->cnt <= 0) {
+            // WORKER_LOGF("ready, task_id,%u, task_idx,%u, ready_cnt,%u", g_commit_task_id, task_idx, *ready_cnt);
             task_type_t type = g_basic_buf[task_idx & RING_MASK].type;
             int q = ready_queue_index(type);
             rq_buf[q][ready_cnt[q]] = commit;
@@ -95,7 +92,8 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE])
         }
         uint16_t precessor_id = 0;
         uint16_t predecessor_cnt = 0;
-        while (ptr->cnt > 0) {
+        while (ptr->cnt > 0)
+        {
             precessor_id = *(ptr->exp);
             uint16_t precessor_idx = precessor_id;
             if (g_state_buf[precessor_idx].state != TASK_STATUS_COMPLETED) {
@@ -124,8 +122,7 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE])
     }
 }
 
-void send_2_ready_queue(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE])
-{
+void send_2_ready_queue(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) {
     for (uint16_t j = 0; j < 2; j++) {
         int target_ctrl = 0;
         queue_t *rq = &g_ctrl_t[target_ctrl].ready_queue[j];
@@ -136,9 +133,7 @@ void send_2_ready_queue(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZ
     }
 }
 
-void resolve_dep(uint16_t cnt, uint16_t *cq_buf, uint16_t rq_buf[][LOCAL_BUFFER_SIZE],
-                 uint16_t *ready_cnt)
-{
+void resolve_dep(uint16_t cnt, uint16_t* cq_buf, uint16_t rq_buf[][LOCAL_BUFFER_SIZE], uint16_t* ready_cnt) {
     for (uint32_t j = 0; j < cnt; j++) {
         uint16_t task_id = cq_buf[j];
         uint16_t idx = task_id & RING_MASK;
@@ -162,8 +157,7 @@ void resolve_dep(uint16_t cnt, uint16_t *cq_buf, uint16_t rq_buf[][LOCAL_BUFFER_
     }
 }
 
-void deal_completed_queue(void)
-{
+void deal_completed_queue() {
     platform_invalidate_sched_snapshot();
     for (int i = 0; i < DISPATCH_THREAD_CNT; i++) {
         uint16_t cq_buf[CUTTER_BATCH_SIZE];
@@ -173,6 +167,10 @@ void deal_completed_queue(void)
         uint16_t cnt = CUTTER_BATCH_SIZE;
         batch_dequeue(cq, cq_buf, &cnt);
         g_completed_task_cnt += cnt;
+        // for (size_t i = 0; i < cnt; i++)
+        // {
+        //     WORKER_LOGF("cutter, completed_task_id,%d ", cq_buf[i]);
+        // }
         update_task_state(cnt, cq_buf);
         add_successors(ready_cnt, rq_buf);
         resolve_dep(cnt, cq_buf, rq_buf, ready_cnt);
