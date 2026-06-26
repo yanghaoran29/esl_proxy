@@ -37,10 +37,6 @@ void dispatch_drain_completions(int tid, uint16_t *task_ids, int *complete_cnt, 
 void dispatch_after_push_completed(int tid, int complete_cnt);
 uint32_t dispatch_executor_duration(uint32_t raw_duration);
 int dispatch_stall_limit(void);
-void dispatch_loop_enter(int tid, uint64_t start_ns);
-void dispatch_loop_phase2_begin(int tid);
-void dispatch_stall(int tid, int prev_completed);
-void dispatch_loop_exit(int tid, uint64_t elapsed_ns);
 
 extern int g_completed_subtask_cnt;
 

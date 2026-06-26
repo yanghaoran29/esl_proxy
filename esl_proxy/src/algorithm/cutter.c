@@ -46,35 +46,6 @@ static inline int ready_queue_index(task_type_t type)
     return (int)type;
 }
 
-static inline void cutter_loop_enter(void)
-{
-    esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_LOOP_ENTER, 0, 0, 0);
-}
-
-static inline void cutter_loop_iter(uint32_t loop_iter)
-{
-    if ((loop_iter & 0x3FFFFU) == 0) {
-        esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_LOOP, loop_iter,
-                          (uint64_t)g_commit_task_id,
-                          (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire));
-    }
-}
-
-static inline void cutter_drain_begin(uint16_t prev_commit)
-{
-    esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_DRAIN, prev_commit,
-                      (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire), 0);
-}
-
-static inline void cutter_stall(uint16_t cur_commit)
-{
-    MAIN_LOGF("cutter stall timeout: commit=%u task_id=%u", (unsigned)cur_commit,
-              (unsigned)atomic_load(&g_task_id));
-    esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_DRAIN, (uint64_t)cur_commit,
-                      (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire),
-                      0xDEADBEEFULL);
-}
-
 static inline bool update_task_state(uint16_t cnt, uint16_t *cq_buf)
 {
     if (cnt <= 0) {
@@ -223,15 +194,20 @@ void cutter_loop_run(void)
     if (g_state_buf == NULL) {
         init_state_buf();
     }
-    cutter_loop_enter();
+    platform_cutter_loop_enter();
     while (!atomic_load(&g_is_done)) {
-        cutter_loop_iter(loop_iter);
+        if ((loop_iter & 0x3FFFFU) == 0) {
+            platform_cutter_loop_iter(
+                loop_iter, g_commit_task_id,
+                (uint32_t)atomic_load_explicit(&g_task_id, memory_order_acquire));
+        }
         loop_iter++;
         cutter_loop_once();
         platform_scheduler_idle();
     }
     prev_commit = g_commit_task_id;
-    cutter_drain_begin(prev_commit);
+    platform_cutter_drain_begin(
+        prev_commit, (uint32_t)atomic_load_explicit(&g_task_id, memory_order_acquire));
     while (g_commit_task_id < atomic_load_explicit(&g_task_id, memory_order_acquire)) {
         cutter_loop_once();
         uint16_t cur_commit = g_commit_task_id;
@@ -241,7 +217,11 @@ void cutter_loop_run(void)
         } else {
             stall++;
             if (stall > 10000) {
-                cutter_stall(cur_commit);
+                MAIN_LOGF("cutter stall timeout: commit=%u task_id=%u", (unsigned)cur_commit,
+                          (unsigned)atomic_load(&g_task_id));
+                platform_cutter_stall_trace(cur_commit,
+                                            (uint32_t)atomic_load_explicit(&g_task_id,
+                                                                           memory_order_acquire));
                 break;
             }
         }

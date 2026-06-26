@@ -112,6 +112,16 @@ void platform_scheduler_idle(void);
 
 #ifdef ESL_PROXY_ONBOARD
 
+void platform_cutter_loop_enter(void);
+void platform_cutter_loop_iter(uint32_t loop_iter, uint16_t commit_task_id, uint32_t task_id);
+void platform_cutter_drain_begin(uint16_t prev_commit, uint32_t task_id);
+void platform_cutter_stall_trace(uint16_t cur_commit, uint32_t task_id);
+
+void platform_dispatch_loop_enter(int tid, uint64_t start_ns);
+void platform_dispatch_loop_phase2_begin(int completed_cnt, uint32_t task_id);
+void platform_dispatch_stall_trace(int completed_cnt, uint32_t task_id, int prev_completed);
+void platform_dispatch_loop_exit(int tid, uint64_t elapsed_ns);
+
 extern volatile uint64_t *g_trace_base;
 
 void esl_onboard_trace_set_base(volatile uint64_t *base);
@@ -132,6 +142,56 @@ static inline void esl_onboard_trace(int thread, int stage, uint64_t aux_a, uint
     (void)aux_a;
     (void)aux_b;
     (void)aux_c;
+}
+
+static inline void platform_cutter_loop_enter(void)
+{
+}
+
+static inline void platform_cutter_loop_iter(uint32_t loop_iter, uint16_t commit_task_id,
+                                             uint32_t task_id)
+{
+    (void)loop_iter;
+    (void)commit_task_id;
+    (void)task_id;
+}
+
+static inline void platform_cutter_drain_begin(uint16_t prev_commit, uint32_t task_id)
+{
+    (void)prev_commit;
+    (void)task_id;
+}
+
+static inline void platform_cutter_stall_trace(uint16_t cur_commit, uint32_t task_id)
+{
+    (void)cur_commit;
+    (void)task_id;
+}
+
+static inline void platform_dispatch_loop_enter(int tid, uint64_t start_ns)
+{
+    (void)tid;
+    (void)start_ns;
+}
+
+static inline void platform_dispatch_loop_phase2_begin(int completed_cnt, uint32_t task_id)
+{
+    (void)completed_cnt;
+    (void)task_id;
+}
+
+static inline void platform_dispatch_stall_trace(int completed_cnt, uint32_t task_id,
+                                                 int prev_completed)
+{
+    (void)completed_cnt;
+    (void)task_id;
+    (void)prev_completed;
+}
+
+static inline void platform_dispatch_loop_exit(int tid, uint64_t elapsed_ns)
+{
+    (void)tid;
+    (void)elapsed_ns;
 }
 
 #endif

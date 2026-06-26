@@ -141,37 +141,6 @@ int dispatch_stall_limit(void)
     return 10000;
 }
 
-void dispatch_loop_enter(int tid, uint64_t start_ns)
-{
-    esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_LOOP_ENTER, (uint64_t)tid, 0, 0);
-    esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE1, start_ns, 0, 0);
-}
-
-void dispatch_loop_phase2_begin(int tid)
-{
-    (void)tid;
-    esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE2,
-                      (uint64_t)g_completed_cnt,
-                      (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire), 0);
-}
-
-void dispatch_stall(int tid, int prev_completed)
-{
-    (void)tid;
-    MAIN_LOGF("[scheduler] stall timeout: completed_cnt=%u task_id=%u", (unsigned)g_completed_cnt,
-              (unsigned)g_task_id);
-    esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_STALL, (uint64_t)g_completed_cnt,
-                      (uint64_t)g_task_id, (uint64_t)prev_completed);
-    (void)prev_completed;
-}
-
-void dispatch_loop_exit(int tid, uint64_t elapsed_ns)
-{
-    (void)tid;
-    (void)elapsed_ns;
-    platform_sched_stats_flush();
-}
-
 static inline void push_2_completed_queue(int tid)
 {
     uint16_t task_id[DISPATCH_COMPLETE_BATCH];
@@ -247,13 +216,15 @@ void *dispatch_worker(void *arg)
     int prev;
     int count;
 
-    dispatch_loop_enter(tid, start_ns);
+    platform_dispatch_loop_enter(tid, start_ns);
     while (!atomic_load(&g_orch_is_done)) {
         total_sent += dispatch(tid);
         dispatch_poll(tid);
         spin_wait();
     }
-    dispatch_loop_phase2_begin(tid);
+    platform_dispatch_loop_phase2_begin((int)g_completed_cnt,
+                                        (uint32_t)atomic_load_explicit(&g_task_id,
+                                                                       memory_order_acquire));
     prev = g_completed_cnt;
     count = dispatch_stall_limit();
     while (atomic_load(&g_completed_cnt) <
@@ -264,7 +235,10 @@ void *dispatch_worker(void *arg)
         if (prev == g_completed_cnt) {
             count--;
             if (count < 0) {
-                dispatch_stall(tid, prev);
+                MAIN_LOGF("[scheduler] stall timeout: completed_cnt=%u task_id=%u",
+                          (unsigned)g_completed_cnt, (unsigned)g_task_id);
+                platform_dispatch_stall_trace((int)g_completed_cnt,
+                                              (uint32_t)atomic_load(&g_task_id), prev);
                 break;
             }
         } else {
@@ -283,7 +257,7 @@ void *dispatch_worker(void *arg)
         MAIN_LOGF("[scheduler] duration = %llu ns", (unsigned long long)elapsed_ns);
         MAIN_LOGF("[scheduler] task_tp = %f MTasks/s",
                   (float)(g_completed_cnt * 1000.0 / elapsed_ns));
-        dispatch_loop_exit(tid, elapsed_ns);
+        platform_dispatch_loop_exit(tid, elapsed_ns);
     }
     return NULL;
 }

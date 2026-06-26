@@ -79,5 +79,55 @@ void esl_onboard_trace(int thread, int stage, uint64_t aux_a, uint64_t aux_b, ui
     cache_flush_range((const void *)slot, ESL_TRACE_THREAD_SLOTS * sizeof(uint64_t));
 }
 
+void platform_cutter_loop_enter(void)
+{
+    esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_LOOP_ENTER, 0, 0, 0);
+}
+
+void platform_cutter_loop_iter(uint32_t loop_iter, uint16_t commit_task_id, uint32_t task_id)
+{
+    if ((loop_iter & 0x3FFFFU) == 0) {
+        esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_LOOP, loop_iter,
+                          (uint64_t)commit_task_id, (uint64_t)task_id);
+    }
+}
+
+void platform_cutter_drain_begin(uint16_t prev_commit, uint32_t task_id)
+{
+    esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_DRAIN, prev_commit, (uint64_t)task_id,
+                      0);
+}
+
+void platform_cutter_stall_trace(uint16_t cur_commit, uint32_t task_id)
+{
+    esl_onboard_trace(ESL_AICPU_ROLE_CUTTER, ESL_TRACE_CUTTER_DRAIN, (uint64_t)cur_commit,
+                      (uint64_t)task_id, 0xDEADBEEFULL);
+}
+
+void platform_dispatch_loop_enter(int tid, uint64_t start_ns)
+{
+    esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_LOOP_ENTER, (uint64_t)tid, 0, 0);
+    esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE1, start_ns, 0, 0);
+}
+
+void platform_dispatch_loop_phase2_begin(int completed_cnt, uint32_t task_id)
+{
+    esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_PHASE2, (uint64_t)completed_cnt,
+                      (uint64_t)task_id, 0);
+}
+
+void platform_dispatch_stall_trace(int completed_cnt, uint32_t task_id, int prev_completed)
+{
+    esl_onboard_trace(ESL_AICPU_ROLE_DISPATCH, ESL_TRACE_DISPATCH_STALL, (uint64_t)completed_cnt,
+                      (uint64_t)task_id, (uint64_t)prev_completed);
+}
+
+void platform_dispatch_loop_exit(int tid, uint64_t elapsed_ns)
+{
+    (void)tid;
+    (void)elapsed_ns;
+    platform_sched_stats_flush();
+}
+
 #endif /* ESL_PROXY_ONBOARD */
 #endif /* ESL_PROXY_ONBOARD || ESL_PROXY_ONBOARD_HOST */

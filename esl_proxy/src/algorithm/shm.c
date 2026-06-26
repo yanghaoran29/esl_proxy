@@ -16,7 +16,6 @@ atomic_int g_min_uncomplete_task = 0;
 atomic_int g_completed_cnt = 0;
 atomic_bool g_is_done = false;
 atomic_bool g_orch_is_done = false;
-atomic_flag g_lock_buf[RING_SIZE];
 
 struct task_desc g_basic_buf[RING_SIZE];
 struct task_payload g_task_payload[RING_SIZE];

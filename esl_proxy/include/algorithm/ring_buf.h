@@ -28,7 +28,6 @@
 
 extern atomic_int g_task_id;
 extern atomic_int g_min_uncomplete_task;
-extern atomic_flag g_lock_buf[RING_SIZE];
 extern struct task_desc g_basic_buf[RING_SIZE];
 extern struct task_payload g_task_payload[RING_SIZE];
 extern struct predecessor_list g_predecessors[RING_SIZE];
@@ -85,18 +84,6 @@ static inline void add_scalar(uint16_t task_id, int64_t t)
     int idx = (int)g_task_payload[slot].scalar_cnt++;
 
     g_task_payload[slot].scalars[idx] = t;
-}
-
-static inline void lock(int slotIdx)
-{
-    while (atomic_flag_test_and_set_explicit(&g_lock_buf[slotIdx], memory_order_acquire)) {
-        spin_wait();
-    }
-}
-
-static inline void unlock(int slotIdx)
-{
-    atomic_flag_clear_explicit(&g_lock_buf[slotIdx], memory_order_release);
 }
 
 static inline void task_payload_materialize(uint16_t task_id)
