@@ -85,6 +85,8 @@ build_aicpu() {
   fi
 
   local SRC_FILES="${ONBOARD_SRC}/npu_hal.c"
+  SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/cache_ops.c"
+  SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/queue_cache_hooks.c"
   SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/onboard_log.c"
   SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/onboard_trace.c"
   SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/onboard_trace_device.c"

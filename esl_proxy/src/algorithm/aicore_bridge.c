@@ -7,7 +7,6 @@
 #include "dispatch.h"
 #include "executor.h"
 #include "handshake.h"
-#include "memory_barrier.h"
 #include "platform.h"
 #include "platform_config.h"
 #include "platform_regs.h"
@@ -54,12 +53,6 @@ static void aicore_bridge_mark_slot_complete(int exe_type, int core, int slot, u
     }
     platform_reg_task_ack(reg_addr, reg_task);
     g_ctrl_t[0].msg_bitmap[exe_type][slot] |= mask;
-    {
-        uint64_t *field = &g_ctrl_t[0].msg_bitmap[exe_type][slot];
-
-        cache_flush_range((const void *)field, sizeof(uint64_t));
-        OUT_OF_ORDER_STORE_BARRIER();
-    }
     g_executors[exe_type][core].idx = (uint8_t)AIC_OSTD;
     g_executors[exe_type][core].tasks[slot] = EXEC_SLOT_EMPTY;
 }

@@ -76,6 +76,10 @@ void platform_main_log_vwrite(int line, const char *fmt, va_list args);
 void cache_invalidate_range(const void *addr, size_t size);
 void cache_flush_range(const void *addr, size_t size);
 
+/* Shared queue (cutter/dispatch) cache hooks. sim: no-op; onboard: civac/cvac. */
+void platform_queue_lock_prepare(queue_t *queue);
+void platform_queue_unlock_publish(queue_t *queue);
+
 /* Onboard tracing / loop-stage hooks. Backend-provided: the onboard backend writes
  * the device trace buffer (onboard_trace_device.c); the sim backend supplies no-op
  * definitions (sim/onboard_trace_sim.c). No #ifdef in this shared header. */

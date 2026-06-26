@@ -66,12 +66,6 @@ static inline void get_free_exe(int tid)
     for (int i = 0; i < EXE_TYPE_CNT; i++) {
         for (int j = 0; j < AIC_OSTD; j++) {
             g_ctrl_t[tid].free_bitmap[i][j] |= g_ctrl_t[tid].msg_bitmap[i][j];
-            {
-                uint64_t *field = &g_ctrl_t[tid].free_bitmap[i][j];
-
-                cache_flush_range((const void *)field, sizeof(uint64_t));
-                OUT_OF_ORDER_STORE_BARRIER();
-            }
         }
     }
     set_mix(tid);
@@ -122,23 +116,11 @@ int dispatch_submit(ctrl_t *ctrl, int type, int exe_type, uint16_t task_id, int 
 
     // Clear the free bit for this core/slot combination (mark as busy)
     ctrl->free_bitmap[type][slot] &= ~mask;
-    {
-        uint64_t *field = &ctrl->free_bitmap[type][slot];
-
-        cache_flush_range((const void *)field, sizeof(uint64_t));
-        OUT_OF_ORDER_STORE_BARRIER();
-    }
 
     int rc = aicore_bridge_dispatch_task(g_runtime, (int)ctrl->tid, task_id, core, slot, exe_type,
                                          0);
     if (rc != 0) {
         ctrl->free_bitmap[type][slot] |= mask;
-        {
-            uint64_t *field = &ctrl->free_bitmap[type][slot];
-
-            cache_flush_range((const void *)field, sizeof(uint64_t));
-            OUT_OF_ORDER_STORE_BARRIER();
-        }
         g_executors[exe_type][core].tasks[slot] = EXEC_SLOT_EMPTY;
     }
     return rc;
@@ -182,7 +164,7 @@ static inline void push_2_completed_queue(int tid)
     /* 回收完成：解码 msg_bitmap → task_ids，入 completed_queue */
     dispatch_drain_completions(tid, task_id, &complete_cnt, DISPATCH_COMPLETE_BATCH);
     batch_enqueue(&g_ctrl_t[tid].completed_queue, task_id, (uint16_t)complete_cnt);
-    atomic_fetch_add_explicit(&g_completed_cnt, complete_cnt, memory_order_acquire);
+    atomic_fetch_add_explicit(&g_completed_cnt, complete_cnt, memory_order_release);
     /* publish g_completed_cnt 更新，使 cutter/orch 核看到 dispatch 推进 */
     dispatch_after_push_completed(tid, complete_cnt);
 }

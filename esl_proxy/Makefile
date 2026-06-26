@@ -79,8 +79,10 @@ SRCS := \
 	src/platform/sim/runtime_setup.c \
 	src/platform/sim/platform_bringup.c \
 	src/platform/sim/platform_regs.c \
+	src/platform/sim/cache_ops.c \
 	src/platform/sim/onboard_trace_sim.c \
 	src/platform/sim/platform_sim.c \
+	src/platform/sim/queue_cache_hooks.c \
 	src/algorithm/manager.c \
 	src/algorithm/log.c \
 	src/algorithm/shm.c

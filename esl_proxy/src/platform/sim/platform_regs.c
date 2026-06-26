@@ -51,20 +51,6 @@ uint64_t get_platform_regs(void)
     return g_platform_regs;
 }
 
-void cache_invalidate_range(const void *addr, size_t size)
-{
-    (void)addr;
-    (void)size;
-    __asm__ __volatile__("" ::: "memory");
-}
-
-void cache_flush_range(const void *addr, size_t size)
-{
-    (void)addr;
-    (void)size;
-    __asm__ __volatile__("" ::: "memory");
-}
-
 uint64_t read_reg(uint64_t reg_base_addr, RegId reg)
 {
     SimWorkerReg *wr;

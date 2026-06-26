@@ -108,7 +108,6 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) 
             const uint16_t slot = (uint16_t)(task_idx & RING_MASK);
 
             cache_flush_range(&g_predecessor_cnt[slot], sizeof(g_predecessor_cnt[slot]));
-            OUT_OF_ORDER_STORE_BARRIER();
         }
         if (predecessor_cnt <= 0) {
             task_type_t type = g_basic_buf[task_idx & RING_MASK].type;
@@ -152,7 +151,6 @@ void resolve_dep(uint16_t cnt, uint16_t* cq_buf, uint16_t rq_buf[][LOCAL_BUFFER_
                 const uint16_t slot = (uint16_t)(succ_id & RING_MASK);
 
                 cache_flush_range(&g_predecessor_cnt[slot], sizeof(g_predecessor_cnt[slot]));
-                OUT_OF_ORDER_STORE_BARRIER();
             }
             WORKER_LOGF("cutter, task_id,%u, successor_id,%u, predecessor_cnt,%u", task_id, succ_id,
                         pred_left);

@@ -42,7 +42,6 @@ static int wait_handshake_field(volatile uint32_t *field, uint32_t expect)
     uint64_t spins;
 
     for (spins = 0; spins < HANDSHAKE_SPIN_MAX; ++spins) {
-        cache_invalidate_range((const void *)field, sizeof(*field));
         if (*field == expect) {
             return 1;
         }

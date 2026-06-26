@@ -114,14 +114,10 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
         atomic_store_explicit(&g_predecessor_ring.tail, idx + 1, memory_order_relaxed);
         *idx = target[i];
         cache_flush_range((const void *)idx, sizeof(uint16_t));
-        OUT_OF_ORDER_STORE_BARRIER();
         cnt++;
     }
     ptr->cnt = cnt;
-    cache_flush_range(&g_basic_buf[slotIdx], sizeof(g_basic_buf[slotIdx]));
     cache_flush_range(&g_predecessors[task_id], sizeof(g_predecessors[task_id]));
-    cache_flush_range(&g_predecessor_cnt[slotIdx], sizeof(g_predecessor_cnt[slotIdx]));
-    OUT_OF_ORDER_STORE_BARRIER();
 
     return cnt;
 }

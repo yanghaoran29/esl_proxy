@@ -20,7 +20,6 @@
 #include "queue.h"
 #include "ring_buf.h"
 #include "platform.h"
-#include "memory_barrier.h"
 
 extern atomic_int g_task_id;
 extern atomic_int g_min_uncomplete_task;
@@ -39,7 +38,6 @@ static inline void publish_task_slot(uint16_t task_id)
         cache_flush_range(&g_predecessors[task_id], sizeof(g_predecessors[task_id]));
     }
     cache_flush_range(&g_predecessor_cnt[slot], sizeof(g_predecessor_cnt[slot]));
-    OUT_OF_ORDER_STORE_BARRIER();
 }
 
 static inline void invalidate_sched_snapshot(void)
@@ -64,12 +62,11 @@ static inline void publish_counters(void)
     cache_flush_range(&g_completed_cnt, sizeof(g_completed_cnt));
     cache_flush_range(&g_orch_is_done, sizeof(g_orch_is_done));
     cache_flush_range(&g_predecessor_ring.tail, sizeof(g_predecessor_ring.tail));
-    OUT_OF_ORDER_STORE_BARRIER();
 }
 
 /* advance_task_id: publish the just-finished task slot, bump g_task_id, then
  * publish counters. Replaces the old platform_advance_task_id() wrapper.
- * sim: cache_* are no-ops → atomic_fetch_add only. onboard: full flush + dmb. */
+ * sim: cache_* are no-ops → atomic_fetch_add only. onboard: full flush. */
 static inline void advance_task_id(void)
 {
     const uint16_t finished = (uint16_t)atomic_load_explicit(&g_task_id, memory_order_relaxed);

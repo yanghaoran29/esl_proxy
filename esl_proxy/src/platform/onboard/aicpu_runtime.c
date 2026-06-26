@@ -140,14 +140,8 @@ int32_t esl_aicpu_execute(EslRuntime *runtime) {
             (uint64_t)atomic_load_explicit(&g_task_id, memory_order_acquire),
             (uint64_t)g_subtask_cnt, 0);
         atomic_store_explicit(&g_orch_is_done, true, memory_order_release);
-        cache_flush_range(&g_task_id, sizeof(g_task_id));
         cache_flush_range(&g_orch_is_done, sizeof(g_orch_is_done));
-        cache_flush_range(g_basic_buf, sizeof(g_basic_buf));
-        cache_flush_range(g_predecessors, sizeof(g_predecessors));
-        cache_flush_range(g_successor_buf, sizeof(g_successor_buf));
-        cache_flush_range(g_predecessor_cnt, sizeof(g_predecessor_cnt));
-        cache_flush_range(g_state_buf, sizeof(task_state) * RING_SIZE);
-        cache_flush_range(&g_commit_task_id, sizeof(g_commit_task_id));
+        cache_flush_range(&g_task_id, sizeof(g_task_id));
         esl_onboard_trace(idx, ESL_TRACE_SIGNAL_ORCH_DONE, 0, 0, 0);
         break;
     default:
