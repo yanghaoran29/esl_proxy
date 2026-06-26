@@ -164,12 +164,7 @@ void main_log_write(int line, const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    
-    // Output to stdout only
-    fprintf(stdout, "[main:%d] ", line);
-    vfprintf(stdout, fmt, args);
-    fprintf(stdout, "\n");
-    
+    platform_main_log_vwrite(line, fmt, args);
     va_end(args);
 }
 #endif

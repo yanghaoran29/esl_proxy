@@ -128,29 +128,29 @@ static inline void tm_deps_init(void) {
 }
 
 static inline void tm_in_ptr(uint16_t tid, const Tensor *t) {
-    add_tensor_addr(tid, t->buffer_addr);
+    add_tensor(tid, t);
     tm_pending_push(t, TM_PEND_IN);
 }
 
 static inline void tm_in_ro_ptr(uint16_t tid, const Tensor *t) {
-    add_tensor_addr(tid, t->buffer_addr);
+    add_tensor(tid, t);
 }
 
 static inline void tm_out_ro_ptr(uint16_t tid, const Tensor *t) {
-    add_tensor_addr(tid, t->buffer_addr);
+    add_tensor(tid, t);
 }
 
 static inline void tm_inout_ro_ptr(uint16_t tid, const Tensor *t) {
-    add_tensor_addr(tid, t->buffer_addr);
+    add_tensor(tid, t);
 }
 
 static inline void tm_out_ptr(uint16_t tid, const Tensor *t) {
-    add_tensor_addr(tid, t->buffer_addr);
+    add_tensor(tid, t);
     tm_pending_push(t, TM_PEND_OUT);
 }
 
 static inline void tm_inout_ptr(uint16_t tid, const Tensor *t) {
-    add_tensor_addr(tid, t->buffer_addr);
+    add_tensor(tid, t);
     tm_pending_push(t, TM_PEND_INOUT);
 }
 

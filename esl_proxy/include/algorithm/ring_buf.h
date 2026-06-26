@@ -24,11 +24,12 @@
 #include "spin.h"
 
 #include "tensor.h"
+#include "platform.h"
 
 extern atomic_int g_task_id;
 extern atomic_int g_min_uncomplete_task;
-extern atomic_flag g_lock_buf[RING_SIZE];
 extern struct task_desc g_basic_buf[RING_SIZE];
+extern struct task_payload g_task_payload[RING_SIZE];
 extern struct predecessor_list g_predecessors[RING_SIZE];
 extern struct ring_buf g_predecessor_ring;
 extern struct node_list g_successor_buf[RING_SIZE];
@@ -46,49 +47,54 @@ struct ring_buf {
 
 static inline void ring_buf_init(void)
 {
+    uint16_t *head = NULL;
+
     for (size_t i = 0; i < RING_SIZE; i++) {
         g_successor_buf[i].next = NULL;
     }
-    g_predecessor_ring.head = malloc(sizeof(uint16_t) * NODE_BUFF_SIZE);
+    platform_predecessor_ring_init(&head);
+    g_predecessor_ring.head = head;
     atomic_store(&g_predecessor_ring.tail, g_predecessor_ring.head);
     atomic_store(&g_predecessor_ring.start, g_predecessor_ring.head);
 }
 
-/* input/output/inout tensors are all recorded the same way: append the
- * tensor's buffer_addr to data[] and bump tensor_cnt. task_desc keeps a single
- * flat data[]/tensor_cnt with no direction field, so there is one implementation
- * here; the dependency direction (when needed) is tracked by the tensormap
- * layer, not the ring buffer. The distinct add_input/output/inout spellings are
- * kept only for call-site readability. */
-static inline void add_tensor_addr(uint16_t task_id, uint64_t addr)
+/* input/output/inout tensors are all recorded the same way: append the full
+ * Tensor into the task payload (g_task_payload[slot].tensors[]) and bump
+ * tensor_cnt. esl_build_dispatch_payload reads these back to forward shape +
+ * buffer_addr + owner_task_id to the kernel, so the whole Tensor is stored (not
+ * just buffer_addr). Dependency direction (when needed) is tracked by the
+ * tensormap layer, not the ring buffer; the distinct add_input/output/inout
+ * spellings are kept only for call-site readability. */
+static inline void add_tensor(uint16_t task_id, const Tensor *t)
 {
-    int idx = g_basic_buf[task_id & RING_MASK].tensor_cnt++;
-    g_basic_buf[task_id & RING_MASK].data[idx] = addr;
+    const uint16_t slot = (uint16_t)(task_id & RING_MASK);
+    int idx = (int)g_task_payload[slot].tensor_cnt++;
+    g_task_payload[slot].tensors[idx] = *t;
 }
 
-/* Only buffer_addr is recorded, so the macros read that 8-byte field directly
- * instead of copying the whole 128B Tensor. (t).buffer_addr is valid for both
- * lvalue and rvalue arguments, e.g. add_input(id, view(x, ...)). */
-#define add_input(task_id, t)  add_tensor_addr((task_id), (t).buffer_addr)
-#define add_output(task_id, t) add_tensor_addr((task_id), (t).buffer_addr)
-#define add_inout(task_id, t)  add_tensor_addr((task_id), (t).buffer_addr)
+/* The temp copy makes (t) valid for both lvalue and rvalue arguments, e.g.
+ * add_input(id, view(x, ...)). */
+#define add_input(task_id, t)  do { Tensor _tm_t_ = (t); add_tensor((task_id), &_tm_t_); } while (0)
+#define add_output(task_id, t) do { Tensor _tm_t_ = (t); add_tensor((task_id), &_tm_t_); } while (0)
+#define add_inout(task_id, t)  do { Tensor _tm_t_ = (t); add_tensor((task_id), &_tm_t_); } while (0)
 
 static inline void add_scalar(uint16_t task_id, int64_t t)
 {
-    int idx = g_basic_buf[task_id & RING_MASK].scalar_cnt++;
-    g_basic_buf[task_id & RING_MASK].scalar[idx] = t;
+    const uint16_t slot = (uint16_t)(task_id & RING_MASK);
+    int idx = (int)g_task_payload[slot].scalar_cnt++;
+
+    g_task_payload[slot].scalars[idx] = t;
 }
 
-static inline void lock(int slotIdx)
+static inline void task_payload_materialize(uint16_t task_id)
 {
-    while (atomic_flag_test_and_set_explicit(&g_lock_buf[slotIdx], memory_order_acquire)) {
-        spin_wait();
+    const uint16_t slot = (uint16_t)(task_id & RING_MASK);
+    struct task_payload *pay = &g_task_payload[slot];
+    uint16_t i;
+
+    for (i = 0; i < pay->tensor_cnt; ++i) {
+        pay->tensors[i].owner_task_id = task_id;
     }
-}
-
-static inline void unlock(int slotIdx)
-{
-    atomic_flag_clear_explicit(&g_lock_buf[slotIdx], memory_order_release);
 }
 
 static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uint16_t start)
@@ -106,26 +112,43 @@ static int add_predecessors(uint16_t task_id, uint16_t target[], uint16_t n, uin
         if (target[i] < min_uncomplete_task)
             continue;
         WORKER_LOGF("succeed,task_id,%u,predecessor_id,%u,idx,%d", task_id, target[i], cnt);
-        uint16_t* idx = atomic_fetch_add(&g_predecessor_ring.tail, 1);
+        /* Reserve one uint16 slot. NOTE: atomic_fetch_add on an _Atomic(uint16_t*)
+         * advances by BYTES, not elements (GCC's __atomic treats the pointer as a
+         * byte address — confirmed on both the host gcc and the AICPU cross-
+         * compiler), which half-overwrites the previous slot and corrupts the
+         * dependency graph. Use explicit element-stride pointer arithmetic. */
+        uint16_t* idx = atomic_load_explicit(&g_predecessor_ring.tail, memory_order_relaxed);
+        atomic_store_explicit(&g_predecessor_ring.tail, idx + 1, memory_order_relaxed);
         *idx = target[i];
+        platform_publish_u16(idx);
         cnt++;
     }
     ptr->cnt = cnt;
+    task_payload_materialize(task_id);
+    platform_publish_task_slot(task_id);
     return cnt;
 }
 
-static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uint16_t duration)
+static inline bool new_task(uint32_t task_id, uint16_t type, uint16_t count, uint32_t duration_ns,
+                            uint32_t jitter_mask)
 {
-    while ((task_id - atomic_load(&g_min_uncomplete_task)) >= RING_SIZE ) {
+    while ((task_id - (uint32_t)atomic_load(&g_min_uncomplete_task)) >= RING_SIZE) {
+        platform_consume_min_uncomplete();
         MAIN_LOGF("[orchestration] task_id = %u g_min_uncomplete_task = %u", task_id, g_min_uncomplete_task);
         spin_wait();
     }
     if (count > 1)
         g_basic_buf[task_id & RING_MASK].mode = ORG_MODE_SPMD_SYNC;
-    g_basic_buf[task_id & RING_MASK].count = count; 
-    g_basic_buf[task_id & RING_MASK].duration = duration;
+    g_basic_buf[task_id & RING_MASK].type = (task_type_t)type;
+    g_basic_buf[task_id & RING_MASK].count = count;
+    g_basic_buf[task_id & RING_MASK].id = (uint16_t)task_id;
+    g_basic_buf[task_id & RING_MASK].duration = duration_ns;
+    g_basic_buf[task_id & RING_MASK].jitter_mask = jitter_mask;
+    g_task_payload[task_id & RING_MASK].tensor_cnt = 0;
+    g_task_payload[task_id & RING_MASK].scalar_cnt = 0;
     g_subtask_cnt += count;
     WORKER_LOGF("new,task_id,%u,type,%d,subtask_cnt,%d", task_id, type, count);
+    return true;
 }
 
 #endif /* DAG_RING_BUF_H */
