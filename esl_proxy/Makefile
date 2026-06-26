@@ -36,9 +36,10 @@ QWEN3_CASES := qwen3_dynamic_manual_scope.h qwen3_dynamic_tensormap.h
 
 CC       := cc
 # -MMD -MP emits a .d alongside each .o listing the headers it included, so a
-# change to any include/algorithm/*.h (e.g. tensormap.h) rebuilds the dependent objects.
+# change to any include/*.h (e.g. tensormap.h) rebuilds the dependent objects.
 CFLAGS   := -g -std=c11 -Wall -Wextra -pedantic -O2 -D_POSIX_C_SOURCE=199309L \
-	-I include/algorithm -I cases -DORCH_CASE=$(CASE) -MMD -MP -Wno-error=implicit-function-declaration
+	-I include/algorithm -I include/platform -I include/platform/sim -I include/swimlane \
+	-I cases -DORCH_CASE=$(CASE) -MMD -MP -Wno-error=implicit-function-declaration
 
 # -latomic is needed on Linux but not on macOS (clang)
 UNAME_S  := $(shell uname -s)
@@ -51,7 +52,7 @@ endif
 # All four cases use struct Tensor / tensormap helpers.
 # Qwen3 only: default spmd-4 tier; override via make QWEN3_SPMD_TIER=N.
 ifneq ($(filter $(CASE),$(QWEN3_CASES)),)
-QWEN3_SPMD_TIER ?= 2
+QWEN3_SPMD_TIER ?= 0
 CFLAGS   += -DQWEN3_SPMD_TIER=$(QWEN3_SPMD_TIER)
 endif
 
@@ -69,9 +70,16 @@ TARGET  := $(BIN_DIR)/esl_proxy
 
 SRCS := \
 	src/main.c \
-	src/algorithm/executor.c \
 	src/algorithm/dispatch.c \
 	src/algorithm/cutter.c \
+	src/algorithm/executor.c \
+	src/algorithm/handshake.c \
+	src/algorithm/dispatch_payload.c \
+	src/platform/sim/platform_init.c \
+	src/platform/sim/platform_regs.c \
+	src/platform/sim/cache_ops.c \
+	src/platform/sim/onboard_trace_sim.c \
+	src/platform/sim/platform_sim.c \
 	src/algorithm/manager.c \
 	src/algorithm/log.c \
 	src/algorithm/shm.c
@@ -86,6 +94,9 @@ ORCH_CONFIG := case=$(CASE) tier=$(QWEN3_SPMD_TIER) log=$(MAIN_LOG)
 .PHONY: all run clean force test-tensormap
 
 all: $(TARGET)
+
+gen-dag:
+	bash ../tools/gen_all_dags.sh
 
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CC) $(CFLAGS) $(OBJS) -o $@ $(LDFLAGS)

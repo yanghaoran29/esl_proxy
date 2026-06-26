@@ -21,11 +21,16 @@ extern executor_t g_executors[EXE_TYPE_CNT][AIC_CNT];
 
 void executor_init(void)
 {
+    executors_init_slots_empty();
+}
+
+void executors_init_slots_empty(void)
+{
     for (int exe_type = 0; exe_type < EXE_TYPE_CNT; exe_type++) {
         for (int core = 0; core < AIC_CNT; core++) {
             g_executors[exe_type][core].idx = AIC_OSTD;
             for (int i = 0; i < AIC_OSTD; i++) {
-                g_executors[exe_type][core].tasks[i] = 0;
+                g_executors[exe_type][core].tasks[i] = EXEC_SLOT_EMPTY;
                 g_executors[exe_type][core].block_idx[i] = 0;
                 g_executors[exe_type][core].duration[i] = 0;
                 g_executors[exe_type][core].base[i] = 0;
