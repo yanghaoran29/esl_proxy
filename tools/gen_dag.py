@@ -160,7 +160,7 @@ def render_dot(dot_path, output_path, format='svg'):
 def main():
     log_files = [
         'esl_proxy/log/pto._thread_0.csv',
-        # 'esl_proxy/log/pto._thread_2.csv',
+        'esl_proxy/log/pto._thread_1.csv',
     ]
 
     for log_file in log_files:

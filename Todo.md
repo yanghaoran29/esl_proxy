@@ -1,15 +1,14 @@
 # Todo
  - [x] Orchestrator性能计算
  - [x] Scheduler性能计算
- - [x] 完善DEBUG信息（运行时日志 & 日志可视化）
+ - [x] 支持DEBUG（运行时日志 & 日志可视化）
  - [x] Orchestrator传递构图信息，Cutter执行构图
- - [ ] 任务调度开销计算（任务理想执行时延）
+ - [x] 支持AICORE交互，任务调度开销计算（任务理想执行时延）
+ - [ ] 支持内存管理
  - [ ] 支持MIX调度
  - [ ] 支持SPMD调度
  - [ ] Tensor Map性能基线
- - [ ] 依赖合并（a->b,b->c,a->c = b->c)
- - [ ] Cutter分批构图, 分Cluster（task_id & 0x1)
- - [ ] 支持AICORE交互
- - [ ] 对比上一版性能收益
+ - [ ] 依赖合并（a->b, b->c, a->c = b->c)
+ - [ ] Cutter分批构图, 分Cluster（task_id & (0x1 << 16))
+ - [ ] 对比上一版性能收益(无限图)
  - [ ] 支持EDA
- - [ ] 支持内存管理

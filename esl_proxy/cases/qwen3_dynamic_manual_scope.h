@@ -120,7 +120,7 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
     uint16_t v_cnt_per_tile[6];
     uint16_t os_by_b[90][4];
     uint16_t os_cnt_by_b[90];
-    uint16_t batch_predecessors[24];
+    uint16_t batch_predecessors[90];
     for (int64_t b0 = 0; b0 < batch_padded; b0 += 16) {
         const size_t tix = (size_t)(b0 / 16);
         Tensor normed_tile = alloc_tensors((uint32_t[2]){16, 5120}, 2, BFLOAT16);
@@ -271,8 +271,6 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             qk_ids[ci] = g_task_id;
             g_task_id++;
 
-
-
             new_task(g_task_id, TASK_TYPE_VECTOR, cur_blocks, DUR_SOFTMAX);
             Tensor cur_li_piece = view(all_cur_li, base * 1024u, 0u, (uint32_t)(cur_blocks * 1024), 1u);
             Tensor cur_mi_piece = view(all_cur_mi, base * 1024u, 0u, (uint32_t)(cur_blocks * 1024), 1u);
@@ -353,10 +351,6 @@ void aicpu_orchestration_entry(const uint64_t orch_args) {
             uint16_t idx = 0;
             for (int64_t row = 0; row < cur_valid; row++) {
                 const int64_t bb = b0 + row;
-                // for (size_t i = 0; i < os_cnt_by_b[bb]; i++)
-                // {
-                //     printf("os_by_b[%d][%d],%d\n",bb,i, os_by_b[bb][i]);
-                // }
                 idx = add_predecessors(g_task_id, os_by_b[bb], os_cnt_by_b[bb], idx);
             }
             op_ids[opi++] = g_task_id;

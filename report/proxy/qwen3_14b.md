@@ -1,15 +1,28 @@
 # Qwen3_14b
 
 ## 理想性能
-|#|任务耗时|X|吞吐 MTasks/s|时延 ns|
+|#|任务耗时 us|X|吞吐 MTasks/s|时延 ns|
 |:---:|:---:|:---:|:---:|:---:|
 |1|5|240-4|48|250|
 |2|10|240-4|24|500|
 |3|5|192-2|38.4|250|
 |4|10|192-2|19.2|500|
 |5|20|192-2|9.6|1000|
-|5|30|192-2|6.4|1500|
+|6|30|192-2|6.4|1500|
 
+> 在NPU闲时使用SPMD，在NPU负载高时使用大KERNEL来降低调度开销
+
+## 动态 VS 静态
+
+静态：先构图再执行，存在头开销
+动态：一边构图，一边执行
+
+动态执行的优势：
+1. 降低头开销
+2. 取消对已完成任务的依赖构建，减少依赖构建的数量
+
+动态执行的劣势：
+1. 增加线程间通信（核间数据同步开销）
 
 ## Conf
 spmd = 4
@@ -23,14 +36,12 @@ make CASE=qwen3_dynamic_tensormap.h run
 |:----:|:----:|:----:|:----:|
 |864|3096|3.58|m5|
 
-| Version | Duration/us | Task throughput MTasks/s | subtask throughput MTasks/s | predict_tasks MTasks/s | predict_subtasks MTasks/s |
+| Version | O_Duration/us | O_Throughput MTasks/s | O_Subtask_Throughput MTasks/s | S_Duration us | S_Throughput MTasks/s |
 |:----:|:----:|:----:|:----:|:----:|:----:|
-| Orchestrator | 90 | 9.60 | 34.40 | / | / |
-| O_Assign | 187 | 4.62 | 16.5 | / | / |
 | O_Tensor  | 407 | 2.12 | 7.6 | 0.69 | 2.58 |
-| O_Async | 142 | 6.08 | 21.8 | / | / |
 | Scheduler | / | 14.9 | / | 4.85 | / |
-| S_Async | 147 | 5.88 | / | / | / |
+| O2_S2 | 142 | 6.08 | 21.8 | 147 | 5.88 |
+| O2F_S2A | 48 | 18 | 64 | 32 | 27 |
 
 ## Debug
 ```shell
@@ -39,8 +50,8 @@ python3 tools/gen_dag.py
 ```
 ## 关键问题
 1. 如何解决性能不够的问题
-2. 如何解决TensorMap的问题（Hash Table Size vs Cache Size）
-
+2. 如何解决Tensor Map的问题（Hash Table Size vs Cache Size）
+3. 如何衡量相较于上一代的性能（纯测吞吐，纯测时延）
 
 ## Apple M5
 10 (4 Super and 6 Efficiency)，无SMT，采用多级动态频率调节（DVFS）机制
