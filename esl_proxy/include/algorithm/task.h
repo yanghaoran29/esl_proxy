@@ -11,13 +11,14 @@
 #include <stdint.h>
 #include <stdatomic.h>
 #include "conf.h"
+#include "tensor.h"
 
 typedef uint16_t task_id_t;
 
 typedef enum {
     TASK_TYPE_CUBE   = 0,
     TASK_TYPE_VECTOR = 1,
-    TASK_TYPE_MIX    = 1,
+    TASK_TYPE_MIX    = 2,
     TASK_TYPE_CNT    = 3,
 } task_type_t;
 
@@ -50,6 +51,11 @@ typedef struct {
     uint32_t successor_cnt;
 } task_state;
 
+enum {
+    TASK_MAX_TENSORS = 16,
+    TASK_MAX_SCALARS = 32,
+};
+
 struct task_desc {
     uint16_t       id;          /* ring-buffer task id */
     task_type_t    type;        /* CUBE / VECTOR / MIX */
@@ -57,11 +63,12 @@ struct task_desc {
     void          *kernel;      /* device kernel entry, NULL if unset */
     uint32_t       index;       /* SPMD base block index */
     uint32_t       count;       /* SPMD instance count (block_num) */
-    uint64_t       data[16];    /* tensor addresses (Tensor handles) */
-    int64_t        scalar[32];  /* scalar kernel arguments */
+    uint64_t       data[TASK_MAX_TENSORS];   /* tensor buffer addresses */
+    int64_t        scalar[TASK_MAX_SCALARS]; /* scalar kernel arguments */
     uint16_t       tensor_cnt;  /* number of valid data[] entries */
     uint16_t       scalar_cnt;  /* number of valid scalar[] entries */
-    uint16_t       duration;    /* estimated kernel cycles (low 16 bits) */
+    uint32_t       duration;    /* fake-kernel busy-wait duration (ns, swimlane measured) */
+    uint32_t       jitter_mask; /* fake-kernel jitter mask (§4.2); 0 = no jitter */
 };
 
 struct predecessor_list {

@@ -16,6 +16,7 @@
 #include <stdbool.h>
 
 #include "conf.h"
+#define EXEC_SLOT_EMPTY ((uint16_t)0xFFFF)
 
 /*
  * Executor
