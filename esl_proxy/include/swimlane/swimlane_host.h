@@ -7,9 +7,7 @@
 #include <stdint.h>
 
 #ifndef ESL_PROXY_ONBOARD_CONFIG_H
-#define ESL_PROXY_ONBOARD_CONFIG_NO_PAYLOAD
 #include "onboard_config.h"
-#undef ESL_PROXY_ONBOARD_CONFIG_NO_PAYLOAD
 #endif
 
 #ifdef __cplusplus

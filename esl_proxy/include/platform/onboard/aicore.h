@@ -19,8 +19,7 @@
 #ifndef SRC_COMMON_PLATFORM_INCLUDE_AICORE_AICORE_H_
 #define SRC_COMMON_PLATFORM_INCLUDE_AICORE_AICORE_H_
 
-#include <cstdint>
-#include <cstring>
+#include <stdint.h>
 
 #include "onboard_config.h"
 #include "core_type.h"
@@ -50,12 +49,13 @@
 #define OUT_OF_ORDER_LOAD_BARRIER() ((void)0)
 #define OUT_OF_ORDER_FULL_BARRIER() ((void)0)
 
-__aicore__ inline uint64_t read_reg(RegId reg) {
+__aicore__ static inline uint64_t read_reg(RegId reg)
+{
     switch (reg) {
     case REG_ID_DATA_MAIN_BASE: {
         uint32_t val;
         __asm__ volatile("MOV %0, DATA_MAIN_BASE\n" : "=l"(val));
-        return static_cast<uint64_t>(val);
+        return (uint64_t)val;
     }
     case REG_ID_COND:
     case REG_ID_FAST_PATH_ENABLE:
@@ -64,10 +64,11 @@ __aicore__ inline uint64_t read_reg(RegId reg) {
     return 0;
 }
 
-__aicore__ inline void write_reg(RegId reg, uint64_t value) {
+__aicore__ static inline void write_reg(RegId reg, uint64_t value)
+{
     switch (reg) {
     case REG_ID_COND:
-        set_cond(static_cast<uint32_t>(value));
+        set_cond((uint32_t)value);
         break;
     case REG_ID_DATA_MAIN_BASE:
     case REG_ID_FAST_PATH_ENABLE:
@@ -75,8 +76,19 @@ __aicore__ inline void write_reg(RegId reg, uint64_t value) {
     }
 }
 
-__aicore__ inline uint32_t get_physical_core_id() { return static_cast<uint32_t>(get_coreid()) & AICORE_COREID_MASK; }
+__aicore__ static inline uint32_t get_physical_core_id(void)
+{
+    return (uint32_t)get_coreid() & AICORE_COREID_MASK;
+}
 
-__aicore__ __attribute__((always_inline)) inline uint64_t get_sys_cnt_aicore() { return get_sys_cnt(); }
+__aicore__ __attribute__((always_inline)) static inline uint64_t get_sys_cnt_aicore(void)
+{
+    return get_sys_cnt();
+}
 
-#endif  // SRC_COMMON_PLATFORM_INCLUDE_AICORE_AICORE_H_
+__aicore__ __attribute__((always_inline)) static inline uint64_t esl_aicore_now_ns(void)
+{
+    return get_sys_cnt_aicore() * 1000000000ULL / ESL_ONBOARD_SYS_CNT_FREQ;
+}
+
+#endif /* SRC_COMMON_PLATFORM_INCLUDE_AICORE_AICORE_H_ */

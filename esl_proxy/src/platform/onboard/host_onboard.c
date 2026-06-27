@@ -6,6 +6,7 @@
 
 #include "dlog_pub.h"
 #include "runtime.h"
+#include "runtime.h"
 #include "kernel_args.h"
 #include "platform.h"
 #include "onboard_config.h"
@@ -637,11 +638,34 @@ int esl_aicore_launcher_load(EslAicoreLauncher *launcher, const void *elf_data,
     return 0;
 }
 
+static int esl_aicore_launcher_register(EslAicoreLauncher *launcher)
+{
+    rtDevBinary_t binary;
+    rtError_t rc;
+
+    if (launcher == NULL) {
+        return -1;
+    }
+    if (launcher->bin_handle != NULL) {
+        return 0;
+    }
+    memset(&binary, 0, sizeof(binary));
+    binary.magic = RT_DEV_BINARY_MAGIC_ELF;
+    binary.version = 0;
+    binary.data = launcher->binary;
+    binary.length = launcher->binary_len;
+    rc = rtRegisterAllKernel(&binary, &launcher->bin_handle);
+    if (rc != RT_ERROR_NONE) {
+        fprintf(stderr, "rtRegisterAllKernel failed: %d\n", (int)rc);
+        return (int)rc;
+    }
+    return 0;
+}
+
 /* 注册并启动 AICore 内核（按 block_dim 下发）。 */
 int esl_aicore_launcher_launch(EslAicoreLauncher *launcher, rtStream_t stream,
     void *k_args_dev, int block_dim)
 {
-    rtDevBinary_t binary;
     rtArgsEx_t rt_args;
     rtTaskCfgInfo_t cfg;
     rtError_t rc;
@@ -651,17 +675,8 @@ int esl_aicore_launcher_launch(EslAicoreLauncher *launcher, rtStream_t stream,
         return -1;
     }
 
-    if (launcher->bin_handle == NULL) {
-        memset(&binary, 0, sizeof(binary));
-        binary.magic = RT_DEV_BINARY_MAGIC_ELF;
-        binary.version = 0;
-        binary.data = launcher->binary;
-        binary.length = launcher->binary_len;
-        rc = rtRegisterAllKernel(&binary, &launcher->bin_handle);
-        if (rc != RT_ERROR_NONE) {
-            fprintf(stderr, "rtRegisterAllKernel failed: %d\n", (int)rc);
-            return (int)rc;
-        }
+    if (esl_aicore_launcher_register(launcher) != 0) {
+        return -1;
     }
 
     args.k_args = (EslKernelArgs *)k_args_dev;
@@ -889,15 +904,14 @@ int esl_onboard_run(int argc, char **argv)
         "device stats GM");
     ACL_CHECK(devmem_alloc(&dev_k_args, sizeof(EslKernelArgs)),
         "device KernelArgs GM");
-    payload_bytes = (size_t)ESL_PROXY_ONBOARD_WORKER_COUNT * 2U *
-                    sizeof(EslFakeDispatchPayload);
+    payload_bytes = (size_t)ESL_PROXY_ONBOARD_WORKER_COUNT * 2U * sizeof(EslDispatchPayload);
     ACL_CHECK(devmem_alloc(&dev_payload, payload_bytes), "fake task args GM");
     ACL_CHECK(aclrtMemset(dev_payload.ptr, payload_bytes, 0, payload_bytes),
         "zero payload GM");
 
     for (i = 0; i < ESL_PROXY_ONBOARD_WORKER_COUNT; ++i) {
         uint8_t *base = (uint8_t *)dev_payload.ptr +
-                        (size_t)i * 2U * sizeof(EslFakeDispatchPayload);
+                        (size_t)i * 2U * sizeof(EslDispatchPayload);
 
         host_runtime.workers[i].task = (uint64_t)(uintptr_t)base;
         host_runtime.workers[i].core_type =
@@ -1015,6 +1029,14 @@ int esl_onboard_run(int argc, char **argv)
         free(aicpu_bytes);
         free(aicore_bytes);
         return 1;
+    }
+
+    {
+        host_runtime.func_id_to_addr_[0] = 1U;
+        host_runtime.func_id_to_addr_[1] = 1U;
+        ACL_CHECK(aclrtMemcpy(dev_runtime.ptr, sizeof(EslRuntime), &host_runtime, sizeof(EslRuntime),
+                      ACL_MEMCPY_HOST_TO_DEVICE),
+            "H2D runtime (fake kernel enabled)");
     }
 
     fprintf(stderr, "[esl_proxy] aicpu exec launch (after aicore; aicore waits "

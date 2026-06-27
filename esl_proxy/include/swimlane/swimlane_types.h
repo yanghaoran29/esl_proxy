@@ -39,9 +39,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define ESL_PROXY_ONBOARD_CONFIG_NO_PAYLOAD
 #include "onboard_config.h"
-#undef ESL_PROXY_ONBOARD_CONFIG_NO_PAYLOAD
 
 // =============================================================================
 // L2 swimlane_level — 0=disabled, 1=AICore per-task start/end timestamps.

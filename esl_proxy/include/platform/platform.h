@@ -76,8 +76,10 @@ void platform_main_log_vwrite(int line, const char *fmt, va_list args);
 void cache_invalidate_range(const void *addr, size_t size);
 void cache_flush_range(const void *addr, size_t size);
 
-/* Dispatch loop exit: flush final scheduler stats to device_wall (onboard); sim: no-op. */
-void platform_dispatch_loop_exit(int tid, uint64_t elapsed_ns);
+/* Dispatch loop exit: publish final scheduler stats (onboard writes device_wall; sim: no-op). */
+void platform_stats_publish(uint64_t task_cnt, uint64_t subtask_cnt, uint64_t completed_cnt,
+                            uint64_t commit, uint64_t ready_cube, uint64_t ready_vec,
+                            uint64_t min_uncomplete, uint64_t elapsed_ns);
 
 /* Sim: pre-fill handshake ack fields + fake reg table (no real AICore).
  * Onboard: no-op — real AICore sets fields in aicore_executor. */

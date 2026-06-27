@@ -1,45 +1,16 @@
 /*
- * Host-side platform register stubs for CPU sim (no MMIO).
+ * Host-side platform register stubs for CPU sim (shared memory per HAL slot).
  */
 #include "platform_regs.h"
 
 #include "log.h"
 #include "platform_config.h"
+#include "sim_core_regs.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
-#define SIM_REG_SLOTS 128
-#define SIM_MAX_COMPLETED_PER_REG 256
-
-typedef struct {
-    uint64_t reg_base;
-    uint8_t exited;
-    uint32_t completed[SIM_MAX_COMPLETED_PER_REG];
-    int completed_cnt;
-} SimWorkerReg;
-
 static uint64_t g_platform_regs;
-static SimWorkerReg g_sim_worker_regs[SIM_REG_SLOTS];
-
-static SimWorkerReg *sim_reg_lookup(uint64_t reg_base_addr, int create)
-{
-    for (int i = 0; i < SIM_REG_SLOTS; i++) {
-        if (g_sim_worker_regs[i].reg_base == reg_base_addr) {
-            return &g_sim_worker_regs[i];
-        }
-    }
-    if (!create) {
-        return NULL;
-    }
-    for (int i = 0; i < SIM_REG_SLOTS; i++) {
-        if (g_sim_worker_regs[i].reg_base == 0) {
-            g_sim_worker_regs[i].reg_base = reg_base_addr;
-            return &g_sim_worker_regs[i];
-        }
-    }
-    return NULL;
-}
 
 void set_platform_regs(uint64_t regs)
 {
@@ -53,77 +24,80 @@ uint64_t get_platform_regs(void)
 
 uint64_t read_reg(uint64_t reg_base_addr, RegId reg)
 {
-    SimWorkerReg *wr;
+    SimCoreReg *cr;
 
-    if (reg != REG_ID_COND) {
+    cr = sim_core_reg_at(reg_base_addr);
+    if (cr == NULL) {
         return 0;
     }
-    wr = sim_reg_lookup(reg_base_addr, 0);
-    if (wr == NULL || wr->exited) {
-        return (uint64_t)AICORE_EXITED_VALUE;
-    }
-    return MAKE_ACK_VALUE(0);
-}
-
-void write_reg(uint64_t reg_base_addr, RegId reg, uint64_t value)
-{
-    SimWorkerReg *wr;
-
-    if (reg != REG_ID_DATA_MAIN_BASE) {
-        return;
-    }
-    wr = sim_reg_lookup(reg_base_addr, 1);
-    if (wr == NULL) {
-        return;
-    }
-    if (value == (uint64_t)AICORE_EXIT_SIGNAL) {
-        wr->exited = 1;
-        wr->completed_cnt = 0;
-        return;
-    }
-    if (wr->completed_cnt < SIM_MAX_COMPLETED_PER_REG) {
-        wr->completed[wr->completed_cnt++] = (uint32_t)value;
-    } else {
-        MAIN_LOGF("[sim] reg 0x%llx completed queue full (task=%u)",
-                  (unsigned long long)reg_base_addr, (unsigned)(uint32_t)value);
-    }
-    wr->exited = 0;
-}
-
-int platform_reg_task_finished(uint64_t reg_base_addr, uint32_t reg_task)
-{
-    SimWorkerReg *wr;
-
-    wr = sim_reg_lookup(reg_base_addr, 0);
-    if (wr == NULL || wr->exited) {
-        return 0;
-    }
-    for (int i = 0; i < wr->completed_cnt; i++) {
-        if (wr->completed[i] == reg_task) {
-            return 1;
+    if (reg == REG_ID_COND) {
+        if (cr->exited) {
+            return (uint64_t)AICORE_EXITED_VALUE;
         }
+        return (uint64_t)cr->cond;
+    }
+    if (reg == REG_ID_DATA_MAIN_BASE) {
+        return (uint64_t)cr->data_main_base;
     }
     return 0;
 }
 
-void platform_reg_task_ack(uint64_t reg_base_addr, uint32_t reg_task)
+void write_reg(uint64_t reg_base_addr, RegId reg, uint64_t value)
 {
-    SimWorkerReg *wr;
+    SimCoreReg *cr;
 
-    wr = sim_reg_lookup(reg_base_addr, 0);
-    if (wr == NULL) {
+    cr = sim_core_reg_at(reg_base_addr);
+    if (cr == NULL) {
         return;
     }
-    for (int i = 0; i < wr->completed_cnt; i++) {
-        if (wr->completed[i] == reg_task) {
-            wr->completed[i] = wr->completed[wr->completed_cnt - 1];
-            wr->completed_cnt--;
+    if (reg == REG_ID_DATA_MAIN_BASE) {
+        if (value == (uint64_t)AICORE_EXIT_SIGNAL) {
+            cr->exited = 1;
+            cr->data_main_base = (uint32_t)value;
             return;
         }
+        cr->exited = 0;
+        cr->data_main_base = (uint32_t)value;
+        return;
+    }
+    if (reg == REG_ID_COND) {
+        cr->cond = (uint32_t)value;
+    }
+}
+
+int platform_reg_task_finished(uint64_t reg_base_addr, uint32_t reg_task)
+{
+    SimCoreReg *cr;
+
+    cr = sim_core_reg_at(reg_base_addr);
+    if (cr == NULL || cr->exited) {
+        return 0;
+    }
+    return cr->cond == (uint32_t)MAKE_FIN_VALUE(reg_task);
+}
+
+void platform_reg_task_ack(uint64_t reg_base_addr, uint32_t reg_task)
+{
+    SimCoreReg *cr;
+
+    cr = sim_core_reg_at(reg_base_addr);
+    if (cr == NULL) {
+        return;
+    }
+    if (cr->cond == (uint32_t)MAKE_FIN_VALUE(reg_task)) {
+        cr->cond = 0;
     }
 }
 
 void platform_init_aicore_regs(uint64_t reg_addr)
 {
-    (void)reg_addr;
+    SimCoreReg *cr;
+
+    cr = sim_core_reg_at(reg_addr);
+    if (cr == NULL) {
+        return;
+    }
+    cr->data_main_base = 0;
+    cr->cond = 0;
+    cr->exited = 0;
 }

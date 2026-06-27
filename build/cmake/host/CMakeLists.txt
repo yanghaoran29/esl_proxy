@@ -31,6 +31,7 @@ set(ESL_SRC "${ESL_CORE}/src")
 set(ESL_ONBOARD_RUNNER_SOURCES
     "${ESL_SRC}/main.c"
     "${ONBOARD_SRC}/host_onboard.c"
+    "${ESL_SRC}/platform/trace_stages.c"
     "${ONBOARD_SRC}/onboard_trace.c"
     "${ONBOARD_SRC}/tools.c"
 )

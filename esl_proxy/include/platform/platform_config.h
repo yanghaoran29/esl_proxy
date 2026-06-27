@@ -52,10 +52,6 @@
 #define SET_PROFILING_FLAG(flags, bit) ((flags) |= (uint32_t)(bit))
 #define CLEAR_PROFILING_FLAG(flags, bit) ((flags) &= ~((uint32_t)(bit)))
 
-#ifndef ESL_PROXY_ONBOARD_CONFIG_NO_PAYLOAD
-#include "tensor.h"
-#endif
-
 #ifdef __cplusplus
 constexpr int PLATFORM_PROF_BUFFER_SIZE_CXX = PLATFORM_PROF_BUFFER_SIZE;
 constexpr int PLATFORM_PROF_SLOT_COUNT_CXX = PLATFORM_PROF_SLOT_COUNT;
@@ -118,38 +114,11 @@ _Static_assert(ESL_PROXY_AICPU_THREAD_NUM == 3, "three-thread cutter/dispatch/or
 
 #define PLATFORM_AICORE_MAP_BUFF_LEN 2U
 
-#define ESL_ONBOARD_MAX_TENSOR_ARGS 16
-#define ESL_ONBOARD_MAX_SCALAR_ARGS 32
-#define ESL_ONBOARD_MAX_KERNEL_ARGS (ESL_ONBOARD_MAX_TENSOR_ARGS + ESL_ONBOARD_MAX_SCALAR_ARGS)
-
 typedef enum {
     REG_ID_DATA_MAIN_BASE = 0,
     REG_ID_COND = 1,
     REG_ID_FAST_PATH_ENABLE = 2,
 } RegId;
-
-typedef struct EslOnboardTaskDesc {
-    uint16_t id;
-    uint16_t type;
-    uint16_t mode;
-    uint16_t tensor_cnt;
-    uint16_t scalar_cnt;
-    uint32_t duration;
-    uint32_t jitter_mask;
-    uint32_t index;
-    uint32_t count;
-    uint64_t kernel;
-} EslOnboardTaskDesc;
-
-#ifndef ESL_PROXY_ONBOARD_CONFIG_NO_PAYLOAD
-typedef struct EslFakeDispatchPayload {
-    EslOnboardTaskDesc task;
-    int64_t duration_ticks;
-    int64_t jitter_mask;
-    uint64_t args[ESL_ONBOARD_MAX_KERNEL_ARGS];
-    Tensor tensors[ESL_ONBOARD_MAX_TENSOR_ARGS];
-} __attribute__((aligned(64))) EslFakeDispatchPayload;
-#endif /* !ESL_PROXY_ONBOARD_CONFIG_NO_PAYLOAD */
 
 static inline uint64_t esl_duration_ns_to_sys_cnt(uint64_t duration_ns)
 {

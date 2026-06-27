@@ -111,6 +111,96 @@ static int read_elf_build_id(const char *data, size_t len, uint64_t *out)
     return 0;
 }
 
+int esl_elf_lookup_symbol(const char *data, size_t len, const char *name, uint64_t *out_value)
+{
+    uint64_t e_shoff;
+    uint16_t e_shentsize;
+    uint16_t e_shnum;
+    uint16_t e_shstrndx;
+    const char *strtab = NULL;
+    uint64_t strtab_sz = 0;
+    uint64_t symtab_off = 0;
+    uint64_t symtab_size = 0;
+    uint64_t sym_ent_size = 0;
+    uint32_t symtab_link = 0;
+    uint16_t i;
+
+    if (data == NULL || name == NULL || out_value == NULL || len < 64) {
+        return -1;
+    }
+    if (memcmp(data, "\x7f""ELF", 4) != 0 || data[4] != 2) {
+        return -1;
+    }
+
+    memcpy(&e_shoff, data + 40, 8);
+    memcpy(&e_shentsize, data + 58, 2);
+    memcpy(&e_shnum, data + 60, 2);
+    memcpy(&e_shstrndx, data + 62, 2);
+    if (e_shentsize != 64 || e_shoff > len || (uint64_t)e_shentsize * e_shnum > len - e_shoff ||
+        e_shstrndx >= e_shnum) {
+        return -1;
+    }
+
+    for (i = 0; i < e_shnum; ++i) {
+        const char *sh = data + e_shoff + (uint64_t)e_shentsize * i;
+        uint32_t sh_name;
+        uint32_t sh_type;
+        uint64_t sh_off;
+        uint64_t sh_size;
+        uint64_t sh_entsize;
+        uint32_t sh_link;
+
+        memcpy(&sh_name, sh + 0, 4);
+        memcpy(&sh_type, sh + 4, 4);
+        memcpy(&sh_off, sh + 24, 8);
+        memcpy(&sh_size, sh + 32, 8);
+        memcpy(&sh_entsize, sh + 56, 8);
+        memcpy(&sh_link, sh + 40, 4);
+        if (sh_type != 2) {
+            continue;
+        }
+        symtab_off = sh_off;
+        symtab_size = sh_size;
+        sym_ent_size = sh_entsize;
+        symtab_link = sh_link;
+    }
+
+    if (symtab_off == 0 || sym_ent_size == 0 || symtab_size == 0 || symtab_link >= e_shnum ||
+        symtab_off > len || symtab_size > len - symtab_off) {
+        return -1;
+    }
+
+    {
+        const char *sh = data + e_shoff + (uint64_t)e_shentsize * symtab_link;
+        uint64_t off;
+
+        memcpy(&off, sh + 24, 8);
+        memcpy(&strtab_sz, sh + 32, 8);
+        if (off > len || strtab_sz > len - off) {
+            return -1;
+        }
+        strtab = data + off;
+    }
+
+    for (uint64_t off = 0; off + sym_ent_size <= symtab_size; off += sym_ent_size) {
+        const char *sym = data + symtab_off + off;
+        uint32_t st_name;
+        uint64_t st_value;
+
+        memcpy(&st_name, sym + 0, 4);
+        memcpy(&st_value, sym + 8, 8);
+        if (st_name == 0 || st_name >= strtab_sz) {
+            continue;
+        }
+        if (strcmp(strtab + st_name, name) == 0) {
+            *out_value = st_value;
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
 uint64_t esl_fingerprint_bytes(const void *data, size_t len)
 {
     uint64_t v = 0;

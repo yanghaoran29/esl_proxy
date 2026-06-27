@@ -37,8 +37,8 @@ foreach(INC_DIR ${CMAKE_CUSTOM_INCLUDE_DIRS})
     list(APPEND CMAKE_CUSTOM_INCLUDE_DIR_FLAGS "-I${INC_DIR}")
 endforeach()
 
-set(AICORE_FLAGS
-    "-c -O3 -g -x cce -Wall -std=c++17 \
+set(AICORE_FLAGS_COMMON
+    "-c -O3 -g -x cce -Wall \
     --cce-aicore-only \
     -DESL_PROXY_AICORE_FAKE_FIN \
     -DESL_PROXY_ENABLE_L2_SWIMLANE=${ESL_PROXY_ENABLE_L2_SWIMLANE} \
@@ -49,27 +49,37 @@ set(AICORE_FLAGS
     -mllvm -cce-aicore-dcci-insert-for-scalar=false \
     ${CMAKE_CUSTOM_INCLUDE_DIR_FLAGS}"
 )
-separate_arguments(AICORE_FLAGS)
+separate_arguments(AICORE_FLAGS_COMMON)
 
 set(ALL_AIC_OBJECTS "")
 set(ALL_AIV_OBJECTS "")
 
 foreach(SRC_FILE ${ALL_SOURCES})
     get_filename_component(SRC_NAME ${SRC_FILE} NAME_WE)
+    get_filename_component(SRC_EXT ${SRC_FILE} EXT)
     set(OBJ_AIC "${CMAKE_CURRENT_BINARY_DIR}/${SRC_NAME}_aic.o")
     set(OBJ_AIV "${CMAKE_CURRENT_BINARY_DIR}/${SRC_NAME}_aiv.o")
     list(APPEND ALL_AIC_OBJECTS ${OBJ_AIC})
     list(APPEND ALL_AIV_OBJECTS ${OBJ_AIV})
 
+    if(SRC_EXT STREQUAL ".cpp")
+        set(AICORE_LANG_FLAGS -std=c++17)
+    else()
+        # ccec CCE front-end rejects -std=c11; rely on default C dialect for .c sources.
+        set(AICORE_LANG_FLAGS "")
+    endif()
+
     add_custom_command(
         OUTPUT ${OBJ_AIC}
-        COMMAND ${BISHENG_CC} ${AICORE_FLAGS} --cce-aicore-arch=dav-c220-cube -o ${OBJ_AIC} ${SRC_FILE}
+        COMMAND ${BISHENG_CC} ${AICORE_FLAGS_COMMON} ${AICORE_LANG_FLAGS}
+                --cce-aicore-arch=dav-c220-cube -o ${OBJ_AIC} ${SRC_FILE}
         DEPENDS ${SRC_FILE}
         COMMENT "Compiling ${SRC_NAME} for AIC"
     )
     add_custom_command(
         OUTPUT ${OBJ_AIV}
-        COMMAND ${BISHENG_CC} ${AICORE_FLAGS} --cce-aicore-arch=dav-c220-vec -o ${OBJ_AIV} ${SRC_FILE}
+        COMMAND ${BISHENG_CC} ${AICORE_FLAGS_COMMON} ${AICORE_LANG_FLAGS}
+                --cce-aicore-arch=dav-c220-vec -o ${OBJ_AIV} ${SRC_FILE}
         DEPENDS ${SRC_FILE}
         COMMENT "Compiling ${SRC_NAME} for AIV"
     )

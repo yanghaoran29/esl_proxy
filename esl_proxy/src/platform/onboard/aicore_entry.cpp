@@ -1,7 +1,7 @@
 /*
  * AICore kernel thin entry — platform layer (ccec).
  */
-#include "aicore.h"
+#include "aicore_executor.h"
 #include "kernel_args.h"
 #include "runtime.h"
 #include "onboard_config.h"
@@ -51,9 +51,6 @@ __attribute__((weak)) __aicore__ __gm__ L2SwimlaneActiveHead *get_l2_swimlane_ai
 #else
 #define KERNEL_ENTRY(x) x##_0_mix_aic
 #endif
-
-extern __aicore__ void aicore_execute(__gm__ EslRuntime *runtime, int block_idx, CoreType core_type,
-                                      uint32_t profiling_flag, uint64_t rotation_table);
 
 #ifdef __DAV_VEC__
 [[block_local]] int block_idx_aiv;

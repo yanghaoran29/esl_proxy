@@ -48,6 +48,11 @@ if [[ -n "${TASK_DEVICE:-}" ]]; then
   DEVICE_ID="$TASK_DEVICE"
 fi
 
+# ---------- shared source lists (build/sources.sh) ----------
+
+# shellcheck disable=SC1091
+source "${ROOT}/build/sources.sh"
+
 # ---------- build functions (merged from build/build_*.sh) ----------
 
 build_aicpu() {
@@ -84,20 +89,16 @@ build_aicpu() {
     SWIMLANE_FLAGS="-DESL_PROXY_ENABLE_L2_SWIMLANE=1"
   fi
 
-  local SRC_FILES="${ONBOARD_SRC}/npu_hal.c"
-  SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/cache_ops.c"
-  SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/onboard_log.c"
-  SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/onboard_trace.c"
-  SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/tools.c"
-  SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/platform_init.c"
-  SRC_FILES="${SRC_FILES};${ALGO_SRC}/executor.c"
-  SRC_FILES="${SRC_FILES};${ALGO_SRC}/handshake.c"
-  SRC_FILES="${SRC_FILES};${ALGO_SRC}/dispatch_payload.c"
-  SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/aicpu_runtime.c"
-  SRC_FILES="${SRC_FILES};${ALGO_SRC}/cutter.c"
-  SRC_FILES="${SRC_FILES};${ALGO_SRC}/dispatch.c"
-  SRC_FILES="${SRC_FILES};${ONBOARD_SRC}/platform_sync_onboard.c"
-  SRC_FILES="${SRC_FILES};${ALGO_SRC}/shm.c"
+  local SRC_FILES=""
+  local src
+
+  for src in "${ESL_PLATFORM_ONBOARD_SRCS[@]}"; do
+    SRC_FILES="${SRC_FILES};${ESL_CORE}/${src}"
+  done
+  for src in "${ESL_ALGORITHM_SRCS[@]}"; do
+    SRC_FILES="${SRC_FILES};${ESL_CORE}/${src}"
+  done
+  SRC_FILES="${SRC_FILES#;}"
   if [[ "$ESL_PROXY_ENABLE_L2_SWIMLANE" != "0" ]]; then
     SRC_FILES="${SRC_FILES};${SWIMLANE_SRC}/swimlane_aicpu.c"
   fi
@@ -122,7 +123,7 @@ build_aicpu() {
 build_aicore() {
   local BUILD_DIR="${ROOT}/build/onboard/aicore"
   local AICORE_ENTRY="${ESL_CORE}/src/platform/onboard/aicore_entry.cpp"
-  local AICORE_EXECUTOR="${ESL_CORE}/src/platform/onboard/aicore_executor.cpp"
+  local AICORE_EXECUTOR="${ESL_CORE}/src/algorithm/aicore_executor.c"
 
   local BISHENG_CC
   BISHENG_CC="$(command -v ccec || echo "${ASCEND_HOME_PATH}/compiler/ccec_compiler/bin/ccec")"

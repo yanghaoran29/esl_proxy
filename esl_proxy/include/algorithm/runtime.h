@@ -41,6 +41,38 @@ typedef struct EslRuntime {
     uint8_t orch_to_sched;
 } EslRuntime;
 
+/* PTO2 512B per-core dispatch payload (simpler: PTO2DispatchPayload). */
+typedef struct EslDispatchPayload {
+    uint64_t function_bin_addr;                 /* 8B */
+    uint64_t args[50];                          /* 400B (simpler: args[50]) */
+
+    /* LocalContext — 48B (simpler: intrinsic.h LocalContext) */
+    int32_t local_block_idx;                    /* 4B */
+    int32_t local_block_num;                    /* 4B */
+    /* AsyncCtx — 40B (simpler: intrinsic.h AsyncCtx; esl uses uint64 placeholders) */
+    uint64_t async_completion_count;            /* 8B */
+    uint64_t async_completion_error_code;       /* 8B */
+    uint64_t async_completion_entries;          /* 8B */
+    uint32_t async_completion_capacity;         /* 4B */
+    uint64_t async_task_token;                  /* 8B */
+
+    /* GlobalContext — 4B (simpler: intrinsic.h GlobalContext) */
+    int32_t global_sub_block_id;                /* 4B */
+
+    volatile uint32_t not_ready;                /* 4B */
+    uint8_t reserved_payload_abi_pad[4];        /* 4B */
+} __attribute__((aligned(64))) EslDispatchPayload; /* 512B */
+
+typedef struct EslPublishHandle {
+    uint64_t reg_addr;
+    uint32_t reg_task_id;
+} EslPublishHandle;
+
+void esl_init_global_context(EslRuntime *runtime);
+EslPublishHandle esl_prepare_subtask_to_core(EslRuntime *runtime, int core, uint16_t task_id,
+                                             uint32_t block_idx);
+void esl_publish_subtask_to_core(EslPublishHandle handle);
+
 int32_t esl_aicpu_execute(EslRuntime *runtime);
 
 #ifdef __cplusplus

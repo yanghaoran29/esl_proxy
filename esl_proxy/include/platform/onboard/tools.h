@@ -56,6 +56,7 @@ uint64_t fnv1a64(const char *data, size_t len);
 uint64_t esl_fingerprint_bytes(const void *data, size_t len);
 int64_t *grow_array(int64_t **arr, size_t *cap, size_t *len, int64_t value);
 int read_file(const char *path, char **out_data, size_t *out_len);
+int esl_elf_lookup_symbol(const char *data, size_t len, const char *name, uint64_t *out_value);
 int write_bytes(const char *path, const char *data, uint64_t len);
 void esl_make_inner_basename(uint64_t fp, int device_id, char *buf, size_t buf_size);
 void esl_make_aicpu_op_type(const char *base, uint64_t fp, char *buf, size_t buf_size);

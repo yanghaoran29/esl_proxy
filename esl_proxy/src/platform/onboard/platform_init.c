@@ -16,7 +16,6 @@
 #include "swimlane_aicpu.h"
 #include "task.h"
 
-#include <stdatomic.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -25,13 +24,6 @@
 #define ONBOARD_WHEN2FREE_CAP 4096
 
 static when2free_entry_t g_onboard_when2free[ONBOARD_WHEN2FREE_CAP];
-
-extern task_state *g_state_buf;
-extern uint16_t g_predecessor_cnt[RING_SIZE];
-extern int g_subtask_cnt;
-extern atomic_int g_task_id;
-extern atomic_int g_completed_cnt;
-extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
 
 void init_predecessors(void);
 
@@ -53,6 +45,7 @@ int esl_platform_init(EslRuntime *runtime)
         runtime->worker_count = ESL_PROXY_ONBOARD_WORKER_COUNT;
     }
     g_runtime = runtime;
+    esl_init_global_context(runtime);
     ESL_SWIMLANE_AICPU_INIT(ESL_PROXY_ONBOARD_WORKER_COUNT);
 
     esl_onboard_trace(-1, ESL_TRACE_INIT_HANDSHAKE, 0, 0, 0);
@@ -70,31 +63,10 @@ void esl_platform_shutdown(EslRuntime *runtime)
     }
 }
 
-void platform_dispatch_loop_exit(int tid, uint64_t elapsed_ns)
+void platform_stats_publish(uint64_t task_cnt, uint64_t subtask_cnt, uint64_t completed_cnt,
+                            uint64_t commit, uint64_t ready_cube, uint64_t ready_vec,
+                            uint64_t min_uncomplete, uint64_t elapsed_ns)
 {
-    (void)tid;
     (void)elapsed_ns;
-    int end = atomic_load_explicit(&g_task_id, memory_order_acquire);
-    int first_uncomp = -1;
-    int n_uncomp = 0;
-    int i;
-
-    for (i = 0; i < end; i++) {
-        if (g_state_buf[i].state != TASK_STATUS_COMPLETED) {
-            if (first_uncomp < 0) {
-                first_uncomp = i;
-            }
-            n_uncomp++;
-        }
-    }
-    {
-        uint64_t pred0 = (first_uncomp >= 0) ? (uint64_t)g_predecessor_cnt[first_uncomp] : 0;
-        uint64_t rqc = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_CUBE].cnt;
-        uint64_t rqv = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_VECTOR].cnt;
-
-        esl_write_stats((uint64_t)end, (uint64_t)g_subtask_cnt, (uint64_t)g_completed_cnt,
-                        ((uint64_t)(uint32_t)atomic_load_explicit(&g_commit_task_id, memory_order_acquire)),
-                        (uint64_t)n_uncomp, ((uint64_t)(uint32_t)first_uncomp) | (pred0 << 32),
-                        (rqc & 0xffffffffULL) | (rqv << 32));
-    }
+    esl_write_stats(task_cnt, subtask_cnt, completed_cnt, commit, ready_cube, ready_vec, min_uncomplete);
 }

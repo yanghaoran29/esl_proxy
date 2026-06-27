@@ -39,6 +39,13 @@ inline const char *core_type_to_string(CoreType core_type)
         return "UNKNOWN";
     }
 }
+#else
+
+typedef enum CoreType {
+    CORE_TYPE_AIC = 0,
+    CORE_TYPE_AIV = 1
+} CoreType;
+
 #endif /* __cplusplus */
 
 #endif /* ESL_PROXY_ONBOARD_CORE_TYPE_H */
