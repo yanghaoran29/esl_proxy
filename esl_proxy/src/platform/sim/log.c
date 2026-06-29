@@ -1,4 +1,4 @@
-#include "log.h"
+#include "sim/log.h"
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>

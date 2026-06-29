@@ -12,12 +12,12 @@
 #define DISPATCH_H
 
 #include <stdint.h>
-#include <stddef.h>
+#include <stdatomic.h>
 
 #include "conf.h"
 #include "task.h"
 #include "queue.h"
-
+#include "runtime.h"
 
 typedef struct ctrl {
     // 64CORES
@@ -32,7 +32,12 @@ typedef struct ctrl {
     uint16_t tid;
 } ctrl_t;
 
+extern EslRuntime *g_runtime;
+
 void *dispatch_worker(void *arg);
 void init_ctrl_t(void);
+
+/* 把硬件 AICore 完成事件拉到 msg_bitmap。 */
+void dispatch_poll(int tid);
 
 #endif /* DISPATCH_H */
