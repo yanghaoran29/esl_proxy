@@ -1,0 +1,92 @@
+任务已提交: task_20260709_052021_204632631588 (断开后可用 task-submit --wait task_20260709_052021_204632631588 重连)
+提示: task-submit --help 查看卡分配/日志等机制与用法
+等待任务执行: task_20260709_052021_204632631588 (Ctrl+C 终止任务)
+[npu-lock] 获取设备 1 的锁 (无超时)...
+[npu-lock] 已获取设备 1 的锁 (pid=2046447)
+-- esl_proxy AICpu kernel: 16 source files
+-- Configuring done (0.9s)
+-- Generating done (0.0s)
+-- Build files have been written to: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicpu
+[  5%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/dispatch_double_buffer.c.o
+[ 10%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/cutter.c.o
+[ 15%] Building C object CMakeFiles/aicpu_dispatcher.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/aicpu_dispatcher.c.o
+[ 20%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/dispatch_payload.c.o
+[ 25%] Building C object CMakeFiles/aicpu_dispatcher.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/tools.c.o
+[ 30%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/dispatch_spmd_mix.c.o
+[ 35%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/executor.c.o
+[ 40%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/handshake.c.o
+[ 45%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/shm.c.o
+[ 50%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/aicpu_affinity.c.o
+[ 55%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/aicpu_runtime.c.o
+[ 60%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/cache_ops.c.o
+[ 65%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/npu_hal.c.o
+[ 70%] Linking C shared library libesl_aicpu_dispatcher.so
+[ 80%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/platform_init.c.o
+[ 80%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/onboard_log.c.o
+[ 85%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/platform_sync_onboard.c.o
+[ 90%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/tools.c.o
+[ 95%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/swimlane/swimlane_aicpu.c.o
+[ 95%] Built target aicpu_dispatcher
+[100%] Linking C shared library libaicpu_kernel.so
+[100%] Built target aicpu_kernel
+Built: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicpu/libaicpu_kernel.so
+CMake Warning (dev) in CMakeLists.txt:
+  No project() command is present.  The top-level CMakeLists.txt file must
+  contain a literal, direct call to the project() command.  Add a line of
+  code such as
+
+    project(ProjectName)
+
+  near the top of the file, but after cmake_minimum_required().
+
+  CMake is pretending there is a "project(Project)" command on the first
+  line.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+CMake Warning (dev) in CMakeLists.txt:
+  cmake_minimum_required() should be called prior to this top-level project()
+  call.  Please see the cmake-commands(7) manual for usage documentation of
+  both commands.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- esl_proxy AICore kernel: 2 source files
+-- Configuring done (0.9s)
+-- Generating done (0.0s)
+-- Build files have been written to: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicore
+[ 14%] Linking esl_proxy AICore kernel binary
+ld.lld: warning: -n (--nmagic) and -N (--omagic) will be ignored
+[100%] Built target aicore_kernel
+Built: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicore/aicore_kernel.o
+-- Configuring done (0.5s)
+-- Generating done (0.0s)
+-- Build files have been written to: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/host
+[100%] Built target esl_onboard_runner
+Built: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/host/esl_onboard_runner
+[esl_proxy] ORCH_CASE=qwen3_dynamic_tensormap.h (swimlane=1)
+[esl_proxy] onboard runner device=1 block_dim=24 workers=72(aic=24+aiv=48) aicpu_threads=4 launch_threads=6
+[esl_proxy] dispatcher=/data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicpu/libesl_aicpu_dispatcher.so aicpu=/data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicpu/libaicpu_kernel.so aicore=/data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicore/aicore_kernel.o
+[esl_proxy] op-execute timeout set: requested=3000000 us actual=4294967 us
+[esl_proxy] bootstrapped inner SO esl_inner_350d6f252245139b_1.so
+[esl_proxy] HW AICore regs: 75 addresses H2D -> 0x12c0c0019000
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+[esl_proxy] L2 swimlane enabled level=1 (no PMU)
+[esl_proxy] ffts_base_addr=0x3fffffb9000 len=32
+[esl_proxy] launching AICore kernel block_dim=24 (workers=72)
+[esl_proxy] aicpu init launch
+[esl_proxy] aicpu init sync
+[esl_proxy] aicore launch block_dim=24 (stream_aicore, before exec so cores are resident for handshake)
+[esl_proxy] aicpu exec launch (after aicore; aicore waits on aicpu_ready)
+[esl_proxy] aicpu exec sync
+[esl_proxy] raw swimlane data: ./l2_swimlane_records.json
+[esl_proxy] convert with: python3 tools/swimlane_trace.py ./l2_swimlane_records.json -o l2_swimlane_trace.json
+[esl_proxy] then import at https://ui.perfetto.dev/
+[esl_proxy] done (aicore stream synced)
+esl_proxy onboard: task_cnt=3096 subtask_cnt=3576 completed_cnt=3096 wall_ns=12364820
+[diag] commit=3096 n_uncomp=0 first_uncomp=4294967295 pred_cnt[first]=0 ready_cube=0 ready_vec=0
+esl_proxy onboard: OK (all 3096 tasks / 3576 subtasks completed)
+Perfetto trace written: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/l2_swimlane_trace.json (3650 events, AICore View only, 17 kernel names)
+Open https://ui.perfetto.dev/ and drag the file to visualize.
+swimlane: case=qwen3_dynamic_tensormap tasks=3576 cores=72 span_ms=4.63 avg_task_us=36.6 ktasks_per_s=772.44
+[esl_proxy] OK qwen3_dynamic_tensormap: trace=/data/y00955915/Desktop/esl_proxy_main/esl_proxy/l2_swimlane_trace.json
+[npu-lock] 已释放设备 1 的锁
+=== 任务完成 (exit=0) ===

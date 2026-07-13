@@ -13,6 +13,7 @@
 #   bash tools/run_onboard.sh --all-cases --swimlane --double-buffer  # → report/swimlane/double_buffer/<case>/
 #
 # Options:
+#   --npu                 build + run on a real NPU via task-submit (device auto)
 #   --basic               basic single-buffer dispatch.c (default)
 #   --double-buffer,--db  double-buffer dispatch (2 outstanding/core)
 #   -d, --device <id>     device id (default: 0 or $TASK_DEVICE)
@@ -63,6 +64,24 @@ DOUBLE_BUFFER=OFF
 # Scheduler lanes: 1 (default, legacy 3-thread) or 2 (strict phased folded-orch,
 # 4 threads / one AICPU cluster). Override via `ESL_LANE_CNT=2 bash tools/run_onboard.sh ...`.
 ESL_LANE_CNT="${ESL_LANE_CNT:-1}"
+
+# --npu: build + run the whole thing on a real NPU via task-submit (former
+# run_onboard_npu.sh). Re-exec self with --npu stripped; $TASK_DEVICE supplies
+# the device. SKIP_BUILD=1 env is bridged to --skip-build across the boundary.
+_npu=0
+_npu_args=()
+for _a in "$@"; do
+  if [[ "$_a" == "--npu" ]]; then _npu=1; else _npu_args+=("$_a"); fi
+done
+if [[ "$_npu" == "1" ]]; then
+  if [[ "${SKIP_BUILD:-0}" == "1" && ! " ${_npu_args[*]} " == *" --skip-build "* ]]; then
+    _npu_args+=("--skip-build")
+  fi
+  _ascend_env="${ASCEND_HOME_PATH:-/usr/local/Ascend/cann-9.0.0}/bin/setenv.bash"
+  exec task-submit --device auto --max-time 0 --timeout 3600 \
+    --env ASCEND_HOME_PATH --env PATH --env LD_LIBRARY_PATH --env HOME --env USER --env ESL_PROXY_ORCH_CASE --env QWEN3_SPMD_TIER --env ESL_LANE_CNT \
+    --run "source '${_ascend_env}' && cd '${ROOT}' && bash tools/run_onboard.sh ${_npu_args[*]}"
+fi
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

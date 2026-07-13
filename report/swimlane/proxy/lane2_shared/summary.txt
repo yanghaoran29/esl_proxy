@@ -1,0 +1,98 @@
+[driver] cleaned build/onboard, ESL_LANE_CNT=2 (aligned shared-queue build)
+=== basic/qwen3_dynamic_manual_scope/tier0 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=3096 subtask_cnt=3576 completed_cnt=3096 wall_ns=9629880
+swimlane: case=qwen3_dynamic_manual_scope tasks=3576 cores=72 span_ms=4.81 avg_task_us=36.3 ktasks_per_s=743.89
+=== basic/qwen3_dynamic_manual_scope/tier1 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=1602 subtask_cnt=3576 completed_cnt=1602 wall_ns=8348260
+swimlane: case=qwen3_dynamic_manual_scope tasks=3576 cores=72 span_ms=4.37 avg_task_us=36.6 ktasks_per_s=818.79
+=== basic/qwen3_dynamic_manual_scope/tier2 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=864 subtask_cnt=3576 completed_cnt=864 wall_ns=8000459
+swimlane: case=qwen3_dynamic_manual_scope tasks=3576 cores=72 span_ms=4.48 avg_task_us=36.9 ktasks_per_s=799.03
+=== basic/qwen3_dynamic_manual_scope/tier3 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=678 subtask_cnt=3576 completed_cnt=678 wall_ns=7738400
+swimlane: case=qwen3_dynamic_manual_scope tasks=3576 cores=72 span_ms=4.32 avg_task_us=36.5 ktasks_per_s=828.61
+=== basic/qwen3_dynamic_manual_scope/tier4 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=522 subtask_cnt=3576 completed_cnt=522 wall_ns=7636719
+swimlane: case=qwen3_dynamic_manual_scope tasks=3576 cores=72 span_ms=4.34 avg_task_us=36.6 ktasks_per_s=824.31
+=== basic/qwen3_dynamic_tensormap/tier0 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=3096 subtask_cnt=3576 completed_cnt=3096 wall_ns=12325700
+swimlane: case=qwen3_dynamic_tensormap tasks=3576 cores=72 span_ms=4.47 avg_task_us=36.7 ktasks_per_s=800.52
+=== basic/qwen3_dynamic_tensormap/tier1 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=1602 subtask_cnt=3576 completed_cnt=1602 wall_ns=9559980
+swimlane: case=qwen3_dynamic_tensormap tasks=3576 cores=72 span_ms=4.42 avg_task_us=36.7 ktasks_per_s=808.38
+=== basic/qwen3_dynamic_tensormap/tier2 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=864 subtask_cnt=3576 completed_cnt=864 wall_ns=8684839
+swimlane: case=qwen3_dynamic_tensormap tasks=3576 cores=72 span_ms=4.32 avg_task_us=36.2 ktasks_per_s=826.84
+=== basic/qwen3_dynamic_tensormap/tier3 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=678 subtask_cnt=3576 completed_cnt=678 wall_ns=8621620
+swimlane: case=qwen3_dynamic_tensormap tasks=3576 cores=72 span_ms=4.48 avg_task_us=36.9 ktasks_per_s=798.91
+=== basic/qwen3_dynamic_tensormap/tier4 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=522 subtask_cnt=3576 completed_cnt=522 wall_ns=8606080
+swimlane: case=qwen3_dynamic_tensormap tasks=3576 cores=72 span_ms=4.43 avg_task_us=37.0 ktasks_per_s=806.52
+=== basic/paged_attention_unroll/tier0 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=1920 subtask_cnt=1920 completed_cnt=1920 wall_ns=7388800
+swimlane: case=paged_attention_unroll tasks=1920 cores=72 span_ms=2.18 avg_task_us=41.8 ktasks_per_s=881.46
+=== basic/paged_attention_unroll_manual_scope/tier0 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=1920 subtask_cnt=1920 completed_cnt=1920 wall_ns=6203880
+swimlane: case=paged_attention_unroll_manual_scope tasks=1920 cores=72 span_ms=2.17 avg_task_us=41.6 ktasks_per_s=886.24
+=== double_buffer/qwen3_dynamic_manual_scope/tier0 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=3096 subtask_cnt=3576 completed_cnt=3096 wall_ns=10207620
+swimlane: case=qwen3_dynamic_manual_scope tasks=3576 cores=72 span_ms=5.11 avg_task_us=37.1 ktasks_per_s=700.04
+=== double_buffer/qwen3_dynamic_manual_scope/tier1 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=1602 subtask_cnt=3576 completed_cnt=1602 wall_ns=8105559
+swimlane: case=qwen3_dynamic_manual_scope tasks=3576 cores=72 span_ms=4.47 avg_task_us=36.4 ktasks_per_s=800.74
+=== double_buffer/qwen3_dynamic_manual_scope/tier2 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=864 subtask_cnt=3576 completed_cnt=864 wall_ns=174454800
+swimlane: case=qwen3_dynamic_manual_scope tasks=3576 cores=72 span_ms=170.56 avg_task_us=35.8 ktasks_per_s=20.97
+=== double_buffer/qwen3_dynamic_manual_scope/tier3 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=678 subtask_cnt=3576 completed_cnt=678 wall_ns=7489000
+swimlane: case=qwen3_dynamic_manual_scope tasks=3576 cores=72 span_ms=4.34 avg_task_us=36.8 ktasks_per_s=823.99
+=== double_buffer/qwen3_dynamic_manual_scope/tier4 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=522 subtask_cnt=3576 completed_cnt=522 wall_ns=8019980
+swimlane: case=qwen3_dynamic_manual_scope tasks=3576 cores=72 span_ms=4.33 avg_task_us=36.7 ktasks_per_s=826.65
+=== double_buffer/qwen3_dynamic_tensormap/tier0 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=3096 subtask_cnt=3576 completed_cnt=3096 wall_ns=12364820
+swimlane: case=qwen3_dynamic_tensormap tasks=3576 cores=72 span_ms=4.63 avg_task_us=36.6 ktasks_per_s=772.44
+=== double_buffer/qwen3_dynamic_tensormap/tier1 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=1602 subtask_cnt=3576 completed_cnt=1602 wall_ns=9623320
+swimlane: case=qwen3_dynamic_tensormap tasks=3576 cores=72 span_ms=4.51 avg_task_us=37.1 ktasks_per_s=792.95
+=== double_buffer/qwen3_dynamic_tensormap/tier2 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=864 subtask_cnt=3576 completed_cnt=864 wall_ns=8460980
+swimlane: case=qwen3_dynamic_tensormap tasks=3576 cores=72 span_ms=4.34 avg_task_us=37.2 ktasks_per_s=824.04
+=== double_buffer/qwen3_dynamic_tensormap/tier3 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=678 subtask_cnt=3576 completed_cnt=678 wall_ns=8828539
+swimlane: case=qwen3_dynamic_tensormap tasks=3576 cores=72 span_ms=4.37 avg_task_us=36.6 ktasks_per_s=817.51
+=== double_buffer/qwen3_dynamic_tensormap/tier4 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=522 subtask_cnt=3576 completed_cnt=522 wall_ns=8266580
+swimlane: case=qwen3_dynamic_tensormap tasks=3576 cores=72 span_ms=4.28 avg_task_us=36.8 ktasks_per_s=834.80
+=== double_buffer/paged_attention_unroll/tier0 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=1920 subtask_cnt=1920 completed_cnt=1920 wall_ns=7524740
+swimlane: case=paged_attention_unroll tasks=1920 cores=72 span_ms=2.18 avg_task_us=41.6 ktasks_per_s=880.65
+=== double_buffer/paged_attention_unroll_manual_scope/tier0 attempt 1 ===
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+esl_proxy onboard: task_cnt=1920 subtask_cnt=1920 completed_cnt=1920 wall_ns=5986900
+swimlane: case=paged_attention_unroll_manual_scope tasks=1920 cores=72 span_ms=2.17 avg_task_us=41.6 ktasks_per_s=883.87
+ALL LANE2-SHARED SWIMLANE DONE

@@ -1,0 +1,98 @@
+[
+  {
+    "case": "qwen3_dynamic_manual_scope",
+    "mode": "basic",
+    "actual_ms": 5.18416,
+    "baseline_ms": 4.07806,
+    "saved_ms": 1.1061,
+    "speedup_pct": 21.3361,
+    "tasks": 3576,
+    "cores_used": 72,
+    "source": "report/swimlane/proxy/basic/qwen3_dynamic_manual_scope/l2_swimlane_records.json",
+    "model": "DAG-aware zero-gap, per-core order preserved"
+  },
+  {
+    "case": "qwen3_dynamic_manual_scope",
+    "mode": "double_buffer",
+    "actual_ms": 5.1083,
+    "baseline_ms": 4.21588,
+    "saved_ms": 0.89242,
+    "speedup_pct": 17.47,
+    "tasks": 3576,
+    "cores_used": 72,
+    "source": "report/swimlane/proxy/lane2_shared/double_buffer/qwen3_dynamic_manual_scope/tier0/l2_swimlane_records.json",
+    "model": "DAG-aware zero-gap, per-core order preserved"
+  },
+  {
+    "case": "qwen3_dynamic_tensormap",
+    "mode": "basic",
+    "actual_ms": 4.60106,
+    "baseline_ms": 4.11028,
+    "saved_ms": 0.49078,
+    "speedup_pct": 10.6667,
+    "tasks": 3576,
+    "cores_used": 72,
+    "source": "report/swimlane/proxy/basic/qwen3_dynamic_tensormap/l2_swimlane_records.json",
+    "model": "DAG-aware zero-gap, per-core order preserved"
+  },
+  {
+    "case": "qwen3_dynamic_tensormap",
+    "mode": "double_buffer",
+    "actual_ms": 4.62946,
+    "baseline_ms": 4.1028,
+    "saved_ms": 0.52666,
+    "speedup_pct": 11.3763,
+    "tasks": 3576,
+    "cores_used": 72,
+    "source": "report/swimlane/proxy/lane2_shared/double_buffer/qwen3_dynamic_tensormap/tier0/l2_swimlane_records.json",
+    "model": "DAG-aware zero-gap, per-core order preserved"
+  },
+  {
+    "case": "paged_attention_unroll",
+    "mode": "basic",
+    "actual_ms": 2.17036,
+    "baseline_ms": 2.13358,
+    "saved_ms": 0.03678,
+    "speedup_pct": 1.6946,
+    "tasks": 1920,
+    "cores_used": 72,
+    "source": "report/swimlane/proxy/basic/paged_attention_unroll/l2_swimlane_records.json",
+    "model": "DAG-aware zero-gap, per-core order preserved"
+  },
+  {
+    "case": "paged_attention_unroll",
+    "mode": "double_buffer",
+    "actual_ms": 2.1802,
+    "baseline_ms": 2.14548,
+    "saved_ms": 0.03472,
+    "speedup_pct": 1.5925,
+    "tasks": 1920,
+    "cores_used": 72,
+    "source": "report/swimlane/proxy/lane2_shared/double_buffer/paged_attention_unroll/tier0/l2_swimlane_records.json",
+    "model": "DAG-aware zero-gap, per-core order preserved"
+  },
+  {
+    "case": "paged_attention_unroll_manual_scope",
+    "mode": "basic",
+    "actual_ms": 2.16722,
+    "baseline_ms": 2.13446,
+    "saved_ms": 0.03276,
+    "speedup_pct": 1.5116,
+    "tasks": 1920,
+    "cores_used": 72,
+    "source": "report/swimlane/proxy/basic/paged_attention_unroll_manual_scope/l2_swimlane_records.json",
+    "model": "DAG-aware zero-gap, per-core order preserved"
+  },
+  {
+    "case": "paged_attention_unroll_manual_scope",
+    "mode": "double_buffer",
+    "actual_ms": 2.17226,
+    "baseline_ms": 2.1355,
+    "saved_ms": 0.03676,
+    "speedup_pct": 1.6922,
+    "tasks": 1920,
+    "cores_used": 72,
+    "source": "report/swimlane/proxy/lane2_shared/double_buffer/paged_attention_unroll_manual_scope/tier0/l2_swimlane_records.json",
+    "model": "DAG-aware zero-gap, per-core order preserved"
+  }
+]

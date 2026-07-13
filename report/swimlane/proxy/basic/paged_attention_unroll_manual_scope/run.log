@@ -1,0 +1,21 @@
+[esl_proxy] onboard runner device=3 block_dim=24 workers=72(aic=24+aiv=48) aicpu_threads=4 launch_threads=6
+[esl_proxy] dispatcher=/data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicpu/libesl_aicpu_dispatcher.so aicpu=/data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicpu/libaicpu_kernel.so aicore=/data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicore/aicore_kernel.o
+[esl_proxy] op-execute timeout set: requested=3000000 us actual=4294967 us
+[esl_proxy] bootstrapped inner SO esl_inner_b309ad4274b4a5ea_3.so
+[esl_proxy] HW AICore regs: 75 addresses H2D -> 0x12c0c0019000
+[esl_proxy] AICPU allowed_cpus=[4,5,6,7] launch=6
+[esl_proxy] L2 swimlane enabled level=1 (no PMU)
+[esl_proxy] ffts_base_addr=0x3fffffb9000 len=32
+[esl_proxy] launching AICore kernel block_dim=24 (workers=72)
+[esl_proxy] aicpu init launch
+[esl_proxy] aicpu init sync
+[esl_proxy] aicore launch block_dim=24 (stream_aicore, before exec so cores are resident for handshake)
+[esl_proxy] aicpu exec launch (after aicore; aicore waits on aicpu_ready)
+[esl_proxy] aicpu exec sync
+[esl_proxy] raw swimlane data: ./l2_swimlane_records.json
+[esl_proxy] convert with: python3 tools/swimlane_trace.py ./l2_swimlane_records.json -o l2_swimlane_trace.json
+[esl_proxy] then import at https://ui.perfetto.dev/
+[esl_proxy] done (aicore stream synced)
+esl_proxy onboard: task_cnt=1920 subtask_cnt=1920 completed_cnt=1920 wall_ns=5800519
+[diag] commit=1920 n_uncomp=0 first_uncomp=4294967295 pred_cnt[first]=0 ready_cube=0 ready_vec=0
+esl_proxy onboard: OK (all 1920 tasks / 1920 subtasks completed)

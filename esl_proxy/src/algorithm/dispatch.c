@@ -1170,7 +1170,7 @@ static int dispatch_push_completed_slots(ctrl_t *ctrl, uint16_t out_tasks[], int
 
 /* ===== 3. SPMD ===== */
 
-__attribute__((weak)) void dispatch_spmd_on_ready(uint16_t task_id)
+void dispatch_spmd_on_ready(uint16_t task_id)
 {
     const uint16_t slot = task_id & RING_MASK;
 

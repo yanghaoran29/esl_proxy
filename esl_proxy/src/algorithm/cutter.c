@@ -1,5 +1,6 @@
 #include "cutter.h"
 #include "dispatch.h"
+#include "dispatch_spmd_mix.h"
 #include "log.h"
 #include "memory_barrier.h"
 #include "ring_buf.h"
@@ -220,6 +221,18 @@ void *cutter_worker(void *arg)
     if (tid == 0) {
         init_state_buf();
     }
+
+#if ESL_ORCH_FIRST
+    /* Orchestrator-first model: the orchestrator runs alone to completion first;
+     * the cutter/dispatch lanes idle-wait here until the whole DAG is built,
+     * then drain it. Only safe for workloads <= RING_SIZE (nothing advances
+     * g_min_uncomplete_task during orch, so new_task backpressure caps live
+     * tasks at RING_SIZE). The overlapped model (ESL_ORCH_FIRST=0) skips this
+     * wait and drains concurrently with orchestration. */
+    while (!atomic_load_explicit(&g_orch_is_done, memory_order_acquire)) {
+        spin_wait();
+    }
+#endif
 
     while (!atomic_load_explicit(&g_is_done, memory_order_relaxed)) {
         deal_completed_queue(tid);

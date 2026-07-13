@@ -119,8 +119,28 @@ int32_t esl_aicpu_execute(EslRuntime *runtime) {
         }
         return 0;
     }
-    /* Overlapped model: N cutter + N dispatch + 1 standalone orch =
-     * 2*ESL_LANE_CNT + 1 threads. Role is selected by idx via the switch below. */
+#if ESL_ORCH_FIRST
+    /* Orchestrator-first folded model (2*ESL_LANE_CNT threads, one AICPU
+     * cluster). exec_idx layout:
+     *   [0, CUTTER_THREAD_CNT)              -> cutter lane (idx)
+     *   [CUTTER_THREAD_CNT, 2*ESL_LANE_CNT) -> dispatch lane (idx-CUTTER_THREAD_CNT)
+     * The last dispatch lane runs orchestration to completion first (strict
+     * phase-1), then drains as dispatch. Non-orch workers self-gate on
+     * g_orch_is_done at their entry (cutter_worker/dispatch_worker). Works for
+     * any lane count, including a single cutter/dispatch lane. */
+    if (idx < CUTTER_THREAD_CNT) {
+        cutter_worker((void *)(intptr_t)idx);
+    } else {
+        int lane = idx - CUTTER_THREAD_CNT;
+
+        if (lane == DISPATCH_THREAD_CNT - 1) {
+            aicpu_orchestration_entry(0);
+            atomic_store_explicit(&g_orch_is_done, true, memory_order_release);
+            wmb();
+        }
+        dispatch_worker((void *)(intptr_t)lane);
+    }
+#else
     switch (idx) {
     case ESL_AICPU_ROLE_CUTTER:
         cutter_worker((void *)0);
@@ -136,6 +156,7 @@ int32_t esl_aicpu_execute(EslRuntime *runtime) {
     default:
         break;
     }
+#endif
 
     finished = atomic_fetch_add_explicit(&g_finished_count, 1, memory_order_acq_rel) + 1;
     if (finished == ESL_PROXY_AICPU_THREAD_NUM) {

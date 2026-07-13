@@ -1,0 +1,74 @@
+[
+  {
+    "case": "qwen3_dynamic_manual_scope",
+    "mode": "basic",
+    "baseline_ms": 4.04082,
+    "actual_ms": 5.36744,
+    "sched_overhead_ms": 1.3266200000000001,
+    "sched_overhead_pct": 32.83046510361758,
+    "order_preserving": true
+  },
+  {
+    "case": "qwen3_dynamic_manual_scope",
+    "mode": "double_buffer",
+    "baseline_ms": 4.1699,
+    "actual_ms": 4.85588,
+    "sched_overhead_ms": 0.6859799999999998,
+    "sched_overhead_pct": 16.45075421472937,
+    "order_preserving": true
+  },
+  {
+    "case": "qwen3_dynamic_tensormap",
+    "mode": "basic",
+    "baseline_ms": 4.02656,
+    "actual_ms": 5.34176,
+    "sched_overhead_ms": 1.3152,
+    "sched_overhead_pct": 32.66311690375905,
+    "order_preserving": true
+  },
+  {
+    "case": "qwen3_dynamic_tensormap",
+    "mode": "double_buffer",
+    "baseline_ms": 4.06528,
+    "actual_ms": 4.85556,
+    "sched_overhead_ms": 0.7902800000000001,
+    "sched_overhead_pct": 19.439743387909324,
+    "order_preserving": true
+  },
+  {
+    "case": "paged_attention_unroll",
+    "mode": "basic",
+    "baseline_ms": 2.16104,
+    "actual_ms": 2.9153800000000003,
+    "sched_overhead_ms": 0.7543400000000005,
+    "sched_overhead_pct": 34.90634139118205,
+    "order_preserving": true
+  },
+  {
+    "case": "paged_attention_unroll",
+    "mode": "double_buffer",
+    "baseline_ms": 2.26322,
+    "actual_ms": 2.45804,
+    "sched_overhead_ms": 0.19482,
+    "sched_overhead_pct": 8.608089359408266,
+    "order_preserving": true
+  },
+  {
+    "case": "paged_attention_unroll_manual_scope",
+    "mode": "basic",
+    "baseline_ms": 2.15852,
+    "actual_ms": 2.8927000000000005,
+    "sched_overhead_ms": 0.7341800000000003,
+    "sched_overhead_pct": 34.013120100809815,
+    "order_preserving": true
+  },
+  {
+    "case": "paged_attention_unroll_manual_scope",
+    "mode": "double_buffer",
+    "baseline_ms": 2.23244,
+    "actual_ms": 2.38592,
+    "sched_overhead_ms": 0.15348000000000006,
+    "sched_overhead_pct": 6.874988801490756,
+    "order_preserving": true
+  }
+]

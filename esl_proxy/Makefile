@@ -77,10 +77,18 @@ LANE_CNT ?= 1
 CFLAGS   += -DESL_LANE_CNT=$(LANE_CNT)
 CXXFLAGS += -DESL_LANE_CNT=$(LANE_CNT)
 
-# Overlapped model only (orchestrator-first folded model is not included
-# in this branch). ORCH_FIRST is always 0: orchestrator overlaps as a
-# standalone thread (2*LANE+1 threads).
-ORCH_FIRST := 0
+# Orchestrator-first (先行执行 Orchestrator). ORCH_FIRST=1: orchestrator runs to
+# completion before cutter/dispatch (folded orch-first, 2*LANE threads).
+# ORCH_FIRST=0: orchestrator overlaps as a standalone thread (2*LANE+1 threads).
+# Independent of LANE_CNT — a single lane can run orch-first (ORCH_FIRST=1
+# LANE_CNT=1). Default follows LANE_CNT for backward compatibility.
+ifeq ($(ORCH_FIRST),)
+  ifeq ($(shell [ $(LANE_CNT) -ge 2 ] && echo y),y)
+    ORCH_FIRST := 1
+  else
+    ORCH_FIRST := 0
+  endif
+endif
 CFLAGS   += -DESL_ORCH_FIRST=$(ORCH_FIRST)
 CXXFLAGS += -DESL_ORCH_FIRST=$(ORCH_FIRST)
 
@@ -97,16 +105,11 @@ CFLAGS   += -DESL_PROXY_SIM_INSTANT_AICORE=1
 CXXFLAGS += -DESL_PROXY_SIM_INSTANT_AICORE=1
 endif
 
-# L2 swimlane trace sources (src/swimlane/) are onboard-only — they depend on
-# CANN headers (acl/acl_rt.h, ascend_hal.h, dlog_pub.h) not available in the
-# sim build. They are compiled via the onboard CMake build, not this Makefile.
-# ESL_PROXY_ENABLE_L2_SWIMLANE stays 0 for sim (no-op hooks); pre-generated
-# swimlane traces live under report/swimlane/proxy/spmd/.
-
 OBJ_DIR := build/obj
 BIN_DIR := bin
 TARGET  := $(BIN_DIR)/esl_proxy
 
+# dispatch variant: basic | double_buffer
 DISPATCH ?= basic
 ifeq ($(DISPATCH),double_buffer)
 CFLAGS += -DESL_DISPATCH_DOUBLE_BUFFER=1
