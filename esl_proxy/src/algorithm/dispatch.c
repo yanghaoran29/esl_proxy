@@ -1,5 +1,5 @@
 /*
- * dispatch.c - Dispatch Worker Thread Implementation (MIX dispatch, non-atomic SPMD)
+ * dispatch.c - Dispatch Worker Thread Implementation (MIX dispatch, atomic SPMD range-claim)
  *
  * Worker thread entry point for Dispatch.
  * This file is compiled separately as it contains pthread-specific code.
@@ -38,78 +38,10 @@ extern int g_subtask_cnt;
 
 EslRuntime *g_runtime;
 
-/* --- Basic SPMD block tracking (single-lane, non-atomic) ---
- * Replaced by atomic range-claim in dispatch_spmd_mix.c when MIX/SPMD
- * multi-block dispatch is enabled. */
-static uint16_t g_next_block[RING_SIZE];
-static uint16_t g_finished_blocks[RING_SIZE];
-
-void dispatch_spmd_on_ready(uint16_t task_id)
-{
-    const uint16_t slot = task_id & RING_MASK;
-
-    g_next_block[slot] = 0;
-    g_finished_blocks[slot] = 0;
-}
-
-static int basic_claim_range(uint16_t task_id, int avail, uint32_t *start_block)
-{
-    const uint16_t slot = task_id & RING_MASK;
-    const uint32_t total = g_basic_buf[slot].count;
-
-    if (avail <= 0) {
-        return 0;
-    }
-    uint32_t cur = g_next_block[slot];
-    uint32_t n;
-
-    if (total <= 1U) {
-        if (cur > 0U) {
-            return 0;
-        }
-        n = 1U;
-    } else {
-        if (cur >= total) {
-            return 0;
-        }
-        const uint32_t remaining = total - cur;
-
-        n = ((uint32_t)avail < remaining) ? (uint32_t)avail : remaining;
-    }
-    g_next_block[slot] = (uint16_t)(cur + n);
-    if (start_block != NULL) {
-        *start_block = cur;
-    }
-    return (int)n;
-}
-
-static int basic_claim_block(uint16_t task_id, uint32_t *block_idx)
-{
-    uint32_t s = 0;
-    int n = basic_claim_range(task_id, 1, &s);
-
-    if (n > 0 && block_idx != NULL) {
-        *block_idx = s;
-    }
-    return n > 0 ? 1 : 0;
-}
-
-static int basic_has_remaining(uint16_t task_id)
-{
-    const uint16_t slot = task_id & RING_MASK;
-    const uint32_t total = g_basic_buf[slot].count;
-
-    if (total <= 1U) {
-        return 0;
-    }
-    return g_next_block[slot] < total;
-}
-
-static void basic_rewind(uint16_t task_id, uint32_t claimed_end, uint32_t next_block)
-{
-    (void)claimed_end;
-    g_next_block[task_id & RING_MASK] = (uint16_t)next_block;
-}
+/* SPMD block cursors (g_next_block / g_finished_blocks) and
+ * dispatch_spmd_on_ready live in dispatch_spmd_mix.c as atomic state with a
+ * weak dispatch_spmd_on_ready — this file consumes them via the
+ * dispatch_spmd_claim_range / claim_block / has_remaining / rewind helpers. */
 
 static uint64_t dispatch_core_reg_addr(int worker_id)
 {
@@ -496,7 +428,7 @@ static inline int send_task(ctrl_t *ctrl, int type)
             batch_enqueue(&g_shared_ready[type], &task_ids[i], (uint16_t)(cnt - i));
             break;
         }
-        n = basic_claim_range(task_id, avail, &start);
+        n = dispatch_spmd_claim_range(task_id, avail, &start);
         if (n <= 0) {
             continue; /* task already exhausted (stale re-enqueue) */
         }
@@ -558,11 +490,11 @@ static inline int send_task(ctrl_t *ctrl, int type)
         if (fail) {
             /* blocks [0,b) dispatched; rewind cursor so [b,n) re-claim, and return
              * this + remaining popped tasks to the queue. */
-            basic_rewind(task_id, start + (uint32_t)n, start + (uint32_t)b);
+            dispatch_spmd_rewind(task_id, start + (uint32_t)n, start + (uint32_t)b);
             batch_enqueue(&g_shared_ready[type], &task_ids[i], (uint16_t)(cnt - i));
             break;
         }
-        if (basic_has_remaining(task_id)) {
+        if (dispatch_spmd_has_remaining(task_id)) {
             batch_enqueue(&g_shared_ready[type], &task_id, 1);
         }
     }
@@ -613,7 +545,7 @@ static int dispatch_prefetch(ctrl_t *ctrl, int type)
             if (!batch_dequeue(&g_shared_ready[type], &one, &cnt1) || cnt1 < 1) {
                 break;
             }
-            if (!basic_claim_block(one, &block_idx)) {
+            if (!dispatch_spmd_claim_block(one, &block_idx)) {
                 break;
             }
             g_executors[exe_type][core].idx = (uint8_t)free_slot;
@@ -633,7 +565,7 @@ static int dispatch_prefetch(ctrl_t *ctrl, int type)
                 batch_enqueue(&g_shared_ready[type], &one, 1);
                 break;
             }
-            if (basic_has_remaining(one)) {
+            if (dispatch_spmd_has_remaining(one)) {
                 batch_enqueue(&g_shared_ready[type], &one, 1);
             }
             sent++;
