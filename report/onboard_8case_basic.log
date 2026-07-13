@@ -1,0 +1,83 @@
+CMake Warning (dev) in CMakeLists.txt:
+  No project() command is present.  The top-level CMakeLists.txt file must
+  contain a literal, direct call to the project() command.  Add a line of
+  code such as
+
+    project(ProjectName)
+
+  near the top of the file, but after cmake_minimum_required().
+
+  CMake is pretending there is a "project(Project)" command on the first
+  line.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+CMake Warning (dev) in CMakeLists.txt:
+  cmake_minimum_required() should be called prior to this top-level project()
+  call.  Please see the cmake-commands(7) manual for usage documentation of
+  both commands.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- esl_proxy AICore kernel: 2 source files
+-- Configuring done (0.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicore
+[ 14%] Linking esl_proxy AICore kernel binary
+ld.lld: warning: -n (--nmagic) and -N (--omagic) will be ignored
+[100%] Built target aicore_kernel
+Built: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicore/aicore_kernel.o
+-- Configuring done (0.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/host
+[100%] Built target esl_onboard_runner
+Built: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/host/esl_onboard_runner
+[esl_proxy] swimlane output: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/report/swimlane/proxy/basic/<case>/
+======== CASE qwen3_dynamic_manual_scope.h ========
+-- esl_proxy AICpu kernel: 16 source files
+-- Configuring done (0.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicpu
+[  5%] Building C object CMakeFiles/aicpu_dispatcher.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/aicpu_dispatcher.c.o
+[ 10%] Building C object CMakeFiles/aicpu_dispatcher.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/tools.c.o
+[ 25%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/dispatch_payload.c.o
+[ 25%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/cutter.c.o
+[ 25%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/dispatch.c.o
+[ 30%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/dispatch_spmd_mix.c.o
+[ 35%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/executor.c.o
+[ 40%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/handshake.c.o
+[ 45%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/algorithm/shm.c.o
+[ 50%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/aicpu_affinity.c.o
+[ 55%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/aicpu_runtime.c.o
+[ 65%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/cache_ops.c.o
+[ 65%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/npu_hal.c.o
+[ 70%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/onboard_log.c.o
+[ 75%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/platform_init.c.o
+[ 80%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/tools.c.o
+[ 90%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/swimlane/swimlane_aicpu.c.o
+[ 90%] Building C object CMakeFiles/aicpu_kernel.dir/data/y00955915/Desktop/esl_proxy_main/esl_proxy/esl_proxy/src/platform/onboard/platform_sync_onboard.c.o
+[ 95%] Linking C shared library libesl_aicpu_dispatcher.so
+[ 95%] Built target aicpu_dispatcher
+[100%] Linking C shared library libaicpu_kernel.so
+[100%] Built target aicpu_kernel
+Built: /data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicpu/libaicpu_kernel.so
+[esl_proxy] ORCH_CASE=qwen3_dynamic_manual_scope.h (swimlane=1)
+[esl_proxy] onboard runner device=0 block_dim=24 workers=72(aic=24+aiv=48) aicpu_threads=3 launch_threads=6
+[esl_proxy] dispatcher=/data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicpu/libesl_aicpu_dispatcher.so aicpu=/data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicpu/libaicpu_kernel.so aicore=/data/y00955915/Desktop/esl_proxy_main/esl_proxy/build/onboard/aicore/aicore_kernel.o
+[esl_proxy] op-execute timeout set: requested=3000000 us actual=4294967 us
+[esl_proxy] bootstrapped inner SO esl_inner_ea209e559c2e0a32_0.so
+[esl_proxy] HW AICore regs: 75 addresses H2D -> 0x12c0c0019000
+[esl_proxy] AICPU allowed_cpus=[4,5,6] launch=6
+[esl_proxy] L2 swimlane enabled level=1 (no PMU)
+[esl_proxy] ffts_base_addr=0xfee00000000 len=32
+[esl_proxy] launching AICore kernel block_dim=24 (workers=72)
+[esl_proxy] aicpu init launch
+[esl_proxy] aicpu init sync
+[esl_proxy] aicore launch block_dim=24 (stream_aicore, before exec so cores are resident for handshake)
+[esl_proxy] aicpu exec launch (after aicore; aicore waits on aicpu_ready)
+[esl_proxy] aicpu exec sync
+[esl_proxy] sync after aicpu exec failed: 507018
+[esl_proxy] device_wall stats: task_cnt=0 subtask_cnt=0 completed_cnt=0 wall_ns=4149300
+[esl_proxy] device_wall diag: commit=0 n_uncomp=0 first_uncomp=0 pred_cnt[first]=0 ready_cube=0 ready_vec=0
+tools/run_onboard.sh: line 247: 717308 Segmentation fault      (core dumped) "${ROOT}/build/onboard/host/esl_onboard_runner" -d "$DEVICE_ID" --dispatcher "${ROOT}/build/onboard/aicpu/libesl_aicpu_dispatcher.so" --aicpu "${ROOT}/build/onboard/aicpu/libaicpu_kernel.so" --aicore "${ROOT}/build/onboard/aicore/aicore_kernel.o" 2>&1
+     717309 Done                    | tee "$log"
+ERROR: missing /data/y00955915/Desktop/esl_proxy_main/esl_proxy/l2_swimlane_records.json for qwen3_dynamic_manual_scope.h
+ERROR: case qwen3_dynamic_manual_scope.h failed

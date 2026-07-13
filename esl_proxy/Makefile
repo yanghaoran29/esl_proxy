@@ -97,6 +97,12 @@ CFLAGS   += -DESL_PROXY_SIM_INSTANT_AICORE=1
 CXXFLAGS += -DESL_PROXY_SIM_INSTANT_AICORE=1
 endif
 
+# L2 swimlane trace sources (src/swimlane/) are onboard-only — they depend on
+# CANN headers (acl/acl_rt.h, ascend_hal.h, dlog_pub.h) not available in the
+# sim build. They are compiled via the onboard CMake build, not this Makefile.
+# ESL_PROXY_ENABLE_L2_SWIMLANE stays 0 for sim (no-op hooks); pre-generated
+# swimlane traces live under report/swimlane/proxy/spmd/.
+
 OBJ_DIR := build/obj
 BIN_DIR := bin
 TARGET  := $(BIN_DIR)/esl_proxy
