@@ -1,5 +1,5 @@
 /*
- * dispatch.c - Dispatch Worker Thread Implementation (basic, no MIX/SPMD range-claim)
+ * dispatch.c - Dispatch Worker Thread Implementation (MIX dispatch, non-atomic SPMD)
  *
  * Worker thread entry point for Dispatch.
  * This file is compiled separately as it contains pthread-specific code.
@@ -7,6 +7,7 @@
 #define _GNU_SOURCE
 
 #include "dispatch.h"
+#include "dispatch_spmd_mix.h"
 #include "handshake.h"
 #include "runtime.h"
 #include "cutter.h"
@@ -104,90 +105,10 @@ static int basic_has_remaining(uint16_t task_id)
     return g_next_block[slot] < total;
 }
 
-static int basic_note_block_done(uint16_t task_id)
-{
-    const uint16_t slot = task_id & RING_MASK;
-    const uint32_t total = g_basic_buf[slot].count;
-    uint16_t prev = g_finished_blocks[slot]++;
-
-    return (uint32_t)(prev + 1U) == total;
-}
-
 static void basic_rewind(uint16_t task_id, uint32_t claimed_end, uint32_t next_block)
 {
     (void)claimed_end;
     g_next_block[task_id & RING_MASK] = (uint16_t)next_block;
-}
-
-/* --- Basic helpers (no MIX cluster logic) --- */
-
-static int basic_defer_slot_clear(int exe_type, int core, int slot)
-{
-    (void)exe_type;
-    (void)core;
-    (void)slot;
-    return 0;
-}
-
-static void basic_merge_msg_to_free(ctrl_t *ctrl)
-{
-    for (int i = 0; i < EXE_TYPE_CNT; i++) {
-        for (int j = 0; j < AIC_OSTD; j++) {
-            ctrl->free_bitmap[i][j] |= ctrl->msg_bitmap[i][j];
-        }
-    }
-    for (int j = 0; j < AIC_OSTD; j++) {
-        ctrl->free_bitmap[TASK_TYPE_MIX][j] =
-            ctrl->free_bitmap[TASK_TYPE_CUBE][j] & ctrl->free_bitmap[TASK_TYPE_VECTOR][j];
-    }
-}
-
-static int basic_push_completed_slots(ctrl_t *ctrl, uint16_t out_tasks[], int max_out)
-{
-    int out = 0;
-
-    for (int i = 0; i < EXE_TYPE_CNT; i++) {
-        uint64_t bitmap0 = ctrl->msg_bitmap[i][0];
-        uint64_t bitmap1 = ctrl->msg_bitmap[i][1];
-        uint64_t keep0 = ctrl->msg_bitmap[i][0];
-        uint64_t keep1 = ctrl->msg_bitmap[i][1];
-
-        while (bitmap0 != 0) {
-            const int core = (int)__builtin_ctzll(bitmap0);
-            const uint64_t mask = (uint64_t)1 << core;
-            uint16_t tid_done = ctrl->task_id_map1[i][core];
-
-            bitmap0 &= ~mask;
-            if (g_basic_buf[tid_done & RING_MASK].type == TASK_TYPE_MIX) {
-                continue;
-            }
-            keep0 &= ~mask;
-            if (basic_note_block_done(tid_done)) {
-                if (out < max_out) {
-                    out_tasks[out++] = tid_done;
-                }
-            }
-        }
-        while (bitmap1 != 0) {
-            const int core = (int)__builtin_ctzll(bitmap1);
-            const uint64_t mask = (uint64_t)1 << core;
-            uint16_t tid_done = ctrl->task_id_map2[i][core];
-
-            bitmap1 &= ~mask;
-            if (g_basic_buf[tid_done & RING_MASK].type == TASK_TYPE_MIX) {
-                continue;
-            }
-            keep1 &= ~mask;
-            if (basic_note_block_done(tid_done)) {
-                if (out < max_out) {
-                    out_tasks[out++] = tid_done;
-                }
-            }
-        }
-        ctrl->msg_bitmap[i][0] = keep0;
-        ctrl->msg_bitmap[i][1] = keep1;
-    }
-    return out;
 }
 
 static uint64_t dispatch_core_reg_addr(int worker_id)
@@ -248,7 +169,7 @@ static void dispatch_mark_slot_complete(int exe_type, int core, int slot, uint64
     }
     platform_reg_task_ack(reg_addr, reg_task);
     g_ctrl_t[CORE_LANE(core)].msg_bitmap[exe_type][slot] |= mask;
-    if (!basic_defer_slot_clear(exe_type, core, slot)) {
+    if (!dispatch_mix_defer_slot_clear(exe_type, core, slot)) {
         g_executors[exe_type][core].idx = (uint8_t)AIC_OSTD;
         g_executors[exe_type][core].tasks[slot] = EXEC_SLOT_EMPTY;
     }
@@ -267,7 +188,7 @@ static void dispatch_force_complete(int exe_type, int core, int slot, uint64_t r
     }
     platform_reg_task_ack(reg_addr, reg_task);
     g_ctrl_t[CORE_LANE(core)].msg_bitmap[exe_type][slot] |= mask;
-    if (!basic_defer_slot_clear(exe_type, core, slot)) {
+    if (!dispatch_mix_defer_slot_clear(exe_type, core, slot)) {
         g_executors[exe_type][core].idx = (uint8_t)AIC_OSTD;
         g_executors[exe_type][core].tasks[slot] = EXEC_SLOT_EMPTY;
     }
@@ -377,13 +298,13 @@ void dispatch_poll(int tid)
 
 static inline void get_free_exe(int tid)
 {
-    basic_merge_msg_to_free(&g_ctrl_t[tid]);
+    dispatch_merge_msg_to_free(&g_ctrl_t[tid]);
 }
 
 static inline void push_2_completed_queue(int tid)
 {
     uint16_t task_id[DISPATCH_COMPLETE_BATCH];
-    int complete_cnt = basic_push_completed_slots(&g_ctrl_t[tid], task_id, DISPATCH_COMPLETE_BATCH);
+    int complete_cnt = dispatch_push_completed_slots(&g_ctrl_t[tid], task_id, DISPATCH_COMPLETE_BATCH);
 
     if (complete_cnt > 0) {
         batch_enqueue(&g_ctrl_t[tid].completed_queue, task_id, (uint16_t)complete_cnt);
@@ -472,11 +393,84 @@ fail:
     return -1;
 }
 
+static int send_task_mix(ctrl_t *ctrl)
+{
+    int sent = 0;
+    int cl_core[AIC_CNT];
+    int cl_slot[AIC_CNT];
+    int ncl = 0;
+    int used = 0;
+
+    /* Snapshot this lane's idle MIX clusters; a task's block range is fanned
+     * across them (simpler dispatch_shape range-claim over available clusters). */
+    for (int core = 0; core < AIC_CNT; core++) {
+        int slot;
+
+        if (CORE_LANE(core) != ctrl->tid) {
+            continue;
+        }
+        if (dispatch_mix_cluster_idle(ctrl, core, &slot)) {
+            cl_core[ncl] = core;
+            cl_slot[ncl] = slot;
+            ncl++;
+        }
+    }
+
+    while (used < ncl) {
+        uint16_t one;
+        uint16_t cnt1 = 1;
+        uint32_t start;
+        int n;
+        EslPublishHandle pubs[3 * AIC_CNT];
+        int phys_arr[3 * AIC_CNT];
+        int np = 0;
+        int fail = 0;
+        int b = 0;
+
+        if (!batch_dequeue(&g_shared_ready[TASK_TYPE_MIX], &one, &cnt1) || cnt1 < 1) {
+            break;
+        }
+        n = dispatch_spmd_claim_range(one, ncl - used, &start);
+        if (n <= 0) {
+            continue;
+        }
+        for (; b < n; b++) {
+            int core = cl_core[used];
+            int slot = cl_slot[used];
+
+            used++;
+            dispatch_mix_occupy_cluster(ctrl, core, slot, one, start + (uint32_t)b);
+            if (dispatch_mix_prepare_cluster(ctrl, core, slot, one, start + (uint32_t)b, pubs, phys_arr, &np) != 0) {
+                dispatch_mix_release_cluster(ctrl, core, slot);
+                fail = 1;
+                break;
+            }
+            sent++;
+        }
+        dispatch_mix_flush(pubs, phys_arr, np);
+        if (fail) {
+            dispatch_spmd_rewind(one, start + (uint32_t)n, start + (uint32_t)b);
+            batch_enqueue(&g_shared_ready[TASK_TYPE_MIX], &one, 1);
+            break;
+        }
+        if (dispatch_spmd_has_remaining(one)) {
+            batch_enqueue(&g_shared_ready[TASK_TYPE_MIX], &one, 1);
+        }
+    }
+    return sent;
+}
+
 static inline int send_task(ctrl_t *ctrl, int type)
 {
     int exe_type = type;
 
     uint64_t free_bitmap = ctrl->free_bitmap[type][0] & ctrl->free_bitmap[type][1];
+
+    for (int core = 0; core < AIC_CNT; core++) {
+        if (dispatch_mix_core_busy(core)) {
+            free_bitmap &= ~((uint64_t)1 << core);
+        }
+    }
 
     int cnt = __builtin_popcountll(free_bitmap);
 
@@ -587,6 +581,9 @@ static int dispatch_prefetch(ctrl_t *ctrl, int type)
         if (CORE_LANE(core) != ctrl->tid) {
             continue;
         }
+        if (dispatch_mix_core_busy(core)) {
+            continue;
+        }
         for (int s = 0; s < AIC_OSTD; s++) {
             if (g_executors[exe_type][core].tasks[s] != EXEC_SLOT_EMPTY) {
                 busy_slot = (busy_slot < 0) ? s : -2;
@@ -652,6 +649,8 @@ int dispatch(int tid)
     atomic_thread_fence(memory_order_acquire);
     get_free_exe(tid);
     push_2_completed_queue(tid);
+    total_sent += send_task_mix(&g_ctrl_t[tid]);
+    total_sent += dispatch_mix_prefetch(&g_ctrl_t[tid]);
     total_sent += send_task(&g_ctrl_t[tid], TASK_TYPE_VECTOR);
     total_sent += send_task(&g_ctrl_t[tid], TASK_TYPE_CUBE);
     total_sent += dispatch_prefetch(&g_ctrl_t[tid], TASK_TYPE_VECTOR);
