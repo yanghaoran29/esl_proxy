@@ -19,6 +19,8 @@
 #include "queue.h"
 #include "runtime.h"
 
+/* ===== types / globals ===== */
+
 typedef struct ctrl {
     // 64CORES
     uint64_t free_bitmap[TASK_TYPE_CNT][AIC_OSTD];
@@ -46,11 +48,15 @@ static inline int lane_core_count(int tid)
            ((AIC_CNT % DISPATCH_THREAD_CNT) > tid ? 1 : 0);
 }
 
+/* ===== worker / poll / init ===== */
+
 void *dispatch_worker(void *arg);
 void init_ctrl_t(void);
 
 /* 把硬件 AICore 完成事件拉到 msg_bitmap。 */
 void dispatch_poll(int tid);
+
+/* ===== SPMD (external: cutter) ===== */
 
 /* Reset SPMD block cursor when a task becomes ready (called by cutter). */
 void dispatch_spmd_on_ready(uint16_t task_id);

@@ -3,19 +3,12 @@
 # Included by cmake/aicpu/CMakeLists.txt. The sim build (esl_proxy/Makefile) keeps
 # its own list.
 
-# dispatch has two interchangeable variants — select one (default: basic).
-#   ESL_PROXY_DOUBLE_BUFFER=ON -> dispatch_double_buffer.c
-#   (default)                  -> dispatch.c
-if(DEFINED ESL_PROXY_DOUBLE_BUFFER AND ESL_PROXY_DOUBLE_BUFFER)
-    set(ESL_DISPATCH_SRC src/algorithm/dispatch_double_buffer.c)
-else()
-    set(ESL_DISPATCH_SRC src/algorithm/dispatch.c)
-endif()
-
+# dispatch.c holds basic + SPMD/MIX + double-buffer (selected via
+# -DESL_DISPATCH_DOUBLE_BUFFER=1). ESL_PROXY_DOUBLE_BUFFER=ON sets that define
+# on aicpu_kernel (see cmake/aicpu/CMakeLists.txt).
 set(ESL_ALGORITHM_SRCS
-    ${ESL_DISPATCH_SRC}
+    src/algorithm/dispatch.c
     src/algorithm/dispatch_payload.c
-    src/algorithm/dispatch_spmd_mix.c
     src/algorithm/cutter.c
     src/algorithm/executor.c
     src/algorithm/handshake.c

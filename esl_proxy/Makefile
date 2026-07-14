@@ -103,16 +103,14 @@ TARGET  := $(BIN_DIR)/esl_proxy
 
 DISPATCH ?= basic
 ifeq ($(DISPATCH),double_buffer)
-DISPATCH_SRC := src/algorithm/dispatch_double_buffer.c
-else
-DISPATCH_SRC := src/algorithm/dispatch.c
+CFLAGS += -DESL_DISPATCH_DOUBLE_BUFFER=1
+CXXFLAGS += -DESL_DISPATCH_DOUBLE_BUFFER=1
 endif
 
 SRCS := \
 	src/main.c \
-	$(DISPATCH_SRC) \
+	src/algorithm/dispatch.c \
 	src/algorithm/dispatch_payload.c \
-	src/algorithm/dispatch_spmd_mix.c \
 	src/algorithm/cutter.c \
 	src/algorithm/executor.c \
 	src/algorithm/handshake.c \

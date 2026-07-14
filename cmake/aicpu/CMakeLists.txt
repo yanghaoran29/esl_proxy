@@ -48,6 +48,11 @@ if(DEFINED ENV{SIMPLER_DISABLE_WARNINGS_AS_ERRORS})
     set(WERROR OFF)
 endif()
 
+# Match sim Makefile DISPATCH=double_buffer (-DESL_DISPATCH_DOUBLE_BUFFER=1).
+if(DEFINED ESL_PROXY_DOUBLE_BUFFER AND ESL_PROXY_DOUBLE_BUFFER)
+    target_compile_definitions(aicpu_kernel PRIVATE ESL_DISPATCH_DOUBLE_BUFFER=1)
+endif()
+
 target_compile_options(aicpu_kernel
     PRIVATE
         -Wall

@@ -42,6 +42,15 @@ _Static_assert(CUTTER_THREAD_CNT == DISPATCH_THREAD_CNT,
 /* core -> owning lane (strided). Matches executor.c completion routing. */
 #define CORE_LANE(core) ((core) % DISPATCH_THREAD_CNT)
 
+/* Dispatch mode. 0 (default) = basic dispatch; 1 = double-buffer dispatch.
+ * Selected via `make DISPATCH=double_buffer` (Makefile adds -D=1). Basic mode
+ * filters cores held by in-flight MIX clusters (dispatch_mix_core_busy) and
+ * runs a second-pass MIX prefetch (dispatch_mix_prefetch); double-buffer mode
+ * skips both so dispatch_prefetch can actively use the 2nd slot. */
+#ifndef ESL_DISPATCH_DOUBLE_BUFFER
+#define ESL_DISPATCH_DOUBLE_BUFFER 0
+#endif
+
 /* 1: compile in worker logs; toggle at runtime via g_worker_log or WORKER_LOG env */
 #ifndef WORKER_LOG
 #define WORKER_LOG 1
