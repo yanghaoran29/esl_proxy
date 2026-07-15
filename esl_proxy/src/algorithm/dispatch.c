@@ -8,6 +8,9 @@
  *   5 schedule path     6 worker
  *   4 MIX               3 SPMD
  *
+ * Double-buffer mode: -DESL_DISPATCH_DOUBLE_BUFFER=1; differs only inside
+ * send_task / dispatch_prefetch / dispatch (local #if).
+ *
  * SPMD block cursor (g_next_block) is non-atomic: batch_dequeue's queue lock
  * serializes pops. g_finished_blocks stays _Atomic for concurrent completions.
  */
@@ -72,11 +75,13 @@ static int dispatch_mix_prepare_cluster(ctrl_t *ctrl, int core, int slot, uint16
                                         EslPublishHandle pubs[], int phys_arr[], int *np);
 static void dispatch_mix_flush(EslPublishHandle pubs[], const int phys_arr[], int np);
 static int dispatch_mix_harvest_completed(ctrl_t *ctrl, uint16_t done_tasks[], int max_out);
+#if !ESL_DISPATCH_DOUBLE_BUFFER
 static int dispatch_mix_core_busy(int core);
 static int dispatch_mix_cluster_pending(ctrl_t *ctrl, int core, int *out_busy_slot, int *out_free_slot);
 static int dispatch_mix_cluster_subtasks_acked(int core, int slot);
 static int dispatch_mix_publish_cluster(ctrl_t *ctrl, int core, int slot, uint16_t task_id, uint32_t block_idx);
 static int dispatch_mix_prefetch(ctrl_t *ctrl);
+#endif
 static void dispatch_merge_msg_to_free(ctrl_t *ctrl);
 static int dispatch_push_completed_slots(ctrl_t *ctrl, uint16_t out_tasks[], int max_out);
 
@@ -427,11 +432,13 @@ static inline int send_task(ctrl_t *ctrl, int type)
     int exe_type = type;
     uint64_t free_bitmap = ctrl->free_bitmap[type][0] & ctrl->free_bitmap[type][1];
 
+#if !ESL_DISPATCH_DOUBLE_BUFFER
     for (int core = 0; core < AIC_CNT; core++) {
         if (dispatch_mix_core_busy(core)) {
             free_bitmap &= ~((uint64_t)1 << core);
         }
     }
+#endif
 
     int cnt = __builtin_popcountll(free_bitmap);
 
@@ -526,6 +533,75 @@ static inline int send_task(ctrl_t *ctrl, int type)
     return sent;
 }
 
+static int dispatch_prefetch(ctrl_t *ctrl, int type)
+{
+    int exe_type = type;
+    int sent = 0;
+
+    for (int core = 0; core < AIC_CNT; core++) {
+        int busy_slot = -1;
+        int free_slot = -1;
+#if !ESL_DISPATCH_DOUBLE_BUFFER
+        if (dispatch_mix_core_busy(core)) {
+            continue;
+        }
+#endif
+        for (int s = 0; s < AIC_OSTD; s++) {
+            if (g_executors[exe_type][core].tasks[s] != EXEC_SLOT_EMPTY) {
+                busy_slot = (busy_slot < 0) ? s : -2;
+            } else {
+                free_slot = (free_slot < 0) ? s : -2;
+            }
+        }
+        if (busy_slot < 0 || free_slot < 0) {
+            continue;
+        }
+        const uint64_t mask = (uint64_t)1 << core;
+        if (!(ctrl->free_bitmap[type][free_slot] & mask)) {
+            continue;
+        }
+        const uint32_t reg_busy = (uint32_t)g_executors[exe_type][core].base[busy_slot];
+        const int phys = (int)g_executors[exe_type][core].block_idx[busy_slot];
+        const uint64_t reg_addr = dispatch_core_reg_addr(phys);
+        if (reg_addr == 0 || !platform_reg_task_acked(reg_addr, reg_busy)) {
+            continue;
+        }
+
+        uint16_t one;
+        uint16_t cnt1 = 1;
+        uint32_t block_idx;
+
+        if (!batch_dequeue(&ctrl->ready_queue[type], &one, &cnt1) || cnt1 < 1) {
+            break;
+        }
+        if (!dispatch_spmd_claim_block(one, &block_idx)) {
+            break;
+        }
+        g_executors[exe_type][core].idx = (uint8_t)free_slot;
+        if (free_slot == 1) {
+            ctrl->task_id_map2[type][core] = one;
+        } else {
+            ctrl->task_id_map1[type][core] = one;
+        }
+        ctrl->free_bitmap[type][free_slot] &= ~mask;
+        g_executors[exe_type][core].tasks[free_slot] = one;
+        g_executors[exe_type][core].duration[free_slot] = g_basic_buf[one & RING_MASK].duration;
+        g_executors[exe_type][core].block_idx[free_slot] =
+            (uint16_t)platform_pick_phys_worker(core, exe_type);
+        if (dispatch_publish_block(ctrl, exe_type, type, one, block_idx, core, free_slot) != 0) {
+            batch_enqueue(&ctrl->ready_queue[type], &one, 1);
+            break;
+        }
+        if (dispatch_spmd_has_remaining(one)) {
+            batch_enqueue(&ctrl->ready_queue[type], &one, 1);
+        }
+        WORKER_LOGF("prefetch,task_id,%u,core,%d,slot,%d,type,%d,block,%u", one, core, free_slot,
+                    type, (unsigned)block_idx);
+        sent++;
+    }
+    return sent;
+}
+
 static int dispatch(int tid)
 {
     int total_sent = 0;
@@ -541,9 +617,13 @@ static int dispatch(int tid)
         wmb();
     }
     total_sent += send_task_mix(&g_ctrl_t[tid]);
+#if !ESL_DISPATCH_DOUBLE_BUFFER
     total_sent += dispatch_mix_prefetch(&g_ctrl_t[tid]);
+#endif
     total_sent += send_task(&g_ctrl_t[tid], TASK_TYPE_VECTOR);
     total_sent += send_task(&g_ctrl_t[tid], TASK_TYPE_CUBE);
+    total_sent += dispatch_prefetch(&g_ctrl_t[tid], TASK_TYPE_VECTOR);
+    total_sent += dispatch_prefetch(&g_ctrl_t[tid], TASK_TYPE_CUBE);
     return total_sent;
 }
 
@@ -662,6 +742,7 @@ static int dispatch_mix_cluster_idle(ctrl_t *ctrl, int core, int *out_slot)
     return 0;
 }
 
+#if !ESL_DISPATCH_DOUBLE_BUFFER
 static int dispatch_mix_cluster_pending(ctrl_t *ctrl, int core, int *out_busy_slot, int *out_free_slot)
 {
     const uint64_t mask = (uint64_t)1 << core;
@@ -700,7 +781,9 @@ static int dispatch_mix_cluster_pending(ctrl_t *ctrl, int core, int *out_busy_sl
     }
     return 0;
 }
+#endif
 
+#if !ESL_DISPATCH_DOUBLE_BUFFER
 static int dispatch_mix_cluster_subtasks_acked(int core, int slot)
 {
     const int other = 1 - slot;
@@ -721,7 +804,9 @@ static int dispatch_mix_cluster_subtasks_acked(int core, int slot)
     }
     return 1;
 }
+#endif
 
+#if !ESL_DISPATCH_DOUBLE_BUFFER
 static int dispatch_mix_core_busy(int core)
 {
     for (int s = 0; s < AIC_OSTD; s++) {
@@ -731,6 +816,7 @@ static int dispatch_mix_core_busy(int core)
     }
     return 0;
 }
+#endif
 
 static int dispatch_mix_prepare_cluster(ctrl_t *ctrl, int core, int slot, uint16_t task_id, uint32_t block_idx,
                                  EslPublishHandle pubs[], int phys_arr[], int *np)
@@ -794,6 +880,7 @@ static void dispatch_mix_flush(EslPublishHandle pubs[], const int phys_arr[], in
     }
 }
 
+#if !ESL_DISPATCH_DOUBLE_BUFFER
 static int dispatch_mix_publish_cluster(ctrl_t *ctrl, int core, int slot, uint16_t task_id,
                                  uint32_t block_idx)
 {
@@ -807,7 +894,9 @@ static int dispatch_mix_publish_cluster(ctrl_t *ctrl, int core, int slot, uint16
     dispatch_mix_flush(pubs, phys_arr, np);
     return 0;
 }
+#endif
 
+#if !ESL_DISPATCH_DOUBLE_BUFFER
 static int dispatch_mix_prefetch(ctrl_t *ctrl)
 {
     int sent = 0;
@@ -846,6 +935,7 @@ static int dispatch_mix_prefetch(ctrl_t *ctrl)
     }
     return sent;
 }
+#endif
 
 static int dispatch_mix_cluster_all_done(ctrl_t *ctrl, int core, int slot)
 {

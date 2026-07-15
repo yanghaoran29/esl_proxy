@@ -71,6 +71,13 @@ CFLAGS   += -DMAIN_LOG=$(MAIN_LOG)
 CXXFLAGS += -DMAIN_LOG=$(MAIN_LOG)
 endif
 
+# Dispatch mode: basic (default) or double_buffer.
+DISPATCH ?= basic
+ifeq ($(DISPATCH),double_buffer)
+CFLAGS += -DESL_DISPATCH_DOUBLE_BUFFER=1
+CXXFLAGS += -DESL_DISPATCH_DOUBLE_BUFFER=1
+endif
+
 ifneq ($(EXTRA_CFLAGS),)
 CFLAGS   += $(EXTRA_CFLAGS)
 CXXFLAGS += $(EXTRA_CFLAGS)
