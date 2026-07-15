@@ -25,8 +25,8 @@ void executor_init(void)
         for (int core = 0; core < AIC_CNT; core++) {
             g_executors[exe_type][core].idx = AIC_OSTD;
             for (int i = 0; i < AIC_OSTD; i++) {
-                g_executors[exe_type][core].tasks[i] = 0;
-                g_executors[exe_type][core].block_idx[i] = 0;
+                g_executors[exe_type][core].tasks[i] = EXEC_SLOT_EMPTY;
+                g_executors[exe_type][core].block_idx[i] = EXEC_SLOT_EMPTY;
                 g_executors[exe_type][core].duration[i] = 0;
                 g_executors[exe_type][core].base[i] = 0;
             }
@@ -39,7 +39,7 @@ void* executor_worker(void *arg)
     (void)arg;
     int total_write_cnt = 0;
     int iterations = 0;
-    while (!atomic_load(&g_is_done))
+    while (!atomic_load_explicit(&g_is_done, memory_order_relaxed))
     {
         for (int exe_type = 0; exe_type < EXE_TYPE_CNT; exe_type++) {
             for (int core = 0; core < AIC_CNT; core++) {
@@ -58,8 +58,8 @@ void* executor_worker(void *arg)
                             // Reset duration for next block if not done
                             if (block_idx < block_count) {
                                 // Get base duration for this task (reuse original value)
-                                g_executors[exe_type][core].duration[idx] = 
-                                    (uint16_t)g_basic_buf[task_id & RING_MASK].duration;
+                                g_executors[exe_type][core].duration[idx] =
+                                    g_basic_buf[task_id & RING_MASK].duration;
                             }
                         } else {
                             // Decrement current block's duration

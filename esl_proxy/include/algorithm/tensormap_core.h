@@ -120,7 +120,7 @@ typedef struct TmHeader {
  * so hot-path accessors are plain member reads instead of base+offset each call.
  * Rebind via tm_attach() if the backing memory is relocated. */
 typedef struct TmTensorMap {
-    TmHeader *hdr; /* arena base; header lives at offset 0 */
+    TmHeader *hdr; /* backing-buffer base; header lives at offset 0 */
     int32_t *buckets;
     TmEntry *pool;
     int32_t *free_list;
