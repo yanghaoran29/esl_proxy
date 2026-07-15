@@ -41,4 +41,7 @@ void init_ctrl_t(void);
 /* 把硬件 AICore 完成事件拉到 msg_bitmap。 */
 void dispatch_poll(int tid);
 
+/* Reset SPMD block cursor when a task becomes ready (called by cutter). */
+void dispatch_spmd_on_ready(uint16_t task_id);
+
 #endif /* DISPATCH_H */

@@ -73,6 +73,7 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) 
             // WORKER_LOGF("ready, task_id,%u, task_idx,%u, ready_cnt,%u", g_commit_task_id, task_idx, *ready_cnt);
             task_type_t type = g_basic_buf[task_idx & RING_MASK].type;
             int q = ready_queue_index(type);
+            dispatch_spmd_on_ready(g_commit_task_id);
             rq_buf[q][ready_cnt[q]++] = g_commit_task_id;
             WORKER_LOGF("ready_cnt[%d],%d", q, ready_cnt[q]);
             g_commit_task_id++;
@@ -98,6 +99,7 @@ void add_successors(uint16_t ready_cnt[], uint16_t rq_buf[][LOCAL_BUFFER_SIZE]) 
         if (predecessor_cnt <= 0) {
             task_type_t type = g_basic_buf[task_idx & RING_MASK].type;
             int q = ready_queue_index(type);
+            dispatch_spmd_on_ready(g_commit_task_id);
             rq_buf[q][ready_cnt[q]++] = g_commit_task_id;
             WORKER_LOGF("ready_cnt[%d],%d", q, ready_cnt[q]);
         }
@@ -134,6 +136,7 @@ void resolve_dep(uint16_t cnt, uint16_t* cq_buf, uint16_t rq_buf[][LOCAL_BUFFER_
             WORKER_LOGF("cutter, task_id,%u, successor_id,%u, predecessor_cnt,%u", task_id, succ_id, g_predecessor_cnt[succ_id & RING_MASK]);
             if (g_predecessor_cnt[succ_id & RING_MASK] < 1) {
                 int q = ready_queue_index(g_basic_buf[succ_id].type);
+                dispatch_spmd_on_ready(succ_id);
                 rq_buf[q][ready_cnt[q]++] = succ_id;
                 WORKER_LOGF("ready_cnt[%d],%d", q, ready_cnt[q]);
             }

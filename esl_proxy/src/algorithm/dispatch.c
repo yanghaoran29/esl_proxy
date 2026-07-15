@@ -1,11 +1,15 @@
 /*
- * dispatch.c - Dispatch Worker Thread Implementation
+ * dispatch.c - Dispatch Worker Thread Implementation (SPMD range-claim, no MIX)
  *
  * Worker thread entry point for Dispatch.
- * This file is compiled separately as it contains pthread-specific code.
  *
- * PR-A onboard: Fake Return replaced by prepare/wmb/publish + COND poll.
- * Ready tasks still live in ctrl_t.ready_queue (QuteMiao).
+ * Layout (section order 0-1-2-5-6-3):
+ *   0 includes/externs  1 static state  2 basic infra
+ *   5 schedule path     6 worker
+ *   3 SPMD
+ *
+ * SPMD block cursor (g_next_block) is non-atomic: batch_dequeue's queue lock
+ * serializes pops. g_finished_blocks stays _Atomic for concurrent completions.
  */
 #define _GNU_SOURCE
 
@@ -36,16 +40,29 @@ extern atomic_int g_completed_cnt;
 extern atomic_bool g_is_done;
 extern ctrl_t g_ctrl_t[DISPATCH_THREAD_CNT];
 extern executor_t g_executors[EXE_TYPE_CNT][AIC_CNT];
-extern uint16_t g_predecessor_cnt[RING_SIZE];
-extern uint16_t g_commit_task_id;
+extern _Atomic uint16_t g_predecessor_cnt[RING_SIZE];
 extern int g_subtask_cnt;
+extern uint16_t g_commit_task_id;
 
 EslRuntime *g_runtime;
 
-/* ===== 1. Forward decls ===== */
+/* ===== 1. Static state ===== */
 
+/* Per-task SPMD block cursor. Non-atomic: pop-serialized. */
+static uint16_t g_next_block[RING_SIZE];
+
+/* Per-task finished-block counter. STAYS _Atomic. */
+static _Atomic uint16_t g_finished_blocks[RING_SIZE];
+
+/* Forward decls for SPMD used by section 2 and 5 (defs in 3). */
 static void dispatch_merge_msg_to_free(ctrl_t *ctrl);
 static int dispatch_push_completed_slots(ctrl_t *ctrl, uint16_t out_tasks[], int max_out);
+
+static int dispatch_spmd_claim_range(uint16_t task_id, int avail, uint32_t *start_block);
+static int dispatch_spmd_claim_block(uint16_t task_id, uint32_t *block_idx);
+static int dispatch_spmd_rewind(uint16_t task_id, uint32_t claimed_end, uint32_t next_block);
+static int dispatch_spmd_has_remaining(uint16_t task_id);
+static int dispatch_spmd_note_block_done(uint16_t task_id);
 
 /* ===== 2. Basic infrastructure ===== */
 
@@ -127,13 +144,13 @@ static void dispatch_force_complete(int exe_type, int core, int slot, uint64_t r
 /* Pull AICore FIN events into msg_bitmap. */
 void dispatch_poll(int tid)
 {
-    (void)tid;
     if (g_runtime == NULL) {
         return;
     }
     const int n_workers = g_runtime->worker_count;
     const int n_cores = AIC_CNT;
 
+    (void)tid;
     for (int exe_type = 0; exe_type < EXE_TYPE_CNT; exe_type++) {
         for (int core = 0; core < n_cores; core++) {
             const uint64_t mask = (uint64_t)1 << core;
@@ -164,7 +181,17 @@ void dispatch_poll(int tid)
             if (nb == 2 && (int)g_executors[exe_type][core].block_idx[bs[1]] == phys0) {
                 /* 同一物理核 2 个在飞:COND 单寄存器只留最新值。仿照 simpler:读一次 COND,
                  * 按 seq 定 running(旧)/pending(新),用"看到 pending 事件即推断 running 完成"
-                 * (串行执行)化解覆盖丢失 —— 见 simpler decide_slot_transition。 */
+                 * (串行执行)化解覆盖丢失 —— 见 simpler decide_slot_transition。
+                 *
+                 * 双 slot 完成推断 vs 双缓冲(prefetch):
+                 *  - 双 slot 完成推断是基础设施(正确性要求):同一物理核 2 个在飞时,单 COND
+                 *    寄存器只留最新值,先发任务的 FIN 会被后发任务覆盖丢失;不推断则先发任务
+                 *    永远无法完成(挂死)。无论是否启用双缓冲都必须处理。
+                 *  - 双缓冲(dispatch_prefetch)是性能优化:主动利用第二 slot 提前下发下一
+                 *    任务,提高并行度。
+                 *  - 两者关系:双缓冲创建 2 在飞场景,完成推断处理该场景的完成事件。
+                 *  - 对应 simpler 的 decide_slot_transition(scheduler_completion.cpp:46-61),
+                 *    由 zhusy54 在 PR #477 (2026-04-12) 引入。 */
                 const int s0 = bs[0];
                 const int s1 = bs[1];
                 const uint32_t b0 = (uint32_t)g_executors[exe_type][core].base[s0];
@@ -309,8 +336,8 @@ fail:
 static inline int send_task(ctrl_t *ctrl, int type)
 {
     int exe_type = type;
-    // Check both slots - slot is free if neither slot 0 nor slot 1 has been sent a task
     uint64_t free_bitmap = ctrl->free_bitmap[type][0] & ctrl->free_bitmap[type][1];
+
     int cnt = __builtin_popcountll(free_bitmap);
 
     if (cnt <= 0) {
@@ -325,130 +352,83 @@ static inline int send_task(ctrl_t *ctrl, int type)
     cnt = (int)pop_cnt;
 
     int sent = 0;
-    struct {
-        int core;
-        int slot;
-        EslPublishHandle h;
-    } pend[AIC_CNT];
-    int np = 0;
-
     for (int i = 0; i < cnt; i++) {
         uint16_t task_id = task_ids[i];
-        uint64_t idx;
-        uint64_t mask;
-        int slot;
-        int core;
-        EslPublishHandle h;
-        int fast = 0;
+        int avail = __builtin_popcountll(free_bitmap);
+        uint32_t start;
+        int n;
 
-        if (free_bitmap == 0) {
+        if (avail <= 0) {
             batch_enqueue(&ctrl->ready_queue[type], &task_ids[i], (uint16_t)(cnt - i));
             break;
         }
-        /* count==1: one core per task, always block_idx=0 (no SPMD claim). */
-        idx = (uint64_t)__builtin_ctzll(free_bitmap);
-        mask = (uint64_t)0x1 << idx;
-        slot = (ctrl->free_bitmap[type][0] & mask) != 0 ? 0 : 1;
-        core = (int)idx;
-
-        g_executors[exe_type][core].tasks[slot] = task_id;
-        g_executors[exe_type][core].duration[slot] = g_basic_buf[task_id & RING_MASK].duration;
-        g_executors[exe_type][core].idx = (uint8_t)slot;
-        if (slot == 1) {
-            ctrl->task_id_map2[type][idx] = task_id;
-        } else {
-            ctrl->task_id_map1[type][idx] = task_id;
+        n = dispatch_spmd_claim_range(task_id, avail, &start);
+        if (n <= 0) {
+            continue;
         }
-        // Clear the free bit for this core/slot combination (mark as busy)
-        ctrl->free_bitmap[type][slot] &= ~mask;
-        g_executors[exe_type][core].block_idx[slot] = (uint16_t)platform_pick_phys_worker(core, exe_type);
-        free_bitmap &= ~mask;
 
-        // Fake Return — replaced by prepare/wmb/publish + COND poll on onboard
-        if (dispatch_publish_block_prepare(ctrl, exe_type, type, task_id, 0 /* block_idx */, core, slot, &h,
-                                           &fast) != 0) {
+        struct {
+            int core;
+            int slot;
+            EslPublishHandle h;
+        } pend[AIC_CNT];
+        int np = 0;
+        int fail = 0;
+        int b = 0;
+
+        for (; b < n; b++) {
+            uint64_t idx = (uint64_t)__builtin_ctzll(free_bitmap);
+            uint64_t mask = (uint64_t)0x1 << idx;
+            int slot = (ctrl->free_bitmap[type][0] & mask) != 0 ? 0 : 1;
+            int core = (int)idx;
+            EslPublishHandle h;
+            int fast = 0;
+
+            g_executors[exe_type][core].tasks[slot] = task_id;
+            g_executors[exe_type][core].duration[slot] = g_basic_buf[task_id & RING_MASK].duration;
+            g_executors[exe_type][core].idx = (uint8_t)slot;
+            if (slot == 1) {
+                ctrl->task_id_map2[type][idx] = task_id;
+            } else {
+                ctrl->task_id_map1[type][idx] = task_id;
+            }
+            ctrl->free_bitmap[type][slot] &= ~mask;
+            g_executors[exe_type][core].block_idx[slot] = (uint16_t)platform_pick_phys_worker(core, exe_type);
+            free_bitmap &= ~mask;
+
+            if (dispatch_publish_block_prepare(ctrl, exe_type, type, task_id, start + (uint32_t)b, core, slot, &h,
+                                               &fast) != 0) {
+                fail = 1;
+                break;
+            }
+            sent++;
+            if (!fast) {
+                pend[np].core = core;
+                pend[np].slot = slot;
+                pend[np].h = h;
+                np++;
+            }
+        }
+
+        if (np > 0) {
+            wmb();
+            for (int p = 0; p < np; p++) {
+                esl_publish_subtask_to_core(pend[p].h);
+                dispatch_mark_slot_complete(exe_type, pend[p].core, pend[p].slot, pend[p].h.reg_addr,
+                                            pend[p].h.reg_task_id);
+            }
+        }
+
+        if (fail) {
+            dispatch_spmd_rewind(task_id, start + (uint32_t)n, start + (uint32_t)b);
             batch_enqueue(&ctrl->ready_queue[type], &task_ids[i], (uint16_t)(cnt - i));
             break;
         }
-        sent++;
-        if (!fast) {
-            pend[np].core = core;
-            pend[np].slot = slot;
-            pend[np].h = h;
-            np++;
-        }
-    }
-
-    if (np > 0) {
-        wmb();
-        for (int p = 0; p < np; p++) {
-            esl_publish_subtask_to_core(pend[p].h);
-            dispatch_mark_slot_complete(exe_type, pend[p].core, pend[p].slot, pend[p].h.reg_addr,
-                                        pend[p].h.reg_task_id);
+        if (dispatch_spmd_has_remaining(task_id)) {
+            batch_enqueue(&ctrl->ready_queue[type], &task_id, 1);
         }
     }
     return sent;
-}
-
-static void dispatch_merge_msg_to_free(ctrl_t *ctrl)
-{
-    for (int i = 0; i < EXE_TYPE_CNT; i++) {
-        for (int j = 0; j < AIC_OSTD; j++) {
-            ctrl->free_bitmap[i][j] |= ctrl->msg_bitmap[i][j];
-        }
-    }
-    /* Keep MIX free mask derived from CUBE&VECTOR (unused in PR-A schedule). */
-    for (int j = 0; j < AIC_OSTD; j++) {
-        ctrl->free_bitmap[TASK_TYPE_MIX][j] =
-            ctrl->free_bitmap[TASK_TYPE_CUBE][j] & ctrl->free_bitmap[TASK_TYPE_VECTOR][j];
-    }
-}
-
-// TODO: add counter for spmd
-/* count==1: each msg bit means the task is done; clear and push immediately. */
-static int dispatch_push_completed_slots(ctrl_t *ctrl, uint16_t out_tasks[], int max_out)
-{
-    int out = 0;
-    int i;
-
-    for (i = 0; i < EXE_TYPE_CNT; i++) {
-        uint64_t bitmap0 = ctrl->msg_bitmap[i][0];
-        uint64_t bitmap1 = ctrl->msg_bitmap[i][1];
-        uint64_t keep0 = ctrl->msg_bitmap[i][0];
-        uint64_t keep1 = ctrl->msg_bitmap[i][1];
-
-        while (bitmap0 != 0) {
-            const int core = (int)__builtin_ctzll(bitmap0);
-            const uint64_t mask = (uint64_t)1 << core;
-            uint16_t tid_done = ctrl->task_id_map1[i][core];
-
-            bitmap0 &= ~mask;
-            if (g_basic_buf[tid_done & RING_MASK].type == TASK_TYPE_MIX) {
-                continue;
-            }
-            keep0 &= ~mask;
-            if (out < max_out) {
-                out_tasks[out++] = tid_done;
-            }
-        }
-        while (bitmap1 != 0) {
-            const int core = (int)__builtin_ctzll(bitmap1);
-            const uint64_t mask = (uint64_t)1 << core;
-            uint16_t tid_done = ctrl->task_id_map2[i][core];
-
-            bitmap1 &= ~mask;
-            if (g_basic_buf[tid_done & RING_MASK].type == TASK_TYPE_MIX) {
-                continue;
-            }
-            keep1 &= ~mask;
-            if (out < max_out) {
-                out_tasks[out++] = tid_done;
-            }
-        }
-        ctrl->msg_bitmap[i][0] = keep0;
-        ctrl->msg_bitmap[i][1] = keep1;
-    }
-    return out;
 }
 
 static int dispatch(int tid)
@@ -492,15 +472,13 @@ static void dispatch_publish_final_stats(uint64_t elapsed_ns)
     uint64_t rqv = (uint64_t)g_ctrl_t[0].ready_queue[TASK_TYPE_VECTOR].cnt;
 
     platform_stats_publish((uint64_t)end, (uint64_t)g_subtask_cnt, (uint64_t)g_completed_cnt,
-                           ((uint64_t)(uint32_t)g_commit_task_id),
+                           ((uint64_t)(uint32_t)atomic_load_explicit(&g_commit_task_id, memory_order_acquire)),
                            (uint64_t)n_uncomp, ((uint64_t)(uint32_t)first_uncomp) | (pred0 << 32),
                            (rqc & 0xffffffffULL) | (rqv << 32), elapsed_ns);
 }
 
 void *dispatch_worker(void *arg)
 {
-    // atomic_store(&g_is_done, true);
-    // return NULL;
     int tid = (int)(intptr_t)arg;
 
     int total_sent = 0;
@@ -526,8 +504,7 @@ void *dispatch_worker(void *arg)
     uint64_t end_ns = get_time_ns();
     uint64_t elapsed_ns = end_ns - start_ns;
 
-    MAIN_LOGF("[scheduler] dispatched %d subtasks", total_sent);
-    (void)tid;
+    MAIN_LOGF("[scheduler] lane %d dispatched %d subtasks", tid, total_sent);
     MAIN_LOGF("[scheduler] task_cnt = %u", g_completed_cnt);
     MAIN_LOGF("[scheduler] duration = %llu ns", (unsigned long long)elapsed_ns);
     MAIN_LOGF("[scheduler] task_tp = %f MTasks/s",(float)(g_completed_cnt * 1000.0 / elapsed_ns));
@@ -536,5 +513,144 @@ void *dispatch_worker(void *arg)
     }
 
     return NULL;
+}
+
+static void dispatch_merge_msg_to_free(ctrl_t *ctrl)
+{
+    for (int i = 0; i < EXE_TYPE_CNT; i++) {
+        for (int j = 0; j < AIC_OSTD; j++) {
+            ctrl->free_bitmap[i][j] |= ctrl->msg_bitmap[i][j];
+        }
+    }
+}
+
+static int dispatch_push_completed_slots(ctrl_t *ctrl, uint16_t out_tasks[], int max_out)
+{
+    int out = 0;
+    int i;
+
+    for (i = 0; i < EXE_TYPE_CNT; i++) {
+        uint64_t bitmap0 = ctrl->msg_bitmap[i][0];
+        uint64_t bitmap1 = ctrl->msg_bitmap[i][1];
+        uint64_t keep0 = ctrl->msg_bitmap[i][0];
+        uint64_t keep1 = ctrl->msg_bitmap[i][1];
+
+        while (bitmap0 != 0) {
+            const int core = (int)__builtin_ctzll(bitmap0);
+            const uint64_t mask = (uint64_t)1 << core;
+            uint16_t tid_done = ctrl->task_id_map1[i][core];
+
+            bitmap0 &= ~mask;
+            if (g_basic_buf[tid_done & RING_MASK].type == TASK_TYPE_MIX) {
+                continue;
+            }
+            keep0 &= ~mask;
+            if (dispatch_spmd_note_block_done(tid_done)) {
+                if (out < max_out) {
+                    out_tasks[out++] = tid_done;
+                }
+            }
+        }
+        while (bitmap1 != 0) {
+            const int core = (int)__builtin_ctzll(bitmap1);
+            const uint64_t mask = (uint64_t)1 << core;
+            uint16_t tid_done = ctrl->task_id_map2[i][core];
+
+            bitmap1 &= ~mask;
+            if (g_basic_buf[tid_done & RING_MASK].type == TASK_TYPE_MIX) {
+                continue;
+            }
+            keep1 &= ~mask;
+            if (dispatch_spmd_note_block_done(tid_done)) {
+                if (out < max_out) {
+                    out_tasks[out++] = tid_done;
+                }
+            }
+        }
+        ctrl->msg_bitmap[i][0] = keep0;
+        ctrl->msg_bitmap[i][1] = keep1;
+    }
+    return out;
+}
+
+/* ===== 3. SPMD ===== */
+
+__attribute__((weak)) void dispatch_spmd_on_ready(uint16_t task_id)
+{
+    const uint16_t slot = task_id & RING_MASK;
+
+    g_next_block[slot] = 0;
+    g_finished_blocks[slot] = 0;
+}
+
+
+static int dispatch_spmd_claim_range(uint16_t task_id, int avail, uint32_t *start_block)
+{
+    const uint16_t slot = task_id & RING_MASK;
+    const uint32_t total = g_basic_buf[slot].count;
+
+    if (avail <= 0) {
+        return 0;
+    }
+    uint16_t cur = g_next_block[slot];
+    uint32_t start;
+    uint32_t n;
+
+    start = cur;
+    if (total <= 1U) {
+        if (start > 0U) {
+            return 0;
+        }
+        n = 1U;
+    } else {
+        if (start >= total) {
+            return 0;
+        }
+        n = ((uint32_t)avail < (total - start)) ? (uint32_t)avail : (total - start);
+    }
+    g_next_block[slot] = (uint16_t)(start + n);
+    if (start_block != NULL) {
+        *start_block = start;
+    }
+    return (int)n;
+}
+
+static int dispatch_spmd_rewind(uint16_t task_id, uint32_t claimed_end, uint32_t next_block)
+{
+    (void)claimed_end;
+    g_next_block[task_id & RING_MASK] = (uint16_t)next_block;
+    return 1;
+}
+
+static int dispatch_spmd_claim_block(uint16_t task_id, uint32_t *block_idx)
+{
+    uint32_t s = 0;
+    int n = dispatch_spmd_claim_range(task_id, 1, &s);
+
+    if (n > 0 && block_idx != NULL) {
+        *block_idx = s;
+    }
+    return n > 0 ? 1 : 0;
+}
+
+static int dispatch_spmd_has_remaining(uint16_t task_id)
+{
+    const uint16_t slot = task_id & RING_MASK;
+    const uint32_t total = g_basic_buf[slot].count;
+
+    if (total <= 1U) {
+        return 0;
+    }
+    return g_next_block[slot] < total;
+}
+
+static int dispatch_spmd_note_block_done(uint16_t task_id)
+{
+    const uint16_t slot = task_id & RING_MASK;
+    const uint32_t total = g_basic_buf[slot].count;
+
+    uint16_t prev = atomic_fetch_add_explicit(&g_finished_blocks[slot], 1, memory_order_acq_rel);
+
+    return (uint32_t)(prev + 1U) == total;
 }
 
